@@ -17,6 +17,9 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "ruff>=0.14.3",
     "pydantic-settings>=2.11.0",
+    "lxml>=6.0.2",
+    "graphviz>=0.21",
+    "sqlalchemy-data-model-visualizer>=0.1.3",
 ]
 
 

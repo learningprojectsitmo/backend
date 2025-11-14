@@ -1,0 +1,90 @@
+// Interactive Data Models
+digraph {
+	graph [bgcolor="#EEEEEE" rankdir=TB splines=spline]
+	node [fontname=Roboto fontsize=12 shape=none]
+	edge [fontname=Roboto fontsize=10]
+	User [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0">
+        <TR><TD COLSPAN="2" BGCOLOR="#3F51B5"><FONT COLOR="white">User</FONT></TD></TR>
+        <TR>
+                         <TD BGCOLOR="#BBDEFB">id</TD>
+                         <TD BGCOLOR="#BBDEFB">INTEGER (PK)</TD>
+                         </TR><TR>
+                         <TD BGCOLOR="#BBDEFB">first_name</TD>
+                         <TD BGCOLOR="#BBDEFB">VARCHAR(30) ()</TD>
+                         </TR><TR>
+                         <TD BGCOLOR="#BBDEFB">middle_name</TD>
+                         <TD BGCOLOR="#BBDEFB">VARCHAR(40) ()</TD>
+                         </TR><TR>
+                         <TD BGCOLOR="#BBDEFB">last_name</TD>
+                         <TD BGCOLOR="#BBDEFB">VARCHAR(30) ()</TD>
+                         </TR><TR>
+                         <TD BGCOLOR="#BBDEFB">isu_number</TD>
+                         <TD BGCOLOR="#BBDEFB">INTEGER ()</TD>
+                         </TR><TR>
+                         <TD BGCOLOR="#BBDEFB">tg_nickname</TD>
+                         <TD BGCOLOR="#BBDEFB">VARCHAR(40) ()</TD>
+                         </TR><TR>
+                         <TD BGCOLOR="#BBDEFB">email</TD>
+                         <TD BGCOLOR="#BBDEFB">VARCHAR(50) ()</TD>
+                         </TR></TABLE>> URL="http://User_details.html"]
+	User -> Resume [label=resumes color="#1E88E5" style=dashed tooltip="Relation between User and Resume"]
+	User -> Response [label=responses color="#1E88E5" style=dashed tooltip="Relation between User and Response"]
+	User -> Project [label=projects_led color="#1E88E5" style=dashed tooltip="Relation between User and Project"]
+	Resume [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0">
+        <TR><TD COLSPAN="2" BGCOLOR="#3F51B5"><FONT COLOR="white">Resume</FONT></TD></TR>
+        <TR>
+                         <TD BGCOLOR="#BBDEFB">id</TD>
+                         <TD BGCOLOR="#BBDEFB">INTEGER (PK)</TD>
+                         </TR><TR>
+                         <TD BGCOLOR="#BBDEFB">user_id</TD>
+                         <TD BGCOLOR="#BBDEFB">INTEGER ()</TD>
+                         </TR><TR>
+                         <TD BGCOLOR="#BBDEFB">header</TD>
+                         <TD BGCOLOR="#BBDEFB">VARCHAR ()</TD>
+                         </TR><TR>
+                         <TD BGCOLOR="#BBDEFB">resume_text</TD>
+                         <TD BGCOLOR="#BBDEFB">VARCHAR ()</TD>
+                         </TR></TABLE>> URL="http://Resume_details.html"]
+	Resume -> User [label=user color="#1E88E5" style=dashed tooltip="Relation between Resume and User"]
+	Response [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0">
+        <TR><TD COLSPAN="2" BGCOLOR="#3F51B5"><FONT COLOR="white">Response</FONT></TD></TR>
+        <TR>
+                         <TD BGCOLOR="#BBDEFB">id</TD>
+                         <TD BGCOLOR="#BBDEFB">INTEGER (PK)</TD>
+                         </TR><TR>
+                         <TD BGCOLOR="#BBDEFB">respondent_id</TD>
+                         <TD BGCOLOR="#BBDEFB">INTEGER ()</TD>
+                         </TR><TR>
+                         <TD BGCOLOR="#BBDEFB">project_id</TD>
+                         <TD BGCOLOR="#BBDEFB">INTEGER ()</TD>
+                         </TR><TR>
+                         <TD BGCOLOR="#BBDEFB">note</TD>
+                         <TD BGCOLOR="#BBDEFB">VARCHAR(200) ()</TD>
+                         </TR></TABLE>> URL="http://Response_details.html"]
+	Response -> User [label=respondent color="#1E88E5" style=dashed tooltip="Relation between Response and User"]
+	Response -> Project [label=project color="#1E88E5" style=dashed tooltip="Relation between Response and Project"]
+	Project [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0">
+        <TR><TD COLSPAN="2" BGCOLOR="#3F51B5"><FONT COLOR="white">Project</FONT></TD></TR>
+        <TR>
+                         <TD BGCOLOR="#BBDEFB">id</TD>
+                         <TD BGCOLOR="#BBDEFB">INTEGER (PK)</TD>
+                         </TR><TR>
+                         <TD BGCOLOR="#BBDEFB">name</TD>
+                         <TD BGCOLOR="#BBDEFB">VARCHAR(200) ()</TD>
+                         </TR><TR>
+                         <TD BGCOLOR="#BBDEFB">description</TD>
+                         <TD BGCOLOR="#BBDEFB">VARCHAR ()</TD>
+                         </TR><TR>
+                         <TD BGCOLOR="#BBDEFB">author_id</TD>
+                         <TD BGCOLOR="#BBDEFB">INTEGER ()</TD>
+                         </TR><TR>
+                         <TD BGCOLOR="#BBDEFB">max_participants</TD>
+                         <TD BGCOLOR="#BBDEFB">VARCHAR ()</TD>
+                         </TR></TABLE>> URL="http://Project_details.html"]
+	Project -> User [label=author color="#1E88E5" style=dashed tooltip="Relation between Project and User"]
+	Project -> Response [label=responses color="#1E88E5" style=dashed tooltip="Relation between Project and Response"]
+}
