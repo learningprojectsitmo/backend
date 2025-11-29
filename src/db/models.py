@@ -20,9 +20,11 @@ class User(Base):
     middle_name: Mapped[str] = mapped_column(String(40), nullable=False)
     last_name: Mapped[str | None] = mapped_column(String(30), nullable=True)
 
+    email: Mapped[str | None] = mapped_column(String(50), nullable=True, unique=True)
+    password_hashed: Mapped[str] = mapped_column(String, nullable=False)
+
     isu_number: Mapped[int | None] = mapped_column(nullable=True)
     tg_nickname: Mapped[str | None] = mapped_column(String(40), nullable=True)
-    email: Mapped[str | None] = mapped_column(String(50), nullable=True, unique=True)
 
     resumes: Mapped[list["Resume"]] = relationship(
             # TODO I think don't need the delete-orphan, "all" is enough, because we have 1:n relationship

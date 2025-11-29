@@ -3,7 +3,8 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     # Database
-    DATABASE_URL: str = "postgresql://postgres:password@127.0.0.1/backend_db"
+    # DATABASE_URL: str = "postgresql://postgres:password@127.0.0.1/backend_db" TODO learn postgresql
+    DATABASE_URL: str = "sqlite:///test.db"
 
     # JWT
     SECRET_KEY: str = "your-secret-key-here"

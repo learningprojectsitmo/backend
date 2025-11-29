@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from api.v1.routes import router as v1_router
 from core.config import settings
-
+from auth import auth_router 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -18,8 +18,8 @@ app = FastAPI(
 )
 
 app.include_router(v1_router, prefix="/v1")
+app.include_router(auth_router)
 
-# CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
@@ -31,18 +31,9 @@ app.add_middleware(
 api_url = "/api/v1"
 system_api_url = f"{api_url}/system"
 
-# Include routers
-# app.include_router(auth.router,  prefix=api_url, tags=["Auth"])
-
-
 @app.get("/")
 async def root():
     return {"message": "System API", "version": "1.0.0"}
-
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy"}
-
 
 if __name__ == "__main__":
     import uvicorn
