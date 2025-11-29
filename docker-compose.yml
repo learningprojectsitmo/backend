@@ -25,17 +25,8 @@ services:
     restart: unless-stopped
     ports:
       - "8000:8000"
-    environment:
-      # - DATABASE_URL=postgresql://postgres:password@postgres:5432/backend_db
-      - SECRET_KEY=your-secret-key-here
-      - ALGORITHM=HS256
-      - ACCESS_TOKEN_EXPIRE_MINUTES=30
-      - CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001
     volumes:
       - ./:/app
-    # depends_on:
-    #   postgres:
-    #     condition: service_healthy
 
   frontend:
     build:
@@ -54,9 +45,6 @@ services:
     stdin_open: true
     tty: true
 
-volumes:
-  postgres_data:
-    driver: local
 
 networks:
   default:

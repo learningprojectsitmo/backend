@@ -12,10 +12,10 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
     # CORS
-    CORS_ORIGINS: list = ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:3001", "http://127.0.0.1:3001"]
+    CORS_ORIGINS: list = ["http://localhost:8080","http://127.0.0.1:8080","http://localhost:8080","http://127.0.0.1:8080"]
 
     class Config:
-        env_file = ".env"
+        env_file = "../.env"
         extra = "ignore"
 
 
