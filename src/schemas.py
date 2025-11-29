@@ -1,5 +1,9 @@
 from pydantic import BaseModel, EmailStr
 
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
 class UserBase(BaseModel):
     email: EmailStr | None = None
     first_name: str
@@ -8,10 +12,6 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password_string: str
-
-class Token(BaseModel):
-    access_token: str
-    token_type: str
 
 class UserFull(UserBase):
     id: int
@@ -35,6 +35,34 @@ class UserResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+# Project schemes, TODO move to a separate file in the future
+
+class ProjectCreate(BaseModel):
+    name: str
+    author_id: int | None = None
+
+class ProjectUpdate(BaseModel):
+    name: str | None = None
+    author_id: int | None = None
+    description: str | None = None
+    max_participants: int | None = None
+
+class ProjectFull(ProjectCreate):
+    id: int
+    description: str | None = None
+    max_participants: int | None = None
+
+    class Config:
+        from_attributes = True
+
+class ProjectResponse(BaseModel):
+    id: int
+    name: str
+
+    class Config:
+        from_attributes = True
+
 
 class DeleteResponse(BaseModel):
     message: str

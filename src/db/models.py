@@ -27,12 +27,18 @@ class User(Base):
     tg_nickname: Mapped[str | None] = mapped_column(String(40), nullable=True)
 
     resumes: Mapped[list["Resume"]] = relationship(
-            # TODO I think don't need the delete-orphan, "all" is enough, because we have 1:n relationship
-            # read about it
             back_populates="user", cascade="all, delete-orphan" 
     )
-    responses: Mapped["Response"] = relationship(back_populates="respondent")
-    projects_led: Mapped["Project"] = relationship(back_populates="author")
+    responses: Mapped[list["Response"]] = relationship(
+        back_populates="respondent", cascade="all, delete-orphan" 
+    )
+    projects_led: Mapped[list["Project"]] = relationship(
+        # The project will not be deleted when its author gets deleted
+        back_populates="author"
+    )
+    projects_in: Mapped[list['ProjectParticipation']] = relationship(
+        back_populates='participant', cascade='all, delete-orphan'
+    )
 
     def __repr__(self) -> str:
         return f"User(id={self.id!r}, first_name={self.first_name!r}, isu_number={self.isu_number!r})"
@@ -70,25 +76,36 @@ class Resume(Base):
 class Project(Base):
     __tablename__ = "project"
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(200))
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    author_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
     # should description be in markdown too?
     description: Mapped[str | None] = mapped_column(nullable=True)
-    # TODO is it a good idea to use author instead of user? Project.author would be much bettew than Project.user.. 
-    author_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
     max_participants: Mapped[str | None] = mapped_column(nullable=True)
 
     author: Mapped["User"] = relationship(back_populates="projects_led")
-    responses: Mapped["Response"] = relationship(back_populates="project")
+    responses: Mapped[list["Response"]] = relationship(
+        # TODO do we want to store responses to a deleted project?
+        back_populates="project", cascade="all, delete-orphan"
+    )
 
     # status_id (for later, need to create the Status table first)
     # skills (particular, like docker, git etc.)
     # roles (general, like backend, Project Management etc.)
-    # participants (comes from the ProjectUserMap)
+    participants: Mapped[list['ProjectParticipation']] = relationship(back_populates='project')
 
     def __repr__(self) -> str:
         return f"Resume(id={self.id!r}, author_id={self.author_id!r}, description={self.description!r})"
 
-# class ProjectUserMap TODO think of a better name
+
+class ProjectParticipation(Base):
+    __tablename__ = 'project_participation'
+    id: Mapped[int] = mapped_column(primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("project.id"), nullable=False)
+    participant_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
+
+    project: Mapped['Project'] = relationship(back_populates='participants')
+    participant: Mapped['User'] = relationship(back_populates='projects_in')
+
 
 class Response(Base):
     __tablename__ = "response"
