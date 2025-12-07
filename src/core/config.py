@@ -11,8 +11,19 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 43200
 
-    # CORS
-    CORS_ORIGINS: list = ["http://localhost:8080","http://127.0.0.1:8080","http://localhost:8080","http://127.0.0.1:8080", "http://localhost:5173"]
+    # CORS - исправленные настройки для Docker
+    CORS_ORIGINS: list = [
+        "http://localhost:8000",
+        "http://localhost:5173",
+        "http://backend:8000", 
+        "http://localhost",
+        "http://localhost:8083", 
+        "http://frontend:80",
+        "fpin-projects.ru",
+        "http://fpin-projects.ru:1268/",
+        "http://fpin-projects.ru:12683/"
+    ]
+
 
     class Config:
         env_file = "../.env"
