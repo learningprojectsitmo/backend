@@ -115,7 +115,7 @@ class Project(Base):
     participants: Mapped[list['ProjectParticipation']] = relationship(back_populates='project')
 
     def __repr__(self) -> str:
-        return f"Resume(id={self.id!r}, author_id={self.author_id!r}, description={self.description!r})"
+        return f"Project(id={self.id!r}, author_id={self.author_id!r}, description={self.description!r})"
 
 
 class ProjectParticipation(Base):

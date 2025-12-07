@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError  
 
@@ -202,7 +202,22 @@ def create_project(
     return db_project
 
 
+@router.get("/projects", response_model=list[ProjectFull], tags=['project'])
+def fetch_projects(
+    page: int = Query(1, ge=1), 
+    size: int = Query(10, ge=1, le=100),
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user)
+):
+    offset = (page - 1) * size
 
+    db_projects = db.query(Project).offset(offset).limit(size).all()
+    projects_full = [ProjectFull.from_orm(project) for project in db_projects]
+
+    return projects_full
+
+
+"""
 @router.get("/resumes/{resume_id}", response_model=ResumeFull, tags=["resume"])
 def fetch_resume(
     resume_id: int,
@@ -307,3 +322,4 @@ def delete_resume(
         )
 
     return {"message": "Resume Deleted"}
+"""

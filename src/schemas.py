@@ -56,6 +56,12 @@ class ProjectFull(ProjectCreate):
     class Config:
         from_attributes = True
 
+class ProjectsFull(BaseModel):
+    projects: list[ProjectFull]
+
+    class Config:
+        from_attributes = True
+
 class ProjectResponse(BaseModel):
     id: int
     name: str
