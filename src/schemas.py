@@ -1,4 +1,14 @@
 from pydantic import BaseModel, EmailStr
+from typing import Generic, TypeVar, List
+
+T = TypeVar('T')
+
+class PaginatedResponse(BaseModel, Generic[T]):
+    items: List[T]
+    total: int
+    page: int
+    limit: int
+    total_pages: int
 
 class Token(BaseModel):
     access_token: str
@@ -35,6 +45,9 @@ class UserResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class UserListResponse(PaginatedResponse[UserResponse]):
+    pass
 
 # Project schemes, TODO move to a separate file in the future
 

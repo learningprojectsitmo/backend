@@ -1,6 +1,7 @@
 from typing import Annotated
+import math
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError  
 
@@ -24,6 +25,37 @@ def fetch_user(
     return db_user
 
 
+@router.get("/users", response_model=UserListResponse, tags=['user'])
+def fetch_users(
+    page: int = Query(1, ge=1, description="Номер страницы"),
+    limit: int = Query(10, ge=1, le=100, description="Количество пользователей на странице"),
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user)
+):
+    # Подсчет общего количества пользователей
+    total = db.query(User).count()
+    
+    # Вычисление offset для пагинации
+    offset = (page - 1) * limit
+    
+    # Получение пользователей с пагинацией
+    db_users = db.query(User).offset(offset).limit(limit).all()
+    
+    # Преобразование в схему UserResponse
+    users = [UserResponse.model_validate(user) for user in db_users]
+    
+    # Вычисление общего количества страниц
+    total_pages = math.ceil(total / limit) if total > 0 else 0
+    
+    return UserListResponse(
+        items=users,
+        total=total,
+        page=page,
+        limit=limit,
+        total_pages=total_pages
+    )
+
+
 @router.patch("/users/{user_id}", response_model=UserFull, tags=['user'])
 def update_user(
     user_id: int, 
@@ -38,7 +70,7 @@ def update_user(
             detail=f"Only a user with id {user_id} can update their info!",
             headers={"WWW-Authenticate": "Bearer"},
         )
-
+    
     db_user = db.query(User).filter(User.id == user_id).first()
     if not db_user:
         raise HTTPException(status_code=404, detail="There is no user with that id!")
@@ -70,7 +102,7 @@ def delete_user(
             detail=f"Only a user with id {user_id} can update their info!",
             headers={"WWW-Authenticate": "Bearer"},
         )
-
+        
     db_user = db.query(User).filter(User.id == user_id).first()
     if not db_user:
         raise HTTPException(status_code=404, detail="There is no user with that id!")
