@@ -82,12 +82,6 @@ class ProjectFull(ProjectCreate):
     class Config:
         from_attributes = True
 
-class ProjectsFull(BaseModel):
-    projects: list[ProjectFull]
-
-    class Config:
-        from_attributes = True
-
 class ProjectResponse(BaseModel):
     id: int
     name: str
@@ -108,6 +102,35 @@ class ProjectListItem(BaseModel):
 class ProjectListResponse(PaginatedResponse[ProjectListItem]):
     pass
 
+#
+# Resumes schemas TODO move to a separate file in the future
+#
+
+class ResumeCreate(BaseModel):
+    header: str
+    author_id: int | None = None
+
+class ResumeUpdate(BaseModel):
+    header: str | None = None
+    resume_text: str | None = None
+
+class ResumeFull(ResumeCreate):
+    id: int
+    resume_text: str | None = None
+
+    class Config:
+        from_attributes = True
+
+class ResumeResponse(BaseModel):
+    id: int
+    header: str
+    author_id: int
+
+    class Config:
+        from_attributes = True
 
 class DeleteResponse(BaseModel):
     message: str
+
+class ResumeListResponse(PaginatedResponse[ResumeFull]):
+    pass

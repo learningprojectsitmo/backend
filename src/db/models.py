@@ -5,19 +5,6 @@ from sqlalchemy.orm import declarative_base
 
 Base = declarative_base()
 
-resume_role_table = Table(
-    "resume_role",
-    Base.metadata,
-    Column("resume_id", ForeignKey("resume.id"), primary_key=True),
-    Column("role_id", ForeignKey("role.id"), primary_key=True),
-)
-
-
-
-
-# class Base(DeclarativeBase):
-#    pass
-
 class User(Base):
     __tablename__ = "user"
     # using "id" instead of "user_id" to avoid "user.user_id"
@@ -57,26 +44,27 @@ class User(Base):
 class Resume(Base):
     __tablename__ = "resume"
     id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
-    header: Mapped[str]
+    author_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
+    header: Mapped[str] = mapped_column(nullable=False)
     resume_text: Mapped[str | None] = mapped_column(nullable=True)
 
     user: Mapped["User"] = relationship(back_populates="resumes")
 
-    roles: Mapped[list["Role"]] = relationship(
-        "Role",
-        secondary=resume_role_table,
-        back_populates="resumes",
-    )
+    # roles: Mapped[list["Role"]] = relationship(
+    #     "Role",
+    #     secondary=resume_role_table,
+    #     back_populates="resumes",
+    # )
 
     def __repr__(self) -> str:
         return (
             f"Resume(id={self.id!r}, "
-            f"user_id={self.user_id!r}, "
-            f"resume_text={self.resume_text!r})"
+            f"author_id={self.author_id!r}, "
+            f"header={self.header!r})"
         )
 
 
+""" TODO add roles in the future
 class Role(Base):
     __tablename__ = "role"
 
@@ -91,6 +79,7 @@ class Role(Base):
 
     def __repr__(self) -> str:
         return f"Role(id={self.id!r}, name={self.name!r})"
+"""
 
 
 
