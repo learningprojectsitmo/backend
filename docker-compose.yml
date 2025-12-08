@@ -24,7 +24,7 @@ services:
     container_name: backend
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "8083:8000"
     volumes:
       - ./:/app
 
@@ -37,7 +37,7 @@ services:
     ports:
       - "80:80"
     environment:
-      - VITE_API_URL=http://backend:8000
+      - VITE_API_URL=http://backend:8083
     volumes:
       - ../frontend:/app
     depends_on:

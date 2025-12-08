@@ -22,6 +22,7 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password_string: str
+    isu_number: int | None = None
 
 class UserFull(UserBase):
     id: int
@@ -110,4 +111,3 @@ class ProjectListResponse(PaginatedResponse[ProjectListItem]):
 
 class DeleteResponse(BaseModel):
     message: str
-
