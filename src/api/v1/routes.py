@@ -6,7 +6,7 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from db.database import get_db
 from schemas import *
-from db.models import User, Project
+from db.models import User, Project, Resume
 from auth import hash_password, get_current_user
 
 router = APIRouter()
@@ -240,19 +240,12 @@ def fetch_projects(
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user)
 ):
-    # Подсчет общего количества проектов
     total = db.query(Project).count()
-    
-    # Вычисление offset для пагинации
     offset = (page - 1) * limit
     
-    # Получение проектов с пагинацией
     db_projects = db.query(Project).offset(offset).limit(limit).all()
-    
-    # Преобразование в схему ProjectListItem
     projects = [ProjectListItem.model_validate(project) for project in db_projects]
     
-    # Вычисление общего количества страниц
     total_pages = math.ceil(total / limit) if total > 0 else 0
     
     return ProjectListResponse(
@@ -264,7 +257,6 @@ def fetch_projects(
     )
 
 
-"""
 @router.get("/resumes/{resume_id}", response_model=ResumeFull, tags=["resume"])
 def fetch_resume(
     resume_id: int,
@@ -284,10 +276,12 @@ def create_resume(
     current_user: User = Depends(get_current_user),
 ):
     data = resume.model_dump(exclude_unset=True)
-    if "user_id" not in data:
-        data["user_id"] = current_user.id
+    if "author_id" not in data:
+        data["author_id"] = current_user.id
 
+    print(data)
     db_resume = Resume(**data)
+    print(db_resume)
     db.add(db_resume)
 
     try:
@@ -314,7 +308,8 @@ def update_resume(
     if not db_resume:
         raise HTTPException(status_code=404, detail="There is no resume with that id!")
 
-    if current_user.id != db_resume.user_id:
+    if current_user.id != db_resume.author_id:
+        # TODO add admin role check in the future
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Only a user with id {db_resume.user_id} can update this resume!",
@@ -351,7 +346,8 @@ def delete_resume(
             detail="There is no resume with that id!",
         )
 
-    if current_user.id != db_resume.user_id:
+    if current_user.id != db_resume.author_id:
+        # TODO add admin role check in the future
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Only a user with id {db_resume.user_id} can delete this resume!",
@@ -369,4 +365,26 @@ def delete_resume(
         )
 
     return {"message": "Resume Deleted"}
-"""
+
+@router.get("/resumes", response_model=ResumeListResponse, tags=['resume'])
+def fetch_resumes(
+    page: int = Query(1, ge=1, description="Номер страницы"), 
+    limit: int = Query(10, ge=1, le=100, description="Количество резюме на странице"),
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user)
+):
+    total = db.query(Resume).count()
+    offset = (page - 1) * limit
+    
+    db_resumes = db.query(Resume).offset(offset).limit(limit).all()
+    resumes = [ResumeFull.model_validate(resume) for resume in db_resumes]
+    
+    total_pages = math.ceil(total / limit) if total > 0 else 0
+    
+    return ResumeListResponse(
+        items=resumes,
+        total=total,
+        page=page,
+        limit=limit,
+        total_pages=total_pages
+    )
