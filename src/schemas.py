@@ -3,6 +3,10 @@ from typing import Generic, TypeVar, List
 
 T = TypeVar('T')
 
+#
+# General Schemes:
+#
+
 class PaginatedResponse(BaseModel, Generic[T]):
     items: List[T]
     total: int
@@ -13,6 +17,13 @@ class PaginatedResponse(BaseModel, Generic[T]):
 class Token(BaseModel):
     access_token: str
     token_type: str
+
+class DeleteResponse(BaseModel):
+    message: str
+
+#
+# Users schemas TODO move to a separate file in the future
+#
 
 class UserBase(BaseModel):
     email: EmailStr | None = None
@@ -62,7 +73,9 @@ class UserListItem(BaseModel):
 class UserListResponse(PaginatedResponse[UserListItem]):
     pass
 
+#
 # Project schemes, TODO move to a separate file in the future
+#
 
 class ProjectCreate(BaseModel):
     name: str
@@ -128,9 +141,6 @@ class ResumeResponse(BaseModel):
 
     class Config:
         from_attributes = True
-
-class DeleteResponse(BaseModel):
-    message: str
 
 class ResumeListResponse(PaginatedResponse[ResumeFull]):
     pass

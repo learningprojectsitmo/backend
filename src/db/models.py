@@ -7,21 +7,16 @@ Base = declarative_base()
 
 class User(Base):
     __tablename__ = "user"
-    # using "id" instead of "user_id" to avoid "user.user_id"
     id: Mapped[int] = mapped_column(primary_key=True)
-    # I am splitting fullname into three attributes in order to avoid troubles with incorrect "FIO" input format
-    # and to make it easier to address a user by their first (or first+last) name (could be useful in the interface)
-    # eg: notification from the user with the role teacher would be displayed as "First Last";
-    # notification from the student would be "First Middle[0]."
     first_name: Mapped[str] = mapped_column(String(30), nullable=False)
     middle_name: Mapped[str] = mapped_column(String(40), nullable=False)
     last_name: Mapped[str | None] = mapped_column(String(30), nullable=True)
 
     email: Mapped[str | None] = mapped_column(String(50), nullable=True, unique=True)
-    password_hashed: Mapped[str] = mapped_column(String, nullable=False)
-
     isu_number: Mapped[int | None] = mapped_column(nullable=True)
     tg_nickname: Mapped[str | None] = mapped_column(String(40), nullable=True)
+
+    password_hashed: Mapped[str] = mapped_column(String, nullable=False)
 
     resumes: Mapped[list["Resume"]] = relationship(
             back_populates="user", cascade="all, delete-orphan" 
@@ -50,11 +45,8 @@ class Resume(Base):
 
     user: Mapped["User"] = relationship(back_populates="resumes")
 
-    # roles: Mapped[list["Role"]] = relationship(
-    #     "Role",
-    #     secondary=resume_role_table,
-    #     back_populates="resumes",
-    # )
+    # skills (particular, like docker, git etc.)
+    # roles (general, like backend, Project Management etc.)
 
     def __repr__(self) -> str:
         return (
@@ -64,31 +56,11 @@ class Resume(Base):
         )
 
 
-""" TODO add roles in the future
-class Role(Base):
-    __tablename__ = "role"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
-
-    resumes: Mapped[list["Resume"]] = relationship(
-        "Resume",
-        secondary=resume_role_table,
-        back_populates="roles",
-    )
-
-    def __repr__(self) -> str:
-        return f"Role(id={self.id!r}, name={self.name!r})"
-"""
-
-
-
 class Project(Base):
     __tablename__ = "project"
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     author_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
-    # should description be in markdown too?
     description: Mapped[str | None] = mapped_column(nullable=True)
     max_participants: Mapped[str | None] = mapped_column(nullable=True)
 
@@ -132,10 +104,3 @@ class Response(Base):
         return f"Response(id={self.id!r}, respondent_id={self.respondent_id!r}, note={self.note!r})"
 
 
-# class SkillTag(Base):
-# the problem with tags in resume now is that there are duplicates. how to avoid them? 
-# firstly - store lowecase of everything (GIT = Git = git), trim spaces etc
-# secondly - force somehow advanced checking.. or store a range of possible names (eg Linux, GNU/Linux, UNIX, Линукс, линукс idk..)
-
-# class InterestTag(Base):
-# same notes as for the SkillTag
