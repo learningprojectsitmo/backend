@@ -15,9 +15,9 @@ class Settings(BaseSettings):
     CORS_ORIGINS: list = [
         "http://localhost:8000",
         "http://localhost:5173",
-        "http://backend:8000", 
+        "http://backend:8000",
         "http://localhost",
-        "http://localhost:8083", 
+        "http://localhost:8083",
         "http://frontend:80",
         "fpin-projects.ru",
         "http://fpin-projects.ru:1268/",

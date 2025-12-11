@@ -1,13 +1,12 @@
-from typing import List, Optional
-from sqlalchemy import ForeignKey, String, Table, Column
-from sqlalchemy.orm import Mapped, mapped_column, relationship # DeclarativeBase,
-from sqlalchemy.orm import declarative_base
+from sqlalchemy import ForeignKey, String
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-Base = declarative_base()
+from core.database import BaseModel
 
-class User(Base):
+
+class User(BaseModel):
     __tablename__ = "user"
-    id: Mapped[int] = mapped_column(primary_key=True)
+    
     first_name: Mapped[str] = mapped_column(String(30), nullable=False)
     middle_name: Mapped[str] = mapped_column(String(40), nullable=False)
     last_name: Mapped[str | None] = mapped_column(String(30), nullable=True)
@@ -19,10 +18,10 @@ class User(Base):
     password_hashed: Mapped[str] = mapped_column(String, nullable=False)
 
     resumes: Mapped[list["Resume"]] = relationship(
-            back_populates="user", cascade="all, delete-orphan" 
+            back_populates="user", cascade="all, delete-orphan"
     )
     responses: Mapped[list["Response"]] = relationship(
-        back_populates="respondent", cascade="all, delete-orphan" 
+        back_populates="respondent", cascade="all, delete-orphan"
     )
     projects_led: Mapped[list["Project"]] = relationship(
         # The project will not be deleted when its author gets deleted
@@ -36,9 +35,9 @@ class User(Base):
         return f"User(id={self.id!r}, first_name={self.first_name!r}, isu_number={self.isu_number!r})"
 
 
-class Resume(Base):
+class Resume(BaseModel):
     __tablename__ = "resume"
-    id: Mapped[int] = mapped_column(primary_key=True)
+    
     author_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
     header: Mapped[str] = mapped_column(nullable=False)
     resume_text: Mapped[str | None] = mapped_column(nullable=True)
@@ -56,9 +55,9 @@ class Resume(Base):
         )
 
 
-class Project(Base):
+class Project(BaseModel):
     __tablename__ = "project"
-    id: Mapped[int] = mapped_column(primary_key=True)
+    
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     author_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
     description: Mapped[str | None] = mapped_column(nullable=True)
@@ -79,9 +78,9 @@ class Project(Base):
         return f"Project(id={self.id!r}, author_id={self.author_id!r}, description={self.description!r})"
 
 
-class ProjectParticipation(Base):
+class ProjectParticipation(BaseModel):
     __tablename__ = 'project_participation'
-    id: Mapped[int] = mapped_column(primary_key=True)
+    
     project_id: Mapped[int] = mapped_column(ForeignKey("project.id"), nullable=False)
     participant_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
 
@@ -89,9 +88,9 @@ class ProjectParticipation(Base):
     participant: Mapped['User'] = relationship(back_populates='projects_in')
 
 
-class Response(Base):
+class Response(BaseModel):
     __tablename__ = "response"
-    id: Mapped[int] = mapped_column(primary_key=True)
+    
     respondent_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
     project_id: Mapped[int] = mapped_column(ForeignKey("project.id"), nullable=False)
     note: Mapped[str] = mapped_column(String(200), nullable=True)
@@ -102,5 +101,3 @@ class Response(Base):
 
     def __repr__(self) -> str:
         return f"Response(id={self.id!r}, respondent_id={self.respondent_id!r}, note={self.note!r})"
-
-

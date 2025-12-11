@@ -1,3 +1,5 @@
-# from src.repository.post_repository import PostRepository
-# from src.repository.tag_repository import TagRepository
+from src.repository.project_repository import ProjectRepository
+from src.repository.resume_repository import ResumeRepository
 from src.repository.user_repository import UserRepository
+
+# __all__ = ["UserRepository", "ProjectRepository", "ResumeRepository"]

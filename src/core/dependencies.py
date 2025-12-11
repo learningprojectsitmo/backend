@@ -1,39 +1,42 @@
-import jwt
-# from dependency_injector.wiring import Provide, inject
-from sqlalchemy.orm import Session
-from fastapi import Depends, HTTPException, status
+from dependency_injector.wiring import Provide, inject
+from fastapi import Depends, HTTPException
+from fastapi.security import OAuth2PasswordBearer
 
-from core.config import settings
-from core.database import get_db
-from core.security import oauth2_scheme
+from core.container import Container
 from model.models import User
+from services.auth_service import AuthService
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
 
 
-
-# @inject
+@inject
 def get_current_user(
     token: str = Depends(oauth2_scheme),
-    db: Session = Depends(get_db)
+    auth_service: AuthService = Depends(Provide[Container.auth_service])
 ) -> User:
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
+    """Получить текущего пользователя с использованием AuthService"""
+    return auth_service.get_current_user(token)
+
+
+@inject
+def get_current_user_no_exception(
+    token: str = Depends(oauth2_scheme),
+    auth_service: AuthService = Depends(Provide[Container.auth_service])
+) -> User | None:
+    """Получить текущего пользователя без исключения (возвращает None если ошибка)"""
     try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        email: str = payload.get('sub')
-        if not email:
-            print("NO EMAIL")
-            raise credentials_exception
+        return auth_service.get_current_user(token)
+    except HTTPException:
+        return None
 
-    except jwt.PyJWTError:
-        print("JWT EXCEPT")
-        raise credentials_exception
 
-    user = db.query(User).filter(User.email == email).first()
-    if not user:
-        print("NO USER")
-        raise credentials_exception
+def get_current_active_user(current_user: User = Depends(get_current_user)) -> User:
+    """Получить текущего активного пользователя (для будущего использования)"""
+    # В будущем здесь можно добавить проверку активности пользователя
+    return current_user
 
-    return user
+
+def get_current_super_user(current_user: User = Depends(get_current_user)) -> User:
+    """Получить текущего супер-пользователя (для будущего использования)"""
+    # В будущем здесь можно добавить проверку ролей
+    return current_user
