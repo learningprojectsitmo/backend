@@ -31,6 +31,7 @@ erDiagram
         varchar description
         varchar resource
         varchar action
+        int priority
         timestamp created_at
     }
 
@@ -49,6 +50,7 @@ erDiagram
         bigint permission_id FK
         boolean has_access
         boolean is_override
+        int priority
         bigint granted_by FK
         timestamp created_at
         timestamp expires_at
@@ -84,12 +86,39 @@ erDiagram
         text description
         bigint space_id FK
         bigint author_id FK
-        varchar status
+        bigint status_id FK
         boolean is_public
         int max_participants
         boolean kanban_enabled
         timestamp created_at
         timestamp updated_at
+    }
+
+    project_statuses {
+        bigint id PK
+        bigint space_id FK
+        varchar name
+        varchar code
+        varchar description
+        int order_index
+        boolean is_active
+        timestamp created_at
+    }
+
+    %% Приглашения
+    invitations {
+        bigint id PK
+        varchar email
+        varchar token
+        varchar role
+        bigint invited_by FK
+        bigint space_id FK
+        bigint project_id FK
+        varchar status
+        timestamp sent_at
+        timestamp accepted_at
+        timestamp expires_at
+        timestamp created_at
     }
 
     %% Настройки и конфигурации
@@ -197,7 +226,6 @@ erDiagram
         text about
         json skills
         json desired_roles
-        json interests_tags
         json experience
         json education
         boolean is_public
@@ -208,8 +236,17 @@ erDiagram
     tags {
         bigint id PK
         varchar name
+        varchar normalized_name
         varchar category
         json synonyms
+        timestamp created_at
+    }
+
+    resume_tags {
+        bigint id PK
+        bigint resume_id FK
+        bigint tag_id FK
+        varchar tag_type "skill|interest|other"
         timestamp created_at
     }
 
@@ -217,6 +254,7 @@ erDiagram
         bigint id PK
         bigint user_id FK
         bigint project_id FK
+        bigint vacancy_id FK
         varchar status
         text cover_letter
         bigint reviewed_by FK
@@ -360,6 +398,7 @@ erDiagram
     users ||--o{ projects : "creates_project"
     users ||--o{ spaces : "creates_space"
     users ||--o{ user_settings : "has_settings"
+    users ||--o{ invitations : "invites_or_invited_by"
 
     %% Роли и разрешения
     roles ||--o{ role_permissions : "has_permissions"
@@ -371,6 +410,8 @@ erDiagram
     spaces ||--o{ projects : "contains"
     spaces ||--o{ channels : "has_channel"
     spaces ||--o{ space_settings : "has_settings"
+    spaces ||--o{ project_statuses : "defines_statuses"
+    spaces ||--o{ invitations : "has_invitations"
 
     projects ||--|| project_charters : "has_charter"
     projects ||--o{ backlogs : "has_backlog"
@@ -380,12 +421,32 @@ erDiagram
     projects ||--o{ kanban_boards : "has_board"
     projects ||--o{ channels : "has_channel"
     projects ||--o{ project_settings : "has_settings"
+    projects ||--o{ invitations : "has_invitations"
+    projects ||--|| project_statuses : "has_status"
+
+    %% Статусы проектов
+    project_statuses }o--|| spaces : "belongs_to_space"
+
+    %% Приглашения
+    invitations }o--|| users : "invited_by"
+    invitations }o--|| spaces : "to_space"
+    invitations }o--|| projects : "to_project"
 
     %% Настройки
     setting_definitions ||--o{ global_settings : "defined_in"
     setting_definitions ||--o{ space_settings : "defined_in"
     setting_definitions ||--o{ project_settings : "defined_in"
     setting_definitions ||--o{ user_settings : "defined_in"
+
+    %% Резюме и теги
+    resumes ||--o{ resume_tags : "has_tags"
+    tags ||--o{ resume_tags : "used_in_resumes"
+    resume_tags }o--|| resumes : "belongs_to_resume"
+    resume_tags }o--|| tags : "references_tag"
+
+    %% Заявки и вакансии
+    applications }o--|| vacancies : "for_vacancy"
+    vacancies }o--|| projects : "belongs_to_project"
 
     %% Kanban
     backlogs ||--o{ kanban_cards : "represented_by"
