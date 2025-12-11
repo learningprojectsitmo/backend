@@ -1,3 +1,8 @@
+# Backend
+
+[Wiki](wiki/index.md)
+
+# Run
 In order to run the backend:
 1. Install **uv** on your system
 2. cd into the backend repository, run `uv sync` - the project dependencies will be installed in a virtual environment
