@@ -1,0 +1,306 @@
+erDiagram
+    users {
+        bigint id PK
+        varchar email
+        varchar password_hash
+        varchar first_name
+        varchar last_name
+        varchar middle_name
+        varchar telegram
+        varchar github_id
+        varchar itmo_id
+        bigint role_id FK
+        boolean is_active
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    roles {
+        bigint id PK
+        varchar name
+        varchar description
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    permissions {
+        bigint id PK
+        varchar code
+        varchar name
+        varchar description
+        varchar resource
+        varchar action
+        timestamp created_at
+    }
+
+    role_permissions {
+        bigint id PK
+        bigint role_id FK
+        bigint permission_id FK
+        boolean has_access
+        bigint created_by FK
+        timestamp created_at
+    }
+
+    user_permissions {
+        bigint id PK
+        bigint user_id FK
+        bigint permission_id FK
+        boolean has_access
+        boolean is_override
+        bigint granted_by FK
+        timestamp created_at
+        timestamp expires_at
+    }
+
+    spaces {
+        bigint id PK
+        varchar name
+        varchar description
+        boolean is_public
+        varchar type
+        bigint created_by FK
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    projects {
+        bigint id PK
+        varchar name
+        text description
+        bigint space_id FK
+        bigint author_id FK
+        varchar status
+        boolean is_public
+        int max_participants
+        boolean kanban_enabled
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    project_charters {
+        bigint id PK
+        bigint project_id FK
+        text business_goal
+        text learning_objectives
+        text key_outcomes
+        json constraints
+        json risks
+        bigint approved_by FK
+        timestamp approved_at
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    backlogs {
+        bigint id PK
+        bigint project_id FK
+        varchar name
+        varchar type
+        text description
+        json acceptance_criteria
+        varchar priority
+        varchar status
+        bigint assigned_to FK
+        int story_points
+        bigint parent_id FK
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    resumes {
+        bigint id PK
+        bigint user_id FK
+        text about
+        json skills
+        json desired_roles
+        json interests_tags
+        json experience
+        json education
+        boolean is_public
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    tags {
+        bigint id PK
+        varchar name
+        varchar category
+        json synonyms
+        timestamp created_at
+    }
+
+    applications {
+        bigint id PK
+        bigint user_id FK
+        bigint project_id FK
+        varchar status
+        text cover_letter
+        bigint reviewed_by FK
+        timestamp reviewed_at
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    team_members {
+        bigint id PK
+        bigint project_id FK
+        bigint user_id FK
+        varchar role_in_team
+        timestamp joined_at
+        timestamp left_at
+    }
+
+    vacancies {
+        bigint id PK
+        bigint project_id FK
+        varchar title
+        text description
+        json required_skills
+        varchar required_role
+        int quantity
+        boolean requires_approval
+        boolean is_active
+        bigint approved_by FK
+        timestamp approved_at
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    messages {
+        bigint id PK
+        bigint channel_id FK
+        bigint author_id FK
+        text content
+        json attachments
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    channels {
+        bigint id PK
+        varchar name
+        varchar type
+        bigint space_id FK
+        bigint project_id FK
+        json participants
+        boolean is_active
+        timestamp created_at
+    }
+
+    kanban_boards {
+        bigint id PK
+        bigint project_id FK
+        varchar name
+        json columns_config
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    kanban_cards {
+        bigint id PK
+        bigint board_id FK
+        bigint backlog_item_id FK
+        bigint column_id
+        int position
+        bigint assigned_to FK
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    notifications {
+        bigint id PK
+        bigint user_id FK
+        varchar type
+        varchar title
+        text content
+        varchar status
+        json metadata
+        timestamp sent_at
+        timestamp read_at
+        timestamp created_at
+    }
+
+    audit_logs {
+        bigint id PK
+        varchar entity_type
+        bigint entity_id
+        varchar action
+        json old_values
+        json new_values
+        bigint performed_by FK
+        varchar ip_address
+        varchar user_agent
+        timestamp performed_at
+    }
+
+    permission_history {
+        bigint id PK
+        bigint user_id FK
+        bigint permission_id FK
+        varchar change_type
+        boolean old_access
+        boolean new_access
+        bigint changed_by FK
+        varchar reason
+        timestamp changed_at
+    }
+
+    login_history {
+        bigint id PK
+        bigint user_id FK
+        varchar ip_address
+        varchar user_agent
+        boolean success
+        varchar failure_reason
+        timestamp login_at
+    }
+
+    files {
+        bigint id PK
+        varchar filename
+        varchar storage_path
+        varchar mime_type
+        bigint size
+        bigint uploaded_by FK
+        bigint entity_id
+        varchar entity_type
+        timestamp created_at
+    }
+
+    users ||--|| roles : "has_role"
+    users ||--o{ resumes : "has_resume"
+    users ||--o{ applications : "submits"
+    users ||--o{ team_members : "is_member"
+    users ||--o{ messages : "writes"
+    users ||--o{ notifications : "receives"
+    users ||--o{ user_permissions : "has_custom_permissions"
+    users ||--o{ permission_history : "has_permission_history"
+    users ||--o{ login_history : "has_login_history"
+    users ||--o{ audit_logs : "performs_actions"
+    users ||--o{ files : "uploads"
+    users ||--o{ projects : "creates_project"
+    users ||--o{ spaces : "creates_space"
+
+    roles ||--o{ role_permissions : "has_permissions"
+
+    permissions ||--o{ role_permissions : "assigned_to_role"
+    permissions ||--o{ user_permissions : "assigned_to_user"
+    permissions ||--o{ permission_history : "tracked_in_history"
+
+    spaces ||--o{ projects : "contains"
+    spaces ||--o{ channels : "has_channel"
+
+    projects ||--|| project_charters : "has_charter"
+    projects ||--o{ backlogs : "has_backlog"
+    projects ||--o{ team_members : "has_team"
+    projects ||--o{ applications : "receives_applications"
+    projects ||--o{ vacancies : "has_vacancies"
+    projects ||--o{ kanban_boards : "has_board"
+    projects ||--o{ channels : "has_channel"
+
+    backlogs ||--o{ kanban_cards : "represented_by"
+
+    kanban_boards ||--o{ kanban_cards : "contains"
+
+    channels ||--o{ messages : "contains"
