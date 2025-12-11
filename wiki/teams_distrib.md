@@ -34,6 +34,7 @@ student - "First Middle"
 
 У каждой роли есть свой permissions на чтение, запись и редактирования, но также у пользователя могу быть пользовательские permissions.
 Пользовательские permissions имеют больший приоритет, чем permissions для Роли.
+![permissions.mermaid](schema/permissions.mermaid)
 
 ### Резюме
 

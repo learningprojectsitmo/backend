@@ -1,0 +1,101 @@
+erDiagram
+    users {
+        bigint id PK
+        varchar email UK
+        varchar password_hash
+        varchar name
+        bigint role_id FK
+        boolean is_active
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    roles {
+        bigint id PK
+        varchar name UK
+        varchar description
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    permissions {
+        bigint id PK
+        varchar code UK
+        varchar name
+        varchar description
+        varchar resource
+        varchar action
+        timestamp created_at
+    }
+
+    role_permissions {
+        bigint id PK
+        bigint role_id FK
+        bigint permission_id FK
+        boolean has_access
+        bigint created_by FK
+        timestamp created_at
+    }
+
+    user_permissions {
+        bigint id PK
+        bigint user_id FK
+        bigint permission_id FK
+        boolean has_access
+        boolean is_override
+        bigint granted_by FK
+        timestamp created_at
+        timestamp expires_at
+    }
+
+    audit_logs {
+        bigint id PK
+        varchar entity_type
+        bigint entity_id
+        varchar action
+        json old_values
+        json new_values
+        bigint performed_by FK
+        varchar ip_address
+        varchar user_agent
+        timestamp performed_at
+    }
+
+    permission_history {
+        bigint id PK
+        bigint user_id FK
+        bigint permission_id FK
+        varchar change_type
+        boolean old_access
+        boolean new_access
+        bigint changed_by FK
+        varchar reason
+        timestamp changed_at
+    }
+
+    login_history {
+        bigint id PK
+        bigint user_id FK
+        varchar ip_address
+        varchar user_agent
+        boolean success
+        varchar failure_reason
+        timestamp login_at
+    }
+
+    users ||--o{ roles : has
+    users ||--o{ user_permissions : "custom permissions"
+    users ||--o{ permission_history : "changes history"
+    users ||--o{ login_history : "login attempts"
+
+    roles ||--o{ role_permissions : "default permissions"
+
+    permissions ||--o{ role_permissions : "granted to roles"
+    permissions ||--o{ user_permissions : "granted to users"
+    permissions ||--o{ permission_history : "tracked changes"
+
+    users ||--o{ audit_logs : "performed actions"
+    users ||--o{ audit_logs : "modified by"
+
+    role_permissions }|--|| roles : "(role_id, permission_id) UNIQUE"
+    user_permissions }|--|| users : "(user_id, permission_id) UNIQUE"
