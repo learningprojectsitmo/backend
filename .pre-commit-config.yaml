@@ -1,25 +1,25 @@
-# Конфигурация pre-commit хуков для автоматической проверки кода
-# Установка: pip install pre-commit && pre-commit install
-
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.5.0
     hooks:
-      - id: trailing-whitespace
-      - id: end-of-file-fixer
+      - id: trailing-whitespace  # удаляет конечные пробелы
+      - id: end-of-file-fixer    # добавляет пустую строку в конце файла
       - id: check-yaml
       - id: check-added-large-files
       - id: check-merge-conflict
-      - id: debug-statements
-      - id: check-docstring-first
+      - id: mixed-line-ending    # добавляем проверку смешанных окончаний строк
+        args: [--fix=lf]         # автоматически исправляет на LF
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.14.3
     hooks:
-      # Проверка кода Ruff без исправления
+      # Ruff проверяет и исправляет множество проблем, включая отступы
       - id: ruff
-        args: [--fix]
-      # Форматирование кода
+        args: [--fix, --select, ALL]  # ALL включает все правила, включая отступы
+      # Или более конкретно:
+      # - id: ruff
+      #   args: [--fix, --select, I001, W191]  # I001 - отступы, W191 - табы вместо пробелов
+
       - id: ruff-format
 
   - repo: https://github.com/pre-commit/mirrors-mypy

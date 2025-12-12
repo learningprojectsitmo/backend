@@ -31,10 +31,10 @@ class Container(containers.DeclarativeContainer):
     )
 
     # Database session provider (async)
-    session = providers.Factory(        AsyncSession,        bind=engine.provided    )
+    session = providers.Factory( AsyncSession, bind=engine.provided)
 
     # Repositories
-    user_repository = providers.Factory(        UserRepository,         session_factory=async_session_factory    )
+    user_repository = providers.Factory( UserRepository, session_factory=async_session_factory )
 
     project_repository = providers.Factory(
         ProjectRepository, 
