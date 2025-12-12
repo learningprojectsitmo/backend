@@ -1,3 +1,7 @@
+from src.repository.user_repository import UserRepository
+from src.model.models import User
+from src.schema import UserCreate, Token, UserUpdate, UserFull, UserListItem, UserListResponse
+
 # Примеры тестов для AuthService, UserRepository и Container
 
 ## Тесты для UserRepository
@@ -7,9 +11,9 @@ import pytest
 from unittest.mock import Mock, MagicMock
 from sqlalchemy.orm import Session
 
-from repository.user_repository import UserRepository
-from model.models import User
-from schemas import UserCreate
+from src.repository.user_repository import UserRepository
+from src.model.models import User
+from src.schema import UserCreate
 
 def test_user_repository_get_by_id():
     # Мокируем сессию
@@ -81,9 +85,9 @@ from unittest.mock import Mock, MagicMock
 from datetime import timedelta
 
 from services.auth_service import AuthService
-from repository.user_repository import UserRepository
-from model.models import User
-from schemas import UserCreate, Token
+from src.repository.user_repository import UserRepository
+from src.model.models import User
+from src.schema import UserCreate, Token
 from fastapi.security import OAuth2PasswordRequestForm
 
 def test_auth_service_authenticate_user():
@@ -156,9 +160,9 @@ import pytest
 from unittest.mock import Mock
 
 from services.user_service import UserService
-from repository.user_repository import UserRepository
-from model.models import User
-from schemas import UserCreate, UserUpdate, UserFull, UserListItem, UserListResponse
+from src.repository.user_repository import UserRepository
+from src.model.models import User
+from src.schema import UserCreate, UserUpdate, UserFull, UserListItem, UserListResponse
 
 def test_user_service_create_user():
     mock_repository = Mock()

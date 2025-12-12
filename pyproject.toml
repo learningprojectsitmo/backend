@@ -15,7 +15,6 @@ dependencies = [
     "python-jose[cryptography]>=3.3.0",
     "passlib[bcrypt]>=1.7.4",
     "python-dotenv>=1.0.0",
-    "ruff>=0.14.3",
     "pydantic-settings>=2.11.0",
     "lxml>=6.0.2",
     "graphviz>=0.21",
@@ -23,6 +22,8 @@ dependencies = [
     "bcrypt==4.3.0",
     "pyjwt>=2.10.1",
     "pwdlib[argon2]>=0.3.0",
+    "dependency-injector>=4.48.3",
+    "loguru>=0.7.3",
 ]
 
 
@@ -32,7 +33,7 @@ dev = [
     "pytest-asyncio>=0.21.0",
     "pytest-cov>=4.1.0",
     "httpx>=0.25.0",
-    "ruff>=0.1.0",
+    "ruff>=0.14.3",
     "mypy>=1.7.0",
     "pre-commit>=3.6.0",
 ]
@@ -41,7 +42,7 @@ ci = [
     "pytest>=7.4.0",
     "pytest-asyncio>=0.21.0",
     "pytest-cov>=4.1.0",
-    "ruff>=0.1.0",
+    "ruff>=0.14.3",
     "mypy>=1.7.0",
 ]
 
@@ -75,7 +76,7 @@ asyncio_mode = "auto"
 
 [tool.ruff]
 # Версия Python
-target-version = "py311"
+target-version = "py312"
 
 # Исключаемые файлы/директории
 exclude = [
@@ -85,6 +86,9 @@ exclude = [
     "dist",
     ".venv",
     ".env",
+    ".pytest_cache",
+    "node_modules",
+    "migrations",
 ]
 
 # Включенные правила (можно использовать E, W, F, I и др.)
@@ -101,18 +105,57 @@ select = [
     "B",   # flake8-bugbear
     "C4",  # flake8-comprehensions
     "UP",  # pyupgrade
-    "ARG001", # unused arguments in functions
+    "ARG", # flake8-unused-arguments
+    "SIM", # flake8-simplify
+    "TCH", # flake8-type-checking
+    "ERA", # eradicate
+    "PD",  # pandas-vet
+    "PGH", # pygrep-hooks
+    "PL",  # pylint
+    "TRY", # tryceratops
+    "FLY", # flynt
+    "NPY", # numpy
+    "RUF", # ruff-specific rules
 ]
 
 # Исключенные правила
 ignore = [
     "E501",  # line too long (handled by formatter)
     "B008",  # do not perform function calls in argument defaults
+    "ARG001", # unused function arguments (we'll handle this per-function)
+    "PLR0913", # too many arguments to function call
+    "PLR0915", # too many statements
+    "PLW0603", # global-statement
 ]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query"]
+
+[tool.ruff.lint.flake8-builtins]
+builtins-ignorelist = ["id", "type"]
+
+[tool.ruff.lint.flake8-pytest-style]
+fixture-parentheses = false
+mark-parentheses = false
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.ruff.lint.isort]
+force-single-line = false
+known-first-party = ["src"]
+required-imports = ["from __future__ import annotations"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.pep8-naming]
+classmethod-decorators = ["classmethod"]
 
 [tool.ruff.lint.pyupgrade]
 # Настройки pyupgrade
 keep-runtime-typing = true
+target-version = "py312"
 
 [tool.ruff.format]
 # Настройки форматирования
@@ -120,3 +163,5 @@ quote-style = "double"
 indent-style = "space"
 skip-magic-trailing-comma = false
 line-ending = "auto"
+docstring-code-format = true
+docstring-code-line-length = "dynamic"

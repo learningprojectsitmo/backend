@@ -1,89 +1,90 @@
-from datetime import UTC, datetime, timedelta
-from typing import Annotated
-
+from datetime import datetime, timedelta
+from typing import Optional, Annotated
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy.orm import Session
+from jose import JWTError, jwt
+from passlib.context import CryptContext
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.core.config import settings
-from src.core.security import verify_password
 from src.model.models import User
+from src.schema.user import UserCreate
+from src.schema.auth import Token
 from src.repository.user_repository import UserRepository
-from src.schemas import Token, UserCreate
 
-from .base_service import BaseService
-
-
-class AuthService(BaseService[User, UserCreate, dict]):  # Используем dict вместо UserUpdate
-    def __init__(self, user_repository: UserRepository, db_session: Session):
-        super().__init__(user_repository)
+class AuthService:
+    def __init__(self, user_repository: UserRepository, db_session: AsyncSession):
         self._user_repository = user_repository
         self._db_session = db_session
+        self._pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+        self._secret_key = "your-secret-key-here"  # Получить из настроек
+        self._algorithm = "HS256"
+        self._access_token_expire_minutes = 30
 
-    def authenticate_user(self, email: str, password: str) -> User | None:
-        """Аутентификация пользователя по email и паролю"""
-        return self._user_repository.authenticate_user(email, password, verify_password)
+    def verify_password(self, plain_password: str, hashed_password: str) -> bool:
+        """Проверить пароль"""
+        return self._pwd_context.verify(plain_password, hashed_password)
 
-    def get_current_user(self, token: str) -> User:
-        """Получить текущего пользователя по JWT токену"""
+    def get_password_hash(self, password: str) -> str:
+        """Хешировать пароль"""
+        return self._pwd_context.hash(password)
+
+    async def authenticate_user(self, email: str, password: str) -> Optional[User]:
+        """Аутентификация пользователя"""
+        user = await self._user_repository.get_by_email(email)
+        if not user:
+            return None
+        if not self.verify_password(password, user.password_hashed):
+            return None
+        return user
+
+    async def get_current_user(self, token: str) -> User:
+        """Получить текущего пользователя из токена"""
         credentials_exception = HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
-
         try:
-            import jwt
-            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-            email: str = payload.get('sub')
-            if not email:
+            payload = jwt.decode(token, self._secret_key, algorithms=[self._algorithm])
+            email: str = payload.get("sub")
+            if email is None:
                 raise credentials_exception
-
-        except Exception as e:
-            print(f"JWT Error: {e}")
-            raise credentials_exception from e
-
-        user = self._user_repository.get_by_email(email)
-        if not user:
+        except JWTError:
             raise credentials_exception
-
+        user = await self._user_repository.get_by_email(email)
+        if user is None:
+            raise credentials_exception
         return user
 
-    def create_access_token(self, data: dict, expires_delta: timedelta | None = None) -> str:
-        """Создать JWT токен доступа"""
-        if expires_delta:
-            expire = datetime.now(UTC) + expires_delta
-        else:
-            expire = datetime.now(UTC) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-
+    def create_access_token(self, data: dict, expires_delta: Optional[timedelta] = None) -> str:
+        """Создать токен доступа"""
         to_encode = data.copy()
+        if expires_delta:
+            expire = datetime.utcnow() + expires_delta
+        else:
+            expire = datetime.utcnow() + timedelta(minutes=self._access_token_expire_minutes)
         to_encode.update({"exp": expire})
-
-        import jwt
-        return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+        encoded_jwt = jwt.encode(to_encode, self._secret_key, algorithm=self._algorithm)
+        return encoded_jwt
 
     async def login_for_access_token(
         self,
         form_data: Annotated[OAuth2PasswordRequestForm, Depends()]
     ) -> Token:
-        """Аутентификация пользователя и создание токена доступа"""
-        # OAuth2PasswordRequestForm использует поле 'username', но мы treating его как email
-        user = self.authenticate_user(form_data.username, form_data.password)
-
+        """Вход в систему и получение токена"""
+        user = await self.authenticate_user(form_data.username, form_data.password)
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Incorrect username or password",
                 headers={"WWW-Authenticate": "Bearer"},
             )
-
-        access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token_expires = timedelta(minutes=self._access_token_expire_minutes)
         access_token = self.create_access_token(
             data={"sub": user.email}, expires_delta=access_token_expires
         )
-
         return Token(access_token=access_token, token_type="bearer")
 
-    def get_user_by_token(self, token: str) -> User:
-        """Получить пользователя по токену (алиас для get_current_user)"""
-        return self.get_current_user(token)
+    async def get_user_by_token(self, token: str) -> User:
+        """Получить пользователя по токену"""
+        return await self.get_current_user(token)

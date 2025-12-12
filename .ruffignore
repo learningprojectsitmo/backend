@@ -1,0 +1,25 @@
+# Исключения для Ruff
+
+# Файлы сгенерированные или внешние
+*/migrations/*
+*.py.bak
+*.pyc
+*.pyo
+*.pyd
+
+# Файлы конфигурации и зависимостей
+setup.py
+setup.cfg
+pyproject.toml
+requirements*.txt
+
+# Документация
+docs/
+*.md
+*.rst
+
+# Тесты (если нужны отдельные правила для них)
+# tests/
+
+# Файлы визуальных схем
+wiki/schema/

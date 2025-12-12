@@ -1,40 +1,41 @@
 from typing import Annotated
-
-from dependency_injector.wiring import Provide
-from fastapi import APIRouter, Depends
-from fastapi.security import OAuth2PasswordRequestForm
-
-from src.core.container import Container
-from src.core.dependencies import get_current_user
 from src.core.middleware import inject
-from src.model.models import User
-from src.schemas import Token
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordRequestForm
+from dependency_injector.wiring import Provide
+
+from src.schema.auth import Token
+from src.core.container import Container
 from src.services.auth_service import AuthService
+from src.core.dependencies import get_current_user
+
 
 auth_router = APIRouter(prefix="/auth", tags=["authentication"])
 
 
-@auth_router.post("/token")
+@auth_router.post("/token", response_model=Token)
 @inject
 async def login_for_access_token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     auth_service: AuthService = Depends(Provide[Container.auth_service])
 ) -> Token:
-    """Аутентификация пользователя и получение токена доступа"""
+    """Вход в систему и получение токена доступа"""
     return await auth_service.login_for_access_token(form_data)
 
 
 @auth_router.post("/logout")
+@inject
 async def logout(
-    _current_user: User = Depends(get_current_user)
+    _current_user: Annotated[str, Depends(get_current_user)]
 ):
-    """Выход пользователя (в будущем можно добавить blacklist токенов)"""
+    """Выход из системы (простое удаление токена на клиенте)"""
     return {"message": "Successfully logged out"}
 
 
 @auth_router.get("/me")
+@inject
 async def get_current_user_info(
-    current_user: User = Depends(get_current_user)
+    current_user: Annotated[str, Depends(get_current_user)]
 ):
     """Получить информацию о текущем пользователе"""
     return {
@@ -42,7 +43,5 @@ async def get_current_user_info(
         "email": current_user.email,
         "first_name": current_user.first_name,
         "middle_name": current_user.middle_name,
-        "last_name": current_user.last_name,
-        "isu_number": current_user.isu_number,
-        "tg_nickname": current_user.tg_nickname
+        "last_name": current_user.last_name
     }

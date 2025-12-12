@@ -1,71 +1,86 @@
-from sqlalchemy.orm import Session
+from typing import List, Optional
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.security import hash_password
-from model.models import User
-from repository.user_repository import UserRepository
-from schemas import UserCreate, UserFull, UserListItem, UserListResponse, UserUpdate
-
-from .base_service import BaseService
+from src.model.models import User
+from src.schema.user import UserCreate, UserUpdate, UserListResponse, UserFull
+from src.services.base_service import BaseService
+from src.repository.user_repository import UserRepository
 
 
 class UserService(BaseService[User, UserCreate, UserUpdate]):
-    def __init__(self, user_repository: UserRepository, db_session: Session):
+    def __init__(self, user_repository: UserRepository, db_session: AsyncSession):
         super().__init__(user_repository)
         self._user_repository = user_repository
         self._db_session = db_session
 
-    def create_user(self, user_data: UserCreate) -> User:
+    async def create_user(self, user_data: UserCreate) -> User:
         """Создать нового пользователя с хешированием пароля"""
-        # Хешируем пароль перед созданием пользователя
-        user_data.password_string = hash_password(user_data.password_string)
-        return self._user_repository.create(user_data)
+        # Создаем временного пользователя для получения хеша пароля
+        temp_user = User(
+            email=user_data.email,
+            first_name=user_data.first_name,
+            middle_name=user_data.middle_name,
+            last_name=user_data.last_name,
+            isu_number=user_data.isu_number,
+            password_hashed=""  # Будет заполнено хешем
+        )
 
-    def get_user_by_id(self, id: int) -> User | None:
+        # Получаем хеш пароля
+        from src.services.auth_service import AuthService
+        auth_service = AuthService(self._user_repository, self._db_session)
+        hashed_password = auth_service.get_password_hash(user_data.password_string)
+        
+        # Создаем объект с хешированным паролем
+        user_data_with_hash = UserCreate(
+            email=user_data.email,
+            first_name=user_data.first_name,
+            middle_name=user_data.middle_name,
+            last_name=user_data.last_name,
+            isu_number=user_data.isu_number,
+            password_string=hashed_password
+        )
+        
+        return await self._user_repository.create(user_data_with_hash)
+
+    async def get_user_by_id(self, id: int) -> Optional[User]:
         """Получить пользователя по ID"""
-        return self._user_repository.get_by_id(id)
+        return await self._user_repository.get_by_id(id)
 
-    def get_user_by_email(self, email: str) -> User | None:
+    async def get_user_by_email(self, email: str) -> Optional[User]:
         """Получить пользователя по email"""
-        return self._user_repository.get_by_email(email)
+        return await self._user_repository.get_by_email(email)
 
-    def get_users_paginated(self, page: int = 1, limit: int = 10) -> UserListResponse:
-        """Получить список пользователей с пагинацией"""
-        # Вычисляем offset для пагинации
+    async def get_users_paginated(self, page: int = 1, limit: int = 10) -> UserListResponse:
+        """Получить пользователей с пагинацией"""
         skip = (page - 1) * limit
-
-        # Получаем пользователей и общее количество
-        users = self._user_repository.get_multi(skip=skip, limit=limit)
-        total = self._user_repository.count()
-
-        # Преобразуем в UserListItem
-        user_items = [UserListItem.model_validate(user) for user in users]
-
-        # Вычисляем общее количество страниц
+        users = await self._user_repository.get_multi(skip=skip, limit=limit)
+        total = await self._user_repository.count()
+        
         total_pages = (total + limit - 1) // limit if total > 0 else 0
-
+        
         return UserListResponse(
-            items=user_items,
+            items=users,
             total=total,
             page=page,
             limit=limit,
             total_pages=total_pages
         )
 
-    def update_user(self, id: int, user_data: UserUpdate) -> User | None:
+    async def update_user(self, id: int, user_data: UserUpdate) -> Optional[User]:
         """Обновить пользователя"""
-        return self._user_repository.update(id, user_data)
+        return await self._user_repository.update(id, user_data)
 
-    def delete_user(self, id: int) -> bool:
+    async def delete_user(self, id: int) -> bool:
         """Удалить пользователя"""
-        return self._user_repository.delete(id)
+        return await self._user_repository.delete(id)
 
-    def count_users(self) -> int:
+    async def count_users(self) -> int:
         """Подсчитать количество пользователей"""
-        return self._user_repository.count()
+        return await self._user_repository.count()
 
-    def get_user_full(self, id: int) -> UserFull | None:
+    async def get_user_full(self, id: int) -> Optional[UserFull]:
         """Получить полную информацию о пользователе"""
-        user = self._user_repository.get_by_id(id)
+        user = await self._user_repository.get_by_id(id)
         if user:
             return UserFull.model_validate(user)
         return None

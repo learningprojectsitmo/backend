@@ -1,22 +1,13 @@
-import math
-
+from fastapi import APIRouter, Depends, Query, HTTPException, status
 from dependency_injector.wiring import Provide
-from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from src.core.container import Container
-from src.core.dependencies import get_current_user
 from src.core.middleware import inject
-from src.model.models import User
-from src.schemas import (
-    DeleteResponse,
-    ProjectCreate,
-    ProjectFull,
-    ProjectListItem,
-    ProjectListResponse,
-    ProjectResponse,
-    ProjectUpdate,
-)
+from src.model.models import User, Project
+from src.schema.project import ProjectCreate, ProjectUpdate, ProjectResponse, ProjectListResponse, ProjectFull
+from src.core.container import Container
 from src.services.project_service import ProjectService
+from src.core.dependencies import get_current_user
+
 
 project_router = APIRouter(prefix="/projects", tags=['project'])
 
@@ -29,68 +20,11 @@ async def fetch_project(
     _current_user: User = Depends(get_current_user)
 ):
     """Получить проект по ID"""
-    project = project_service.get_project_by_id(project_id)
+    project = await project_service.get_project_by_id(project_id)
     if not project:
         raise HTTPException(status_code=404, detail="There is no project with that id!")
 
     return ProjectFull.model_validate(project)
-
-
-@project_router.patch("/{project_id}", response_model=ProjectFull)
-@inject
-async def update_project(
-    project_id: int,
-    project_data: ProjectUpdate,
-    project_service: ProjectService = Depends(Provide[Container.project_service]),
-    current_user: User = Depends(get_current_user)
-):
-    """Обновить проект (только автор может обновлять)"""
-    try:
-        project = project_service.update_project(project_id, project_data, current_user.id)
-        if not project:
-            raise HTTPException(status_code=404, detail="There is no project with that id!")
-
-        return ProjectFull.model_validate(project)
-    except PermissionError as e:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=str(e),
-            headers={"WWW-Authenticate": "Bearer"},
-        ) from e
-
-
-@project_router.delete("/{project_id}", response_model=DeleteResponse)
-@inject
-async def delete_project(
-    project_id: int,
-    project_service: ProjectService = Depends(Provide[Container.project_service]),
-    current_user: User = Depends(get_current_user)
-):
-    """Удалить проект (только автор может удалять)"""
-    try:
-        success = project_service.delete_project(project_id, current_user.id)
-        if not success:
-            raise HTTPException(status_code=404, detail="There is no project with that id!")
-
-        return {"message": "Project Deleted"}
-    except PermissionError as e:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=str(e),
-            headers={"WWW-Authenticate": "Bearer"},
-        ) from e
-
-
-@project_router.post("/", response_model=ProjectResponse, status_code=201)
-@inject
-async def create_project(
-    project_data: ProjectCreate,
-    project_service: ProjectService = Depends(Provide[Container.project_service]),
-    current_user: User = Depends(get_current_user)
-):
-    """Создать новый проект"""
-    project = project_service.create_project(project_data, current_user.id)
-    return ProjectResponse.model_validate(project)
 
 
 @project_router.get("/", response_model=ProjectListResponse)
@@ -102,10 +36,10 @@ async def fetch_projects(
     _current_user: User = Depends(get_current_user)
 ):
     """Получить список проектов с пагинацией"""
-    projects, total = project_service.get_projects_paginated(page, limit)
-    projects_list = [ProjectListItem.model_validate(project) for project in projects]
+    projects, total = await project_service.get_projects_paginated(page, limit)
+    projects_list = [ProjectFull.model_validate(project) for project in projects]
 
-    total_pages = math.ceil(total / limit) if total > 0 else 0
+    total_pages = (total + limit - 1) // limit if total > 0 else 0
 
     return ProjectListResponse(
         items=projects_list,
@@ -114,3 +48,54 @@ async def fetch_projects(
         limit=limit,
         total_pages=total_pages
     )
+
+
+@project_router.post("/", response_model=ProjectFull)
+@inject
+async def create_project(
+    project_data: ProjectCreate,
+    project_service: ProjectService = Depends(Provide[Container.project_service]),
+    current_user: User = Depends(get_current_user)
+):
+    """Создать новый проект"""
+    project = await project_service.create_project(project_data, current_user.id)
+    return ProjectFull.model_validate(project)
+
+
+@project_router.put("/{project_id}", response_model=ProjectFull)
+@inject
+async def update_project(
+    project_id: int,
+    project_data: ProjectUpdate,
+    project_service: ProjectService = Depends(Provide[Container.project_service]),
+    current_user: User = Depends(get_current_user)
+):
+    """Обновить проект (только автор может обновлять)"""
+    try:
+        project = await project_service.update_project(project_id, project_data, current_user.id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        return ProjectFull.model_validate(project)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to update project: {str(e)}") from e
+
+
+@project_router.delete("/{project_id}")
+@inject
+async def delete_project(
+    project_id: int,
+    project_service: ProjectService = Depends(Provide[Container.project_service]),
+    current_user: User = Depends(get_current_user)
+):
+    """Удалить проект (только автор может удалять)"""
+    try:
+        success = await project_service.delete_project(project_id, current_user.id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        return {"message": "Project deleted successfully"}
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))

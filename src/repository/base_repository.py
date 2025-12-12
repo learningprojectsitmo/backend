@@ -1,169 +1,67 @@
 from typing import Any, Generic, Protocol, TypeVar
-
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
-from sqlalchemy.orm import Session
 
-ModelType = TypeVar('ModelType', bound=Any)
-CreateSchemaType = TypeVar('CreateSchemaType', bound=Any)
-UpdateSchemaType = TypeVar('UpdateSchemaType', bound=Any)
-
-
-class RepositoryProtocol(Protocol):
-    """Protocol для типизации репозиториев"""
-    def get_by_id(self, id: int) -> ModelType | None:
-        """Получить объект по ID"""
-        ...
-
-    def get_multi(
-        self,
-        skip: int = 0,
-        limit: int = 100
-    ) -> list[ModelType]:
-        """Получить список объектов с пагинацией"""
-        ...
-
-    def create(self, obj_data: CreateSchemaType) -> ModelType:
-        """Создать новый объект"""
-        ...
-
-    def update(self, id: int, obj_data: UpdateSchemaType) -> ModelType | None:
-        """Обновить объект"""
-        ...
-
-    def delete(self, id: int) -> bool:
-        """Удалить объект"""
-        ...
-
-    def count(self) -> int:
-        """Подсчитать количество объектов"""
-        ...
+ModelType = TypeVar("ModelType")
+CreateSchemaType = TypeVar("CreateSchemaType")
+UpdateSchemaType = TypeVar("UpdateSchemaType")
 
 
 class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
-    """Упрощенный базовый репозиторий для работы с базой данных"""
+    """Упрощенный базовый репозиторий для работы с базой данных (асинхронный)"""
 
     def __init__(self, session_factory):
         self._session_factory = session_factory
-        self._session = None
         self._model = None
 
-    def _get_session(self) -> Session:
+    async def _get_session(self) -> AsyncSession:
         """Получить сессию базы данных"""
-        if self._session is None:
-            self._session = self._session_factory()
-        return self._session
+        async with self._session_factory() as session:
+            return session
 
-    def close_scoped_session(self):
-        """Закрыть scoped сессию"""
-        if self._session:
-            try:
-                self._session.close()
-            except Exception as e:
-                # Логируем ошибку, но не прерываем выполнение
-                print(f"Error closing session: {e}")
-            finally:
-                self._session = None
-
-    def _commit_session(self):
+    async def _commit_session(self, session: AsyncSession):
         """Зафиксировать изменения в базе данных"""
         try:
-            self._session.commit()
+            await session.commit()
         except SQLAlchemyError as e:
-            self._session.rollback()
+            await session.rollback()
             raise e
 
-    def _refresh_session(self, obj: ModelType):
+    async def _refresh_session(self, session: AsyncSession, obj: ModelType):
         """Обновить объект из базы данных"""
-        self._session.refresh(obj)
+        await session.refresh(obj)
 
-    def get_by_id(self, id: int) -> ModelType | None:
+    async def get_by_id(self, id: int) -> ModelType | None:
         """Получить объект по ID"""
-        db = self._get_session()
-        return db.query(self._model).filter(self._model.id == id).first() if self._model else None
+        session = await self._get_session()
+        try:
+            result = await session.execute(
+                select(self._model).where(self._model.id == id)
+            )
+            return result.scalar_one_or_none()
+        finally:
+            await session.close()
 
-    def get_multi(
+    async def get_multi(
         self,
         skip: int = 0,
         limit: int = 100
     ) -> list[ModelType]:
         """Получить список объектов с пагинацией"""
-        db = self._get_session()
-        return db.query(self._model).offset(skip).limit(limit).all() if self._model else []
+        session = await self._get_session()
+        try:
+            result = await session.execute(
+                select(self._model).offset(skip).limit(limit)
+            )
+            return result.scalars().all()
+        finally:
+            await session.close()
 
-    def create(self, obj_data: CreateSchemaType) -> ModelType:
+    async def create(self, obj_data: CreateSchemaType) -> ModelType:
         """Создать новый объект"""
-        db = self._get_session()
-
-        # Поддержка как dict, так и Pydantic models
-        if hasattr(obj_data, 'model_dump'):
-            obj_dict = obj_data.model_dump(exclude_unset=True)
-        else:
-            obj_dict = obj_data
-
-        db_obj = self._model(**obj_dict)
-        db.add(db_obj)
-
+        session = await self._get_session()
         try:
-            self._commit_session()
-            self._refresh_session(db_obj)
-            return db_obj
-        except IntegrityError as e:
-            db.rollback()
-            raise ValueError(f"Error creating object: {e}") from e
-
-    def update(self, id: int, obj_data: UpdateSchemaType) -> ModelType | None:
-        """Обновить объект"""
-        db = self._get_session()
-        db_obj = db.query(self._model).filter(self._model.id == id).first() if self._model else None
-
-        if not db_obj:
-            return None
-
-        # Поддержка как dict, так и Pydantic models
-        if hasattr(obj_data, 'model_dump'):
-            update_data = obj_data.model_dump(exclude_unset=True)
-        else:
-            update_data = obj_data
-
-        for field, value in update_data.items():
-            if hasattr(db_obj, field):
-                setattr(db_obj, field, value)
-
-        try:
-            self._commit_session()
-            self._refresh_session(db_obj)
-            return db_obj
-        except SQLAlchemyError as e:
-            db.rollback()
-            raise ValueError(f"Error updating object: {e}") from e
-
-    def delete(self, id: int) -> bool:
-        """Удалить объект"""
-        db = self._get_session()
-        db_obj = db.query(self._model).filter(self._model.id == id).first() if self._model else None
-
-        if not db_obj:
-            return False
-
-        try:
-            db.delete(db_obj)
-            self._commit_session()
-            return True
-        except SQLAlchemyError as e:
-            db.rollback()
-            raise ValueError(f"Error deleting object: {e}") from e
-
-    def count(self) -> int:
-        """Подсчитать количество объектов"""
-        db = self._get_session()
-        return db.query(self._model).count() if self._model else 0
-
-    def bulk_create(self, obj_data_list: list[CreateSchemaType]) -> list[ModelType]:
-        """Создать несколько объектов за один раз"""
-        db = self._get_session()
-        db_objects = []
-
-        for obj_data in obj_data_list:
             # Поддержка как dict, так и Pydantic models
             if hasattr(obj_data, 'model_dump'):
                 obj_dict = obj_data.model_dump(exclude_unset=True)
@@ -171,19 +69,132 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
                 obj_dict = obj_data
 
             db_obj = self._model(**obj_dict)
-            db_objects.append(db_obj)
+            session.add(db_obj)
+            await self._commit_session(session)
+            await self._refresh_session(session, db_obj)
+            return db_obj
+        except IntegrityError as e:
+            await session.rollback()
+            raise ValueError(f"Error creating object: {e}") from e
+        finally:
+            await session.close()
+
+    async def update(self, id: int, obj_data: UpdateSchemaType) -> ModelType | None:
+        """Обновить объект"""
+        session = await self._get_session()
+        try:
+            result = await session.execute(
+                select(self._model).where(self._model.id == id)
+            )
+            db_obj = result.scalar_one_or_none()
+
+            if not db_obj:
+                return None
+
+            # Поддержка как dict, так и Pydantic models
+            if hasattr(obj_data, 'model_dump'):
+                update_data = obj_data.model_dump(exclude_unset=True)
+            else:
+                update_data = obj_data
+
+            for field, value in update_data.items():
+                if hasattr(db_obj, field):
+                    setattr(db_obj, field, value)
+
+            await self._commit_session(session)
+            await self._refresh_session(session, db_obj)
+            return db_obj
+        except SQLAlchemyError as e:
+            await session.rollback()
+            raise ValueError(f"Error updating object: {e}") from e
+        finally:
+            await session.close()
+
+    async def delete(self, id: int) -> bool:
+        """Удалить объект"""
+        session = await self._get_session()
+        try:
+            result = await session.execute(
+                select(self._model).where(self._model.id == id)
+            )
+            db_obj = result.scalar_one_or_none()
+
+            if not db_obj:
+                return False
+
+            await session.delete(db_obj)
+            await self._commit_session(session)
+            return True
+        except SQLAlchemyError as e:
+            await session.rollback()
+            raise ValueError(f"Error deleting object: {e}") from e
+        finally:
+            await session.close()
+
+    async def count(self) -> int:
+        """Подсчитать количество объектов"""
+        session = await self._get_session()
+        try:
+            result = await session.execute(
+                select(self._model).count()
+            )
+            return result.scalar()
+        finally:
+            await session.close()
+
+    async def bulk_create(self, obj_data_list: list[CreateSchemaType]) -> list[ModelType]:
+        """Создать несколько объектов за один раз"""
+        session = await self._get_session()
+        db_objects = []
 
         try:
-            db.add_all(db_objects)
-            self._commit_session()
+            for obj_data in obj_data_list:
+                # Поддержка как dict, так и Pydantic models
+                if hasattr(obj_data, 'model_dump'):
+                    obj_dict = obj_data.model_dump(exclude_unset=True)
+                else:
+                    obj_dict = obj_data
+
+                db_obj = self._model(**obj_dict)
+                db_objects.append(db_obj)
+
+            session.add_all(db_objects)
+            await self._commit_session(session)
             for db_obj in db_objects:
-                self._refresh_session(db_obj)
+                await self._refresh_session(session, db_obj)
             return db_objects
         except IntegrityError as e:
-            db.rollback()
+            await session.rollback()
             raise ValueError(f"Error creating objects: {e}") from e
+        finally:
+            await session.close()
 
-    def exists(self, id: int) -> bool:
-        """Проверить существование объекта с данным ID"""
-        db = self._get_session()
-        return db.query(self._model.id).filter(self._model.id == id).first() is not None if self._model else False
+    async def exists(self, id: int) -> bool:
+        """Проверить существование объекта"""
+        session = await self._get_session()
+        try:
+            result = await session.execute(
+                select(self._model.id).where(self._model.id == id).limit(1)
+            )
+            return result.first() is not None
+        finally:
+            await session.close()
+
+
+class RepositoryProtocol(Protocol):
+    """Protocol для типизации репозиториев (асинхронный)"""
+    async def get_by_id(self, id: int) -> ModelType | None: ...
+
+    async def get_multi(
+        self,
+        skip: int = 0,
+        limit: int = 100
+    ) -> list[ModelType]: ...
+
+    async def create(self, obj_data: CreateSchemaType) -> ModelType: ...
+
+    async def update(self, id: int, obj_data: UpdateSchemaType) -> ModelType | None: ...
+
+    async def delete(self, id: int) -> bool: ...
+
+    async def count(self) -> int: ...

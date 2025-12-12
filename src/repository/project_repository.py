@@ -1,8 +1,8 @@
-
-
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from src.model.models import Project
+from src.schema.project import ProjectCreate, ProjectUpdate
 from src.repository.base_repository import BaseRepository
-from src.schemas import ProjectCreate, ProjectUpdate
 
 
 class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
@@ -10,57 +10,98 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         super().__init__(session_factory)
         self._model = Project
 
-    def get_by_id(self, id: int) -> Project | None:
+    async def get_by_id(self, id: int) -> Project | None:
         """Получить проект по ID"""
-        db = self._get_session()
-        return db.query(Project).filter(Project.id == id).first()
+        session = await self._get_session()
+        try:
+            result = await session.execute(
+                select(Project).where(Project.id == id)
+            )
+            return result.scalar_one_or_none()
+        finally:
+            await session.close()
 
-    def get_by_author_id(self, author_id: int) -> list[Project]:
-        """Получить проекты автора"""
-        db = self._get_session()
-        return db.query(Project).filter(Project.author_id == author_id).all()
+    async def get_by_author_id(self, author_id: int) -> list[Project]:
+        """Получить проекты по автору"""
+        session = await self._get_session()
+        try:
+            result = await session.execute(
+                select(Project).where(Project.author_id == author_id)
+            )
+            return result.scalars().all()
+        finally:
+            await session.close()
 
-    def get_multi(self, skip: int = 0, limit: int = 100) -> list[Project]:
+    async def get_multi(self, skip: int = 0, limit: int = 100) -> list[Project]:
         """Получить список проектов с пагинацией"""
-        db = self._get_session()
-        return db.query(Project).offset(skip).limit(limit).all()
+        session = await self._get_session()
+        try:
+            result = await session.execute(
+                select(Project).offset(skip).limit(limit)
+            )
+            return result.scalars().all()
+        finally:
+            await session.close()
 
-    def create(self, obj_data: ProjectCreate) -> Project:
+    async def create(self, obj_data: ProjectCreate) -> Project:
         """Создать новый проект"""
-        db = self._get_session()
-        db_project = Project(**obj_data.model_dump())
-        db.add(db_project)
-        db.commit()
-        db.refresh(db_project)
-        return db_project
+        session = await self._get_session()
+        try:
+            db_project = Project(**obj_data.model_dump())
+            session.add(db_project)
+            await self._commit_session(session)
+            await self._refresh_session(session, db_project)
+            return db_project
+        finally:
+            await session.close()
 
-    def update(self, id: int, obj_data: ProjectUpdate) -> Project | None:
+    async def update(self, id: int, obj_data: ProjectUpdate) -> Project | None:
         """Обновить проект"""
-        db = self._get_session()
-        db_project = db.query(Project).filter(Project.id == id).first()
-        if not db_project:
-            return None
+        session = await self._get_session()
+        try:
+            result = await session.execute(
+                select(Project).where(Project.id == id)
+            )
+            db_project = result.scalar_one_or_none()
 
-        update_data = obj_data.model_dump(exclude_unset=True)
-        for field, value in update_data.items():
-            setattr(db_project, field, value)
+            if not db_project:
+                return None
 
-        db.commit()
-        db.refresh(db_project)
-        return db_project
+            update_data = obj_data.model_dump(exclude_unset=True)
+            for field, value in update_data.items():
+                setattr(db_project, field, value)
 
-    def delete(self, id: int) -> bool:
+            await self._commit_session(session)
+            await self._refresh_session(session, db_project)
+            return db_project
+        finally:
+            await session.close()
+
+    async def delete(self, id: int) -> bool:
         """Удалить проект"""
-        db = self._get_session()
-        db_project = db.query(Project).filter(Project.id == id).first()
-        if not db_project:
-            return False
+        session = await self._get_session()
+        try:
+            result = await session.execute(
+                select(Project).where(Project.id == id)
+            )
+            db_project = result.scalar_one_or_none()
 
-        db.delete(db_project)
-        db.commit()
-        return True
+            if not db_project:
+                return False
 
-    def count(self) -> int:
+            await session.delete(db_project)
+            await self._commit_session(session)
+            return True
+        finally:
+            await session.close()
+
+    async def count(self) -> int:
         """Подсчитать количество проектов"""
-        db = self._get_session()
-        return db.query(Project).count()
+        session = await self._get_session()
+        try:
+            result = await session.execute(
+                select(Project).count()
+            )
+            return result.scalar()
+        finally:
+            await session.close()

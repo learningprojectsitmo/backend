@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 
+from src.core.container import Container
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,14 +13,14 @@ from src.core.config import settings
 async def lifespan(_app: FastAPI):
     yield
 
-
+container = Container()
 app = FastAPI(
     title="API",
     description="",
     version="1.0.0",
     lifespan=lifespan
 )
-
+app.container = container
 app.include_router(v1_router)
 
 app.add_middleware(
