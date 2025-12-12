@@ -5,12 +5,12 @@ from typing import TYPE_CHECKING
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.exceptions import PermissionError
+from src.model.models import Resume
+from src.schema.resume import ResumeCreate, ResumeUpdate
+from src.services.base_service import BaseService
 
 if TYPE_CHECKING:
-    from src.model.models import Resume
     from src.repository.resume_repository import ResumeRepository
-    from src.schema.resume import ResumeCreate, ResumeUpdate
-    from src.services.base_service import BaseService
 
 
 class ResumeService(BaseService[Resume, ResumeCreate, ResumeUpdate]):

@@ -6,8 +6,9 @@ from dependency_injector.wiring import Provide, inject
 from fastapi import Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
 
+from src.core.container import Container
+
 if TYPE_CHECKING:
-    from src.core.container import Container
     from src.model.models import User
     from src.services.auth_service import AuthService
 

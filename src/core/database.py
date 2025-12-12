@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+from datetime import datetime
 from typing import TYPE_CHECKING, ClassVar
 
 from sqlalchemy import DateTime, Integer, create_engine, func
@@ -8,7 +9,6 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sess
 
 if TYPE_CHECKING:
     from collections.abc import Generator
-    from datetime import datetime
 
 
 class Base(DeclarativeBase):

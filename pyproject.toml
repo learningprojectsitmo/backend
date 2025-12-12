@@ -123,7 +123,7 @@ ignore = [
     "PLW0603", # global-statement
     "D415", "D400", "RUF002", "RUF003", "TC004", "TC002",
     "RUF003", "RUF001", "TRY003",  # -> remve ater chadge
-    "TC001"
+    "TC001", "TC003"
 ]
 
 [tool.ruff.lint.flake8-bugbear]

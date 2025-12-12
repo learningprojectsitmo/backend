@@ -3,14 +3,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from src.core.exceptions import PermissionError
+from src.model.models import Project
+from src.schema.project import ProjectCreate, ProjectUpdate
+from src.services.base_service import BaseService
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
-    from src.model.models import Project
     from src.repository.project_repository import ProjectRepository
-    from src.schema.project import ProjectCreate, ProjectUpdate
-    from src.services.base_service import BaseService
 
 
 class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
