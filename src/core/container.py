@@ -34,39 +34,17 @@ class Container(containers.DeclarativeContainer):
     session = providers.Factory( AsyncSession, bind=engine.provided)
 
     # Repositories
-    user_repository = providers.Factory( UserRepository, session_factory=async_session_factory )
+    user_repository = providers.Factory(UserRepository, session_factory=async_session_factory )
 
-    project_repository = providers.Factory(
-        ProjectRepository, 
-        session_factory=async_session_factory
-    )
+    project_repository = providers.Factory(        ProjectRepository,         session_factory=async_session_factory    )
 
-    resume_repository = providers.Factory(
-        ResumeRepository,
-        session_factory=async_session_factory
-    )
+    resume_repository = providers.Factory(        ResumeRepository,        session_factory=async_session_factory    )
 
     # Services
-    auth_service = providers.Factory(
-        AuthService,
-        user_repository=user_repository,
-        db_session=session
-    )
+    auth_service = providers.Factory(        AuthService,        user_repository=user_repository,        db_session=session    )
 
-    user_service = providers.Factory(
-        UserService,
-        user_repository=user_repository,
-        db_session=session
-    )
+    user_service = providers.Factory(        UserService,        user_repository=user_repository,        db_session=session    )
 
-    project_service = providers.Factory(
-        ProjectService,
-        project_repository=project_repository,
-        db_session=session
-    )
+    project_service = providers.Factory(        ProjectService,        project_repository=project_repository,        db_session=session    )
 
-    resume_service = providers.Factory(
-        ResumeService,
-        resume_repository=resume_repository,
-        db_session=session
-    )
+    resume_service = providers.Factory(        ResumeService,        resume_repository=resume_repository,        db_session=session    )
