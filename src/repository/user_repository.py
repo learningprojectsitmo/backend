@@ -1,8 +1,10 @@
-from sqlalchemy.ext.asyncio import AsyncSession
+from __future__ import annotations
+
 from sqlalchemy import select
+
 from src.model.models import User
-from src.schema.user import UserCreate, UserUpdate
 from src.repository.base_repository import BaseRepository
+from src.schema.user import UserCreate, UserUpdate
 
 
 class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
@@ -15,7 +17,7 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
         session = await self._get_session()
         try:
             result = await session.execute(
-                select(User).where(User.id == id)
+                select(User).where(User.id == id),
             )
             return result.scalar_one_or_none()
         finally:
@@ -26,7 +28,7 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
         session = await self._get_session()
         try:
             result = await session.execute(
-                select(User).where(User.email == email)
+                select(User).where(User.email == email),
             )
             return result.scalar_one_or_none()
         finally:
@@ -37,7 +39,7 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
         session = await self._get_session()
         try:
             result = await session.execute(
-                select(User).offset(skip).limit(limit)
+                select(User).offset(skip).limit(limit),
             )
             return result.scalars().all()
         finally:
@@ -54,7 +56,7 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
                 middle_name=obj_data.middle_name,
                 last_name=obj_data.last_name,
                 isu_number=obj_data.isu_number,
-                password_hashed=obj_data.password_string  # Будет заменено на хеш в сервисе
+                password_hashed=obj_data.password_string,  # Будет заменено на хеш в сервисе
             )
 
             session.add(db_obj)
@@ -69,7 +71,7 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
         session = await self._get_session()
         try:
             result = await session.execute(
-                select(User).where(User.id == id)
+                select(User).where(User.id == id),
             )
             db_user = result.scalar_one_or_none()
 
@@ -92,7 +94,7 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
         session = await self._get_session()
         try:
             result = await session.execute(
-                select(User).where(User.id == id)
+                select(User).where(User.id == id),
             )
             db_user = result.scalar_one_or_none()
 
@@ -110,7 +112,7 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
         session = await self._get_session()
         try:
             result = await session.execute(
-                select(User).count()
+                select(User).count(),
             )
             return result.scalar()
         finally:
@@ -121,10 +123,10 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
         session = await self._get_session()
         try:
             result = await session.execute(
-                select(User).where(User.email == email)
+                select(User).where(User.email == email),
             )
             user = result.scalar_one_or_none()
-            
+
             if user and verify_password_func(password, user.password_hashed):
                 return user
             return None

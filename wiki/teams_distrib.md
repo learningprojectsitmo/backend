@@ -11,7 +11,7 @@
 
 ```
 Split fullname into three attributes in order to avoid troubles with incorrect "FIO" input format and to make it easier to address a user by their first (or first+last) name (could be useful in the interface).
-eg: 
+eg:
 teacher - "First Last"
 student - "First Middle"
 ```
@@ -20,7 +20,7 @@ student - "First Middle"
 
 #### Авторизация
 
-Регистрация с помощью GitHub/ITMO ID 
+Регистрация с помощью GitHub/ITMO ID
 При регистрации пользователь должен вводить ещё тг, мы проверяем, что тг валидный
 
 #### Инвайт
@@ -38,12 +38,12 @@ student - "First Middle"
 
 ### Резюме
 
-- CRUD + импорт/экспорт 
+- CRUD + импорт/экспорт
 - Поиск по навыкам и по желаемым ролям
 - Отправить приглашение в команду (Руководитель)
 
 ```
-The problem with interests tags in resumes now is that there are duplicates. how to avoid them? 
+The problem with interests tags in resumes now is that there are duplicates. how to avoid them?
 - store lowercase of everything (GIT = Git = git), trim spaces etc
 - force somehow advanced checking.. or store a range of possible names (eg Linux, GNU/Linux, UNIX, Линукс, линукс idk..)
 ```
@@ -53,17 +53,17 @@ The problem with interests tags in resumes now is that there are duplicates. how
 - CRUD + импорт/экспорт
 - Описание проектов планируется в markdown. Как хранить картинки?
 - Необходимые навыки и роли
-- Список участников 
+- Список участников
 - Список откликов
 - Статус проекта зависит от Пространства
 
-- Добавление (CRUD) Участника в команду  
+- Добавление (CRUD) Участника в команду
 
 * Настройки
     * Подчиняются настройкам пространства, в рамках которого создан проект
-    * Публичный проект 
+    * Публичный проект
     * Настройка максимального количества участников для проекта (Подстраивается под количество участников пространства)
-    * Доступ к Канбан Доске 
+    * Доступ к Канбан Доске
 
 ### Отклики
 
@@ -80,14 +80,14 @@ The problem with interests tags in resumes now is that there are duplicates. how
 ### Пространства (Lisa + Дисциплина)
 
 - Возможность публичных проектов
-- Автоматическое распределение по проектам 
+- Автоматическое распределение по проектам
 
 - Добавление(CRUD) пользователей
 
-* Настройки 
+* Настройки
     * Проектов
     * Статусов проекта
-    * Прав доступа к группе проектов 
+    * Прав доступа к группе проектов
     * Публичное пространство
 
 ### Уведомления

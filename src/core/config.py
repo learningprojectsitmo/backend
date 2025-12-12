@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from pydantic_settings import BaseSettings
 
 
@@ -5,7 +7,7 @@ class Settings(BaseSettings):
     # Database
     # DATABASE_URL: str = "postgresql://postgres:password@127.0.0.1/backend_db" TODO learn postgresql
     DATABASE_URL: str = "sqlite:///test.db"
-    DEBUG : str = ""
+    DEBUG: str = ""
 
     # JWT
     SECRET_KEY: str = "your-secret-key-here"
@@ -22,9 +24,8 @@ class Settings(BaseSettings):
         "http://frontend:80",
         "fpin-projects.ru",
         "http://fpin-projects.ru:1268/",
-        "http://fpin-projects.ru:12683/"
+        "http://fpin-projects.ru:12683/",
     ]
-
 
     class Config:
         env_file = "../.env"

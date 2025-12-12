@@ -1,8 +1,10 @@
-from sqlalchemy.ext.asyncio import AsyncSession
+from __future__ import annotations
+
 from sqlalchemy import select
+
 from src.model.models import Project
-from src.schema.project import ProjectCreate, ProjectUpdate
 from src.repository.base_repository import BaseRepository
+from src.schema.project import ProjectCreate, ProjectUpdate
 
 
 class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
@@ -15,7 +17,7 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         session = await self._get_session()
         try:
             result = await session.execute(
-                select(Project).where(Project.id == id)
+                select(Project).where(Project.id == id),
             )
             return result.scalar_one_or_none()
         finally:
@@ -26,7 +28,7 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         session = await self._get_session()
         try:
             result = await session.execute(
-                select(Project).where(Project.author_id == author_id)
+                select(Project).where(Project.author_id == author_id),
             )
             return result.scalars().all()
         finally:
@@ -37,7 +39,7 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         session = await self._get_session()
         try:
             result = await session.execute(
-                select(Project).offset(skip).limit(limit)
+                select(Project).offset(skip).limit(limit),
             )
             return result.scalars().all()
         finally:
@@ -60,7 +62,7 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         session = await self._get_session()
         try:
             result = await session.execute(
-                select(Project).where(Project.id == id)
+                select(Project).where(Project.id == id),
             )
             db_project = result.scalar_one_or_none()
 
@@ -82,7 +84,7 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         session = await self._get_session()
         try:
             result = await session.execute(
-                select(Project).where(Project.id == id)
+                select(Project).where(Project.id == id),
             )
             db_project = result.scalar_one_or_none()
 
@@ -100,7 +102,7 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         session = await self._get_session()
         try:
             result = await session.execute(
-                select(Project).count()
+                select(Project).count(),
             )
             return result.scalar()
         finally:

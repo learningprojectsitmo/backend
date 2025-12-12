@@ -1,9 +1,14 @@
-from collections.abc import Generator
+from __future__ import annotations
+
 from contextlib import contextmanager
-from datetime import datetime
+from typing import TYPE_CHECKING, ClassVar
 
 from sqlalchemy import DateTime, Integer, create_engine, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
+    from datetime import datetime
 
 
 class Base(DeclarativeBase):
@@ -12,19 +17,12 @@ class Base(DeclarativeBase):
 
 class BaseModel(Base):
     __abstract__ = True
-    __table_args__ = {'extend_existing': True} # todo removw this
+    __table_args__: ClassVar[dict] = {"extend_existing": True}  # TODO remove this
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        onupdate=func.now(),
-        nullable=False
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
 
@@ -42,7 +40,7 @@ class Database:
 
     @contextmanager
     def session(self) -> Generator[Session, None, None]:
-        session: Session = self._session_factory()
+        session = self._session_factory()
         try:
             yield session
         except Exception:

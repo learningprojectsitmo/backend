@@ -1,8 +1,10 @@
-from sqlalchemy.ext.asyncio import AsyncSession
+from __future__ import annotations
+
 from sqlalchemy import select
+
 from src.model.models import Resume
-from src.schema.resume import ResumeCreate, ResumeUpdate
 from src.repository.base_repository import BaseRepository
+from src.schema.resume import ResumeCreate, ResumeUpdate
 
 
 class ResumeRepository(BaseRepository[Resume, ResumeCreate, ResumeUpdate]):
@@ -15,7 +17,7 @@ class ResumeRepository(BaseRepository[Resume, ResumeCreate, ResumeUpdate]):
         session = await self._get_session()
         try:
             result = await session.execute(
-                select(Resume).where(Resume.id == id)
+                select(Resume).where(Resume.id == id),
             )
             return result.scalar_one_or_none()
         finally:
@@ -26,7 +28,7 @@ class ResumeRepository(BaseRepository[Resume, ResumeCreate, ResumeUpdate]):
         session = await self._get_session()
         try:
             result = await session.execute(
-                select(Resume).where(Resume.author_id == author_id)
+                select(Resume).where(Resume.author_id == author_id),
             )
             return result.scalars().all()
         finally:
@@ -37,7 +39,7 @@ class ResumeRepository(BaseRepository[Resume, ResumeCreate, ResumeUpdate]):
         session = await self._get_session()
         try:
             result = await session.execute(
-                select(Resume).offset(skip).limit(limit)
+                select(Resume).offset(skip).limit(limit),
             )
             return result.scalars().all()
         finally:
@@ -60,7 +62,7 @@ class ResumeRepository(BaseRepository[Resume, ResumeCreate, ResumeUpdate]):
         session = await self._get_session()
         try:
             result = await session.execute(
-                select(Resume).where(Resume.id == id)
+                select(Resume).where(Resume.id == id),
             )
             db_resume = result.scalar_one_or_none()
 
@@ -82,7 +84,7 @@ class ResumeRepository(BaseRepository[Resume, ResumeCreate, ResumeUpdate]):
         session = await self._get_session()
         try:
             result = await session.execute(
-                select(Resume).where(Resume.id == id)
+                select(Resume).where(Resume.id == id),
             )
             db_resume = result.scalar_one_or_none()
 
@@ -100,7 +102,7 @@ class ResumeRepository(BaseRepository[Resume, ResumeCreate, ResumeUpdate]):
         session = await self._get_session()
         try:
             result = await session.execute(
-                select(Resume).count()
+                select(Resume).count(),
             )
             return result.scalar()
         finally:

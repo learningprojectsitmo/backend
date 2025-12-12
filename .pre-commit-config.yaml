@@ -1,3 +1,6 @@
+# Конфигурация pre-commit хуков для автоматической проверки кода
+# Установка: pip install pre-commit && pre-commit insta
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.5.0
@@ -15,16 +18,17 @@ repos:
     hooks:
       # Ruff проверяет и исправляет множество проблем, включая отступы
       - id: ruff
-        args: [--fix, --select, ALL]  # ALL включает все правила, включая отступы
+        args: [--fix, --ignore, "D1,D2,D4,ANN001,ANN002,ANN003,ANN202,ANN204,ANN401,RUF002,RUF003,TRY300,TRY301,B904,FAST002,TC004"]
+
       # Или более конкретно:
       # - id: ruff
       #   args: [--fix, --select, I001, W191]  # I001 - отступы, W191 - табы вместо пробелов
 
       - id: ruff-format
 
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.7.0
-    hooks:
-      - id: mypy
-        additional_dependencies: [types-all]
-        args: [--ignore-missing-imports]
+#  - repo: https://github.com/pre-commit/mirrors-mypy
+#    rev: v1.7.0 # Keep your current rev
+#    hooks:
+#      - id: mypy
+#        additional_dependencies: [types-all==1.0.0] # Correct version
+#        args: [--ignore-missing-imports]

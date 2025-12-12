@@ -1,13 +1,14 @@
-from fastapi import APIRouter, Depends, Query, HTTPException, status
-from dependency_injector.wiring import Provide
+from __future__ import annotations
 
+from dependency_injector.wiring import Provide
+from fastapi import APIRouter, Depends, HTTPException, Query
+
+from src.core.container import Container
+from src.core.dependencies import get_current_user
 from src.core.middleware import inject
 from src.model.models import User
-from src.schema.resume import ResumeCreate, ResumeUpdate, ResumeResponse, ResumeListResponse, ResumeFull
-from src.core.container import Container
+from src.schema.resume import ResumeCreate, ResumeFull, ResumeListResponse, ResumeUpdate
 from src.services.resume_service import ResumeService
-from src.core.dependencies import get_current_user
-
 
 resume_router = APIRouter(prefix="/resumes", tags=["resume"])
 
@@ -17,7 +18,7 @@ resume_router = APIRouter(prefix="/resumes", tags=["resume"])
 async def fetch_resume(
     resume_id: int,
     resume_service: ResumeService = Depends(Provide[Container.resume_service]),
-    _current_user: User = Depends(get_current_user)
+    _current_user: User = Depends(get_current_user),
 ):
     """Получить резюме по ID"""
     resume = await resume_service.get_resume_by_id(resume_id)
@@ -33,7 +34,7 @@ async def fetch_resumes(
     page: int = Query(1, ge=1, description="Номер страницы"),
     limit: int = Query(10, ge=1, le=100, description="Количество резюме на странице"),
     resume_service: ResumeService = Depends(Provide[Container.resume_service]),
-    _current_user: User = Depends(get_current_user)
+    _current_user: User = Depends(get_current_user),
 ):
     """Получить список резюме с пагинацией"""
     resumes, total = await resume_service.get_resumes_paginated(page, limit)
@@ -46,7 +47,7 @@ async def fetch_resumes(
         total=total,
         page=page,
         limit=limit,
-        total_pages=total_pages
+        total_pages=total_pages,
     )
 
 
@@ -55,7 +56,7 @@ async def fetch_resumes(
 async def create_resume(
     resume_data: ResumeCreate,
     resume_service: ResumeService = Depends(Provide[Container.resume_service]),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """Создать новое резюме"""
     resume = await resume_service.create_resume(resume_data, current_user.id)
@@ -68,19 +69,19 @@ async def update_resume(
     resume_id: int,
     resume_data: ResumeUpdate,
     resume_service: ResumeService = Depends(Provide[Container.resume_service]),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """Обновить резюме (только автор может обновлять)"""
     try:
         resume = await resume_service.update_resume(resume_id, resume_data, current_user.id)
         if not resume:
             raise HTTPException(status_code=404, detail="Resume not found")
-        
+
         return ResumeFull.model_validate(resume)
     except PermissionError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Failed to update resume: {str(e)}") from e
+        raise HTTPException(status_code=400, detail=f"Failed to update resume: {e!s}") from e
 
 
 @resume_router.delete("/{resume_id}")
@@ -88,14 +89,14 @@ async def update_resume(
 async def delete_resume(
     resume_id: int,
     resume_service: ResumeService = Depends(Provide[Container.resume_service]),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """Удалить резюме (только автор может удалять)"""
     try:
         success = await resume_service.delete_resume(resume_id, current_user.id)
         if not success:
             raise HTTPException(status_code=404, detail="Resume not found")
-        
+
         return {"message": "Resume deleted successfully"}
     except PermissionError as e:
         raise HTTPException(status_code=403, detail=str(e))

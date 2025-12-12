@@ -20,10 +20,10 @@ def test_user_repository_get_by_id():
     mock_session = Mock()
     mock_user = User(id=1, email="test@example.com")
     mock_session.query.return_value.filter.return_value.first.return_value = mock_user
-    
+
     repository = UserRepository(mock_session)
     result = repository.get_by_id(1)
-    
+
     assert result == mock_user
     assert result.id == 1
     assert result.email == "test@example.com"
@@ -31,14 +31,14 @@ def test_user_repository_get_by_id():
 def test_user_repository_create():
     mock_session = Mock()
     repository = UserRepository(mock_session)
-    
+
     user_data = UserCreate(
         email="test@example.com",
         first_name="Test",
         middle_name="User",
         password_string="hashed_password"
     )
-    
+
     # Мокируем создание пользователя
     mock_user = User(
         email=user_data.email,
@@ -49,9 +49,9 @@ def test_user_repository_create():
     mock_session.add.return_value = None
     mock_session.commit.return_value = None
     mock_session.refresh.return_value = None
-    
+
     result = repository.create(user_data)
-    
+
     assert result.email == user_data.email
     assert result.first_name == user_data.first_name
     assert result.middle_name == user_data.middle_name
@@ -60,19 +60,19 @@ def test_user_repository_create():
 def test_user_repository_authenticate_user():
     mock_session = Mock()
     repository = UserRepository(mock_session)
-    
+
     # Мокируем пользователя
     mock_user = User(
         id=1,
         email="test@example.com",
         password_hashed="hashed_password"
     )
-    
+
     repository.get_by_email = Mock(return_value=mock_user)
     verify_password = Mock(return_value=True)
-    
+
     result = repository.authenticate_user("test@example.com", "password", verify_password)
-    
+
     assert result == mock_user
     verify_password.assert_called_once_with("password", "hashed_password")
 ```
@@ -95,21 +95,21 @@ def test_auth_service_authenticate_user():
     mock_repository = Mock()
     mock_user = User(id=1, email="test@example.com")
     mock_repository.authenticate_user.return_value = mock_user
-    
+
     # Создаем сервис
     auth_service = AuthService(mock_repository, Mock())
-    
+
     result = auth_service.authenticate_user("test@example.com", "password")
-    
+
     assert result == mock_user
     mock_repository.authenticate_user.assert_called_once()
 
 def test_auth_service_create_access_token():
     mock_repository = Mock()
     auth_service = AuthService(mock_repository, Mock())
-    
+
     token = auth_service.create_access_token({"sub": "test@example.com"})
-    
+
     assert isinstance(token, str)
     assert len(token) > 0  # JWT токен не должен быть пустым
 
@@ -117,15 +117,15 @@ def test_auth_service_get_current_user():
     mock_repository = Mock()
     mock_user = User(id=1, email="test@example.com")
     mock_repository.get_by_email.return_value = mock_user
-    
+
     auth_service = AuthService(mock_repository, Mock())
-    
+
     # Мокируем jwt.decode
     with patch('services.auth_service.jwt.decode') as mock_decode:
         mock_decode.return_value = {"sub": "test@example.com"}
-        
+
         result = auth_service.get_current_user("fake_token")
-        
+
         assert result == mock_user
         mock_repository.get_by_email.assert_called_once_with("test@example.com")
 
@@ -134,20 +134,20 @@ async def test_auth_service_login_for_access_token():
     mock_repository = Mock()
     mock_user = User(id=1, email="test@example.com")
     mock_repository.authenticate_user.return_value = mock_user
-    
+
     auth_service = AuthService(mock_repository, Mock())
-    
+
     # Создаем мок для OAuth2PasswordRequestForm
     form_data = OAuth2PasswordRequestForm(
         username="test@example.com",
         password="password"
     )
-    
+
     with patch.object(auth_service, 'create_access_token') as mock_create_token:
         mock_create_token.return_value = "fake_jwt_token"
-        
+
         result = await auth_service.login_for_access_token(form_data)
-        
+
         assert isinstance(result, Token)
         assert result.access_token == "fake_jwt_token"
         assert result.token_type == "bearer"
@@ -174,41 +174,41 @@ def test_user_service_create_user():
         password_hashed="hashed_password"
     )
     mock_repository.create.return_value = mock_user
-    
+
     user_service = UserService(mock_repository, Mock())
-    
+
     user_data = UserCreate(
         email="test@example.com",
         first_name="Test",
         middle_name="User",
         password_string="plain_password"
     )
-    
+
     with patch('services.user_service.hash_password') as mock_hash:
         mock_hash.return_value = "hashed_password"
-        
+
         result = user_service.create_user(user_data)
-        
+
         assert result == mock_user
         mock_hash.assert_called_once_with("plain_password")
         mock_repository.create.assert_called_once()
 
 def test_user_service_get_users_paginated():
     mock_repository = Mock()
-    
+
     # Мокируем список пользователей
     mock_users = [
         User(id=1, email="user1@example.com", first_name="User", middle_name="One"),
         User(id=2, email="user2@example.com", first_name="User", middle_name="Two")
     ]
-    
+
     mock_repository.get_multi.return_value = mock_users
     mock_repository.count.return_value = 2
-    
+
     user_service = UserService(mock_repository, Mock())
-    
+
     result = user_service.get_users_paginated(page=1, limit=10)
-    
+
     assert isinstance(result, UserListResponse)
     assert result.total == 2
     assert len(result.items) == 2
@@ -233,12 +233,12 @@ def mock_container():
     with patch('core.dependencies.Container') as mock_container_class:
         mock_auth_service = Mock()
         mock_user_service = Mock()
-        
+
         mock_container = Mock()
         mock_container.auth_service = mock_auth_service
         mock_container.user_service = mock_user_service
         mock_container_class.return_value = mock_container
-        
+
         yield {
             'container': mock_container,
             'auth_service': mock_auth_service,
@@ -247,24 +247,24 @@ def mock_container():
 
 def test_login_endpoint(mock_container):
     client = TestClient(app)
-    
+
     # Мокируем ответ AuthService
     mock_token = Token(access_token="fake_token", token_type="bearer")
     mock_container['auth_service'].login_for_access_token.return_value = mock_token
-    
+
     response = client.post(
         "/auth/token",
         data={"username": "test@example.com", "password": "password"},
         headers={"Content-Type": "application/x-www-form-urlencoded"}
     )
-    
+
     assert response.status_code == 200
     assert response.json()["access_token"] == "fake_token"
     assert response.json()["token_type"] == "bearer"
 
 def test_get_current_user_endpoint(mock_container):
     client = TestClient(app)
-    
+
     # Мокируем пользователя
     mock_user = User(
         id=1,
@@ -273,19 +273,19 @@ def test_get_current_user_endpoint(mock_container):
         middle_name="User"
     )
     mock_container['auth_service'].get_current_user.return_value = mock_user
-    
+
     response = client.get(
         "/auth/me",
         headers={"Authorization": "Bearer fake_token"}
     )
-    
+
     assert response.status_code == 200
     assert response.json()["email"] == "test@example.com"
     assert response.json()["first_name"] == "Test"
 
 def test_create_user_endpoint(mock_container):
     client = TestClient(app)
-    
+
     # Мокируем создание пользователя
     mock_user = User(
         id=1,
@@ -294,7 +294,7 @@ def test_create_user_endpoint(mock_container):
         middle_name="User"
     )
     mock_container['user_service'].create_user.return_value = mock_user
-    
+
     response = client.post(
         "/users/",
         json={
@@ -304,7 +304,7 @@ def test_create_user_endpoint(mock_container):
             "password_string": "password"
         }
     )
-    
+
     assert response.status_code == 200
     assert response.json()["email"] == "test@example.com"
     assert response.json()["first_name"] == "Test"

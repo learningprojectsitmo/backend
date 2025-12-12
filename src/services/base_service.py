@@ -1,5 +1,8 @@
-from abc import ABC, abstractmethod
-from typing import Any, Generic, TypeVar, Protocol
+from __future__ import annotations
+
+from typing import Any, Protocol, TypeVar
+
+from src.core.exceptions import NotFoundError
 
 ModelType = TypeVar("ModelType")
 CreateSchemaType = TypeVar("CreateSchemaType")
@@ -8,12 +11,13 @@ UpdateSchemaType = TypeVar("UpdateSchemaType")
 
 class RepositoryProtocol(Protocol):
     """Protocol для типизации репозиториев (асинхронный)"""
+
     async def get_by_id(self, id: int) -> ModelType | None: ...
 
     async def get_multi(
         self,
         skip: int = 0,
-        limit: int = 100
+        limit: int = 100,
     ) -> list[ModelType]: ...
 
     async def create(self, obj_data: CreateSchemaType) -> ModelType: ...
@@ -29,7 +33,7 @@ class RepositoryProtocol(Protocol):
     async def exists(self, id: int) -> bool: ...
 
 
-class BaseService(ABC, Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
+class BaseService[ModelType, CreateSchemaType, UpdateSchemaType]:
     """Улучшенный базовый сервис с дополнительными возможностями (асинхронный)"""
 
     def __init__(self, repository: RepositoryProtocol) -> None:
@@ -39,7 +43,7 @@ class BaseService(ABC, Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         """Получить объект по ID"""
         result = await self._repository.get_by_id(id)
         if result is None:
-            raise ValueError(f"Object with id {id} not found")
+            raise NotFoundError(f"Object with id {id} not found")
         return result
 
     async def get_multi(self, skip: int = 0, limit: int = 100) -> list[ModelType]:
@@ -54,14 +58,14 @@ class BaseService(ABC, Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         """Обновить объект"""
         result = await self._repository.update(id, obj_data)
         if result is None:
-            raise ValueError(f"Object with id {id} not found")
+            raise NotFoundError(f"Object with id {id} not found")
         return result
 
     async def delete(self, id: int) -> bool:
         """Удалить объект"""
         result = await self._repository.delete(id)
         if not result:
-            raise ValueError(f"Object with id {id} not found")
+            raise NotFoundError(f"Object with id {id} not found")
         return result
 
     async def count(self) -> int:
@@ -78,7 +82,7 @@ class BaseService(ABC, Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
     async def get_or_create(self, defaults: dict | None = None, **kwargs) -> tuple[ModelType, bool]:
         """Получить объект или создать новый, если не найден"""
-        id = kwargs.get('id', 0)
+        id = kwargs.get("id", 0)
         existing = await self._repository.get_by_id(id)
 
         # Если объект не найден по ID, создаем новый
@@ -93,7 +97,7 @@ class BaseService(ABC, Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
     async def update_or_create(self, defaults: dict | None = None, **kwargs) -> tuple[ModelType, bool]:
         """Обновить объект или создать новый, если не найден"""
-        id = kwargs.get('id', 0)
+        id = kwargs.get("id", 0)
         existing = await self._repository.get_by_id(id)
 
         if existing is None:
@@ -102,25 +106,24 @@ class BaseService(ABC, Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
                 create_data.update(defaults)
             new_obj = await self.create(create_data)
             return new_obj, True
-        else:
-            update_data = kwargs.copy()
-            if defaults:
-                update_data.update(defaults)
-            updated_obj = await self.update(id, update_data)
-            return updated_obj, False
+        update_data = kwargs.copy()
+        if defaults:
+            update_data.update(defaults)
+        updated_obj = await self.update(id, update_data)
+        return updated_obj, False
 
     async def get_paginated(self, page: int = 1, page_size: int = 10) -> dict[str, Any]:
         """Получить объекты с пагинацией"""
         skip = (page - 1) * page_size
         items = await self._repository.get_multi(skip=skip, limit=page_size)
         total = await self._repository.count()
-        
+
         total_pages = (total + page_size - 1) // page_size if total > 0 else 0
-        
+
         return {
             "items": items,
             "total": total,
             "page": page,
             "page_size": page_size,
-            "total_pages": total_pages
+            "total_pages": total_pages,
         }

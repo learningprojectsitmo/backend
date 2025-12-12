@@ -1,10 +1,16 @@
-from typing import Optional, List
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.model.models import Resume
-from src.schema.resume import ResumeCreate, ResumeUpdate
-from src.services.base_service import BaseService
-from src.repository.resume_repository import ResumeRepository
+from src.core.exceptions import PermissionError
+
+if TYPE_CHECKING:
+    from src.model.models import Resume
+    from src.repository.resume_repository import ResumeRepository
+    from src.schema.resume import ResumeCreate, ResumeUpdate
+    from src.services.base_service import BaseService
 
 
 class ResumeService(BaseService[Resume, ResumeCreate, ResumeUpdate]):
@@ -13,15 +19,15 @@ class ResumeService(BaseService[Resume, ResumeCreate, ResumeUpdate]):
         self._resume_repository = resume_repository
         self._db_session = db_session
 
-    async def get_resume_by_id(self, resume_id: int) -> Optional[Resume]:
+    async def get_resume_by_id(self, resume_id: int) -> Resume | None:
         """Получить резюме по ID"""
         return await self._resume_repository.get_by_id(resume_id)
 
-    async def get_resumes_by_author(self, author_id: int) -> List[Resume]:
+    async def get_resumes_by_author(self, author_id: int) -> list[Resume]:
         """Получить резюме по автору"""
         return await self._resume_repository.get_by_author_id(author_id)
 
-    async def get_resumes_paginated(self, page: int = 1, limit: int = 10) -> tuple[List[Resume], int]:
+    async def get_resumes_paginated(self, page: int = 1, limit: int = 10) -> tuple[list[Resume], int]:
         """Получить резюме с пагинацией"""
         skip = (page - 1) * limit
         resumes = await self._resume_repository.get_multi(skip=skip, limit=limit)
@@ -34,14 +40,14 @@ class ResumeService(BaseService[Resume, ResumeCreate, ResumeUpdate]):
             resume_data.author_id = author_id
         return await self._resume_repository.create(resume_data)
 
-    async def update_resume(self, resume_id: int, resume_data: ResumeUpdate, current_user_id: int) -> Optional[Resume]:
+    async def update_resume(self, resume_id: int, resume_data: ResumeUpdate, current_user_id: int) -> Resume | None:
         """Обновить резюме (только автор может обновлять)"""
         resume = await self.get_resume_by_id(resume_id)
         if not resume:
             return None
 
         if resume.author_id != current_user_id:
-            raise PermissionError("Только автор резюме может его обновлять")
+            raise PermissionError("Only author can update resume")
 
         return await self._resume_repository.update(resume_id, resume_data)
 
@@ -52,6 +58,6 @@ class ResumeService(BaseService[Resume, ResumeCreate, ResumeUpdate]):
             return False
 
         if resume.author_id != current_user_id:
-            raise PermissionError("Только автор резюме может его удалять")
+            raise PermissionError("Only author can delete resume")
 
         return await self._resume_repository.delete(resume_id)

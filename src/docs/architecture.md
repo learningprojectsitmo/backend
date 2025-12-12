@@ -129,7 +129,7 @@ async def fetch_project(
     project = project_service.get_project_by_id(project_id)
     if not project:
         raise HTTPException(status_code=404, detail="There is no project with that id!")
-    
+
     return ProjectFull.model_validate(project)
 ```
 
@@ -145,7 +145,7 @@ async def fetch_resume(
     resume = resume_service.get_resume_by_id(resume_id)
     if not resume:
         raise HTTPException(status_code=404, detail="There is no resume with that id!")
-    
+
     return ResumeFull.model_validate(resume)
 ```
 

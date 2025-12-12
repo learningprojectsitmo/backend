@@ -1,15 +1,16 @@
+from __future__ import annotations
+
 from datetime import datetime, timedelta
-from typing import Optional, Annotated
-from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordRequestForm
+
+from fastapi import HTTPException, status
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.model.models import User
-from src.schema.user import UserCreate
-from src.schema.auth import Token
 from src.repository.user_repository import UserRepository
+from src.schema.auth import LoginRequest, Token
+
 
 class AuthService:
     def __init__(self, user_repository: UserRepository, db_session: AsyncSession):
@@ -28,7 +29,7 @@ class AuthService:
         """Хешировать пароль"""
         return self._pwd_context.hash(password)
 
-    async def authenticate_user(self, email: str, password: str) -> Optional[User]:
+    async def authenticate_user(self, email: str, password: str) -> User | None:
         """Аутентификация пользователя"""
         user = await self._user_repository.get_by_email(email)
         if not user:
@@ -56,7 +57,7 @@ class AuthService:
             raise credentials_exception
         return user
 
-    def create_access_token(self, data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    def create_access_token(self, data: dict, expires_delta: timedelta | None = None) -> str:
         """Создать токен доступа"""
         to_encode = data.copy()
         if expires_delta:
@@ -69,7 +70,7 @@ class AuthService:
 
     async def login_for_access_token(
         self,
-        form_data: Annotated[OAuth2PasswordRequestForm, Depends()]
+        form_data: LoginRequest,
     ) -> Token:
         """Вход в систему и получение токена"""
         user = await self.authenticate_user(form_data.username, form_data.password)
@@ -81,7 +82,8 @@ class AuthService:
             )
         access_token_expires = timedelta(minutes=self._access_token_expire_minutes)
         access_token = self.create_access_token(
-            data={"sub": user.email}, expires_delta=access_token_expires
+            data={"sub": user.email},
+            expires_delta=access_token_expires,
         )
         return Token(access_token=access_token, token_type="bearer")
 

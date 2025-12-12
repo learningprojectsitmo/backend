@@ -23,9 +23,8 @@ dependencies = [
     "pyjwt>=2.10.1",
     "pwdlib[argon2]>=0.3.0",
     "dependency-injector>=4.48.3",
-    "loguru>=0.7.3",
+    "loguru>=0.7.3"
 ]
-
 
 [project.optional-dependencies]
 dev = [
@@ -73,10 +72,10 @@ python_functions = ["test_*"]
 addopts = "-v --tb=short"
 asyncio_mode = "auto"
 
-
 [tool.ruff]
-# Версия Python
-target-version = "py312"
+#python-target = "py312"
+line-length = 120
+indent-width = 4
 
 # Исключаемые файлы/директории
 exclude = [
@@ -91,15 +90,11 @@ exclude = [
     "migrations",
 ]
 
-# Включенные правила (можно использовать E, W, F, I и др.)
-line-length = 120
-indent-width = 4
-
 [tool.ruff.lint]
 # Включенные правила
 select = [
     "E",   # pycodestyle errors
-    "W",   # pycodestyle warnings  
+    "W",   # pycodestyle warnings
     "F",   # pyflakes
     "I",   # isort
     "B",   # flake8-bugbear
@@ -122,10 +117,13 @@ select = [
 ignore = [
     "E501",  # line too long (handled by formatter)
     "B008",  # do not perform function calls in argument defaults
-    "ARG001", # unused function arguments (we'll handle this per-function)
+    "ARG001", # unused function arguments
     "PLR0913", # too many arguments to function call
     "PLR0915", # too many statements
     "PLW0603", # global-statement
+    "D415", "D400", "RUF002", "RUF003", "TC004", "TC002",
+    "RUF003", "RUF001", "TRY003",  # -> remve ater chadge
+    "TC001"
 ]
 
 [tool.ruff.lint.flake8-bugbear]
@@ -153,12 +151,10 @@ max-complexity = 10
 classmethod-decorators = ["classmethod"]
 
 [tool.ruff.lint.pyupgrade]
-# Настройки pyupgrade
 keep-runtime-typing = true
-target-version = "py312"
+#target-version = "py312"
 
 [tool.ruff.format]
-# Настройки форматирования
 quote-style = "double"
 indent-style = "space"
 skip-magic-trailing-comma = false

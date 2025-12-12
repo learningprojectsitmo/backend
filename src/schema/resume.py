@@ -1,21 +1,25 @@
+from __future__ import annotations
 
 from pydantic import BaseModel
 
 
 class ResumeCreate(BaseModel):
     """Схема для создания резюме"""
+
     header: str
     author_id: int | None = None
 
 
 class ResumeUpdate(BaseModel):
     """Схема для обновления резюме"""
+
     header: str | None = None
     resume_text: str | None = None
 
 
 class ResumeFull(ResumeCreate):
     """Полная схема резюме"""
+
     id: int
     resume_text: str | None = None
 
@@ -25,6 +29,7 @@ class ResumeFull(ResumeCreate):
 
 class ResumeResponse(BaseModel):
     """Схема ответа с резюме"""
+
     id: int
     header: str
     author_id: int
@@ -35,6 +40,7 @@ class ResumeResponse(BaseModel):
 
 class ResumeListResponse(BaseModel):
     """Схема ответа со списком резюме"""
+
     items: list[ResumeFull]
     total: int
     page: int

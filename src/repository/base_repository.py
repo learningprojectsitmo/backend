@@ -1,14 +1,19 @@
-from typing import Any, Generic, Protocol, TypeVar
-from sqlalchemy.ext.asyncio import AsyncSession
+from __future__ import annotations
+
+from typing import Protocol, TypeVar
+
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.core.exceptions import DatabaseError
 
 ModelType = TypeVar("ModelType")
 CreateSchemaType = TypeVar("CreateSchemaType")
 UpdateSchemaType = TypeVar("UpdateSchemaType")
 
 
-class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
+class BaseRepository[ModelType, CreateSchemaType, UpdateSchemaType]:
     """Упрощенный базовый репозиторий для работы с базой данных (асинхронный)"""
 
     def __init__(self, session_factory):
@@ -24,9 +29,9 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         """Зафиксировать изменения в базе данных"""
         try:
             await session.commit()
-        except SQLAlchemyError as e:
+        except SQLAlchemyError:
             await session.rollback()
-            raise e
+            raise
 
     async def _refresh_session(self, session: AsyncSession, obj: ModelType):
         """Обновить объект из базы данных"""
@@ -37,7 +42,7 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         session = await self._get_session()
         try:
             result = await session.execute(
-                select(self._model).where(self._model.id == id)
+                select(self._model).where(self._model.id == id),
             )
             return result.scalar_one_or_none()
         finally:
@@ -46,13 +51,13 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
     async def get_multi(
         self,
         skip: int = 0,
-        limit: int = 100
+        limit: int = 100,
     ) -> list[ModelType]:
         """Получить список объектов с пагинацией"""
         session = await self._get_session()
         try:
             result = await session.execute(
-                select(self._model).offset(skip).limit(limit)
+                select(self._model).offset(skip).limit(limit),
             )
             return result.scalars().all()
         finally:
@@ -63,10 +68,7 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         session = await self._get_session()
         try:
             # Поддержка как dict, так и Pydantic models
-            if hasattr(obj_data, 'model_dump'):
-                obj_dict = obj_data.model_dump(exclude_unset=True)
-            else:
-                obj_dict = obj_data
+            obj_dict = obj_data.model_dump(exclude_unset=True) if hasattr(obj_data, "model_dump") else obj_data
 
             db_obj = self._model(**obj_dict)
             session.add(db_obj)
@@ -75,7 +77,7 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             return db_obj
         except IntegrityError as e:
             await session.rollback()
-            raise ValueError(f"Error creating object: {e}") from e
+            raise DatabaseError(f"Error creating object: {e}") from e
         finally:
             await session.close()
 
@@ -84,7 +86,7 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         session = await self._get_session()
         try:
             result = await session.execute(
-                select(self._model).where(self._model.id == id)
+                select(self._model).where(self._model.id == id),
             )
             db_obj = result.scalar_one_or_none()
 
@@ -92,10 +94,7 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
                 return None
 
             # Поддержка как dict, так и Pydantic models
-            if hasattr(obj_data, 'model_dump'):
-                update_data = obj_data.model_dump(exclude_unset=True)
-            else:
-                update_data = obj_data
+            update_data = obj_data.model_dump(exclude_unset=True) if hasattr(obj_data, "model_dump") else obj_data
 
             for field, value in update_data.items():
                 if hasattr(db_obj, field):
@@ -106,7 +105,7 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             return db_obj
         except SQLAlchemyError as e:
             await session.rollback()
-            raise ValueError(f"Error updating object: {e}") from e
+            raise DatabaseError(f"Error updating object: {e}") from e
         finally:
             await session.close()
 
@@ -115,7 +114,7 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         session = await self._get_session()
         try:
             result = await session.execute(
-                select(self._model).where(self._model.id == id)
+                select(self._model).where(self._model.id == id),
             )
             db_obj = result.scalar_one_or_none()
 
@@ -127,7 +126,7 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             return True
         except SQLAlchemyError as e:
             await session.rollback()
-            raise ValueError(f"Error deleting object: {e}") from e
+            raise DatabaseError(f"Error deleting object: {e}") from e
         finally:
             await session.close()
 
@@ -136,7 +135,7 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         session = await self._get_session()
         try:
             result = await session.execute(
-                select(self._model).count()
+                select(self._model).count(),
             )
             return result.scalar()
         finally:
@@ -150,10 +149,7 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         try:
             for obj_data in obj_data_list:
                 # Поддержка как dict, так и Pydantic models
-                if hasattr(obj_data, 'model_dump'):
-                    obj_dict = obj_data.model_dump(exclude_unset=True)
-                else:
-                    obj_dict = obj_data
+                obj_dict = obj_data.model_dump(exclude_unset=True) if hasattr(obj_data, "model_dump") else obj_data
 
                 db_obj = self._model(**obj_dict)
                 db_objects.append(db_obj)
@@ -165,7 +161,7 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             return db_objects
         except IntegrityError as e:
             await session.rollback()
-            raise ValueError(f"Error creating objects: {e}") from e
+            raise DatabaseError(f"Error creating objects: {e}") from e
         finally:
             await session.close()
 
@@ -174,7 +170,7 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         session = await self._get_session()
         try:
             result = await session.execute(
-                select(self._model.id).where(self._model.id == id).limit(1)
+                select(self._model.id).where(self._model.id == id).limit(1),
             )
             return result.first() is not None
         finally:
@@ -183,12 +179,13 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
 class RepositoryProtocol(Protocol):
     """Protocol для типизации репозиториев (асинхронный)"""
+
     async def get_by_id(self, id: int) -> ModelType | None: ...
 
     async def get_multi(
         self,
         skip: int = 0,
-        limit: int = 100
+        limit: int = 100,
     ) -> list[ModelType]: ...
 
     async def create(self, obj_data: CreateSchemaType) -> ModelType: ...

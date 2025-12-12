@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from sqlalchemy import ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -17,18 +19,21 @@ class User(BaseModel):
 
     password_hashed: Mapped[str] = mapped_column(String, nullable=False)
 
-    resumes: Mapped[list["Resume"]] = relationship(
-            back_populates="user", cascade="all, delete-orphan"
+    resumes: Mapped[list[Resume]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
     )
-    responses: Mapped[list["Response"]] = relationship(
-        back_populates="respondent", cascade="all, delete-orphan"
+    responses: Mapped[list[Response]] = relationship(
+        back_populates="respondent",
+        cascade="all, delete-orphan",
     )
-    projects_led: Mapped[list["Project"]] = relationship(
+    projects_led: Mapped[list[Project]] = relationship(
         # The project will not be deleted when its author gets deleted
-        back_populates="author"
+        back_populates="author",
     )
-    projects_in: Mapped[list['ProjectParticipation']] = relationship(
-        back_populates='participant', cascade='all, delete-orphan'
+    projects_in: Mapped[list[ProjectParticipation]] = relationship(
+        back_populates="participant",
+        cascade="all, delete-orphan",
     )
 
     def __repr__(self) -> str:
@@ -42,17 +47,13 @@ class Resume(BaseModel):
     header: Mapped[str] = mapped_column(nullable=False)
     resume_text: Mapped[str | None] = mapped_column(nullable=True)
 
-    user: Mapped["User"] = relationship(back_populates="resumes")
+    user: Mapped[User] = relationship(back_populates="resumes")
 
     # skills (particular, like docker, git etc.)
     # roles (general, like backend, Project Management etc.)
 
     def __repr__(self) -> str:
-        return (
-            f"Resume(id={self.id!r}, "
-            f"author_id={self.author_id!r}, "
-            f"header={self.header!r})"
-        )
+        return f"Resume(id={self.id!r}, author_id={self.author_id!r}, header={self.header!r})"
 
 
 class Project(BaseModel):
@@ -63,29 +64,30 @@ class Project(BaseModel):
     description: Mapped[str | None] = mapped_column(nullable=True)
     max_participants: Mapped[str | None] = mapped_column(nullable=True)
 
-    author: Mapped["User"] = relationship(back_populates="projects_led")
-    responses: Mapped[list["Response"]] = relationship(
+    author: Mapped[User] = relationship(back_populates="projects_led")
+    responses: Mapped[list[Response]] = relationship(
         # TODO do we want to store responses to a deleted project?
-        back_populates="project", cascade="all, delete-orphan"
+        back_populates="project",
+        cascade="all, delete-orphan",
     )
 
     # status_id (for later, need to create the Status table first)
     # skills (particular, like docker, git etc.)
     # roles (general, like backend, Project Management etc.)
-    participants: Mapped[list['ProjectParticipation']] = relationship(back_populates='project')
+    participants: Mapped[list[ProjectParticipation]] = relationship(back_populates="project")
 
     def __repr__(self) -> str:
         return f"Project(id={self.id!r}, author_id={self.author_id!r}, description={self.description!r})"
 
 
 class ProjectParticipation(BaseModel):
-    __tablename__ = 'project_participation'
+    __tablename__ = "project_participation"
 
     project_id: Mapped[int] = mapped_column(ForeignKey("project.id"), nullable=False)
     participant_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
 
-    project: Mapped['Project'] = relationship(back_populates='participants')
-    participant: Mapped['User'] = relationship(back_populates='projects_in')
+    project: Mapped[Project] = relationship(back_populates="participants")
+    participant: Mapped[User] = relationship(back_populates="projects_in")
 
 
 class Response(BaseModel):
@@ -96,8 +98,8 @@ class Response(BaseModel):
     note: Mapped[str] = mapped_column(String(200), nullable=True)
 
     # TODO not all relationships are needed. Remove unneeded
-    respondent: Mapped["User"] = relationship(back_populates="responses")
-    project: Mapped["Project"] = relationship(back_populates="responses")
+    respondent: Mapped[User] = relationship(back_populates="responses")
+    project: Mapped[Project] = relationship(back_populates="responses")
 
     def __repr__(self) -> str:
         return f"Response(id={self.id!r}, respondent_id={self.respondent_id!r}, note={self.note!r})"
