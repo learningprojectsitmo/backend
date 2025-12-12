@@ -1,13 +1,13 @@
 import math
 
-from dependency_injector.wiring import Provide, inject
+from dependency_injector.wiring import Provide
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from src.core.container import Container
 from src.core.dependencies import get_current_user
 from src.core.middleware import inject
 from src.model.models import User
-from src.schemas import *
+from src.schemas import DeleteResponse, ResumeCreate, ResumeFull, ResumeListResponse, ResumeResponse, ResumeUpdate
 from src.services.resume_service import ResumeService
 
 resume_router = APIRouter(prefix="/resumes", tags=["resume"])
@@ -18,7 +18,7 @@ resume_router = APIRouter(prefix="/resumes", tags=["resume"])
 async def fetch_resume(
     resume_id: int,
     resume_service: ResumeService = Depends(Provide[Container.resume_service]),
-    current_user: User = Depends(get_current_user)
+    _current_user: User = Depends(get_current_user)
 ):
     """Получить резюме по ID"""
     resume = resume_service.get_resume_by_id(resume_id)
@@ -60,7 +60,7 @@ async def update_resume(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=str(e),
             headers={"WWW-Authenticate": "Bearer"},
-        )
+        ) from e
 
 
 @resume_router.delete("/{resume_id}", response_model=DeleteResponse)
@@ -82,7 +82,7 @@ async def delete_resume(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=str(e),
             headers={"WWW-Authenticate": "Bearer"},
-        )
+        ) from e
 
 
 @resume_router.get("/", response_model=ResumeListResponse)
@@ -91,7 +91,7 @@ async def fetch_resumes(
     page: int = Query(1, ge=1, description="Номер страницы"),
     limit: int = Query(10, ge=1, le=100, description="Количество резюме на странице"),
     resume_service: ResumeService = Depends(Provide[Container.resume_service]),
-    current_user: User = Depends(get_current_user)
+    _current_user: User = Depends(get_current_user)
 ):
     """Получить список резюме с пагинацией"""
     resumes, total = resume_service.get_resumes_paginated(page, limit)

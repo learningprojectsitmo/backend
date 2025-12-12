@@ -23,14 +23,14 @@ async def create_user(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Failed to create user: {str(e)}"
-        )
+        ) from e
 
 
 @user_router.get("/{user_id}", response_model=UserFull)
 async def get_user(
     user_id: int,
     user_service: UserService = Depends(Provide[Container.user_service]),
-    current_user: User = Depends(get_current_user)
+    _current_user: User = Depends(get_current_user)
 ):
     """Получить пользователя по ID"""
     user = user_service.get_user_by_id(user_id)
@@ -47,7 +47,7 @@ async def get_users(
     page: int = Query(1, ge=1, description="Номер страницы"),
     limit: int = Query(10, ge=1, le=100, description="Количество пользователей на странице"),
     user_service: UserService = Depends(Provide[Container.user_service]),
-    current_user: User = Depends(get_current_user)
+    _current_user: User = Depends(get_current_user)
 ):
     """Получить список пользователей с пагинацией"""
     return user_service.get_users_paginated(page=page, limit=limit)

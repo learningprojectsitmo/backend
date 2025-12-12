@@ -20,7 +20,7 @@ class RepositoryProtocol(Protocol):
 
 class BaseService(ABC, Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
     """Улучшенный базовый сервис с дополнительными возможностями"""
-    
+
     def __init__(self, repository: RepositoryProtocol) -> None:
         self._repository = repository
 
@@ -59,7 +59,7 @@ class BaseService(ABC, Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
     def get_or_create(self, defaults: dict | None = None, **kwargs) -> tuple[ModelType, bool]:
         """Получить объект или создать новый, если не найден"""
         existing = self._repository.get_by_id(kwargs.get('id', 0))
-        
+
         # Если объект не найден по ID, создаем новый
         if existing is None:
             create_data = kwargs.copy()
@@ -67,13 +67,13 @@ class BaseService(ABC, Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
                 create_data.update(defaults)
             new_obj = self.create(create_data)
             return new_obj, True
-        
+
         return existing, False
 
     def update_or_create(self, defaults: dict | None = None, **kwargs) -> tuple[ModelType, bool]:
         """Обновить объект или создать новый, если не существует"""
         obj_id = kwargs.get('id')
-        
+
         if obj_id and self.exists(obj_id):
             updated_obj = self.update(obj_id, kwargs)
             return updated_obj, False
@@ -89,7 +89,7 @@ class BaseService(ABC, Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         skip = (page - 1) * page_size
         items = self.get_multi(skip=skip, limit=page_size)
         total = self.count()
-        
+
         return {
             "items": items,
             "total": total,

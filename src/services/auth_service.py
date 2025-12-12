@@ -10,6 +10,7 @@ from src.core.security import verify_password
 from src.model.models import User
 from src.repository.user_repository import UserRepository
 from src.schemas import Token, UserCreate
+
 from .base_service import BaseService
 
 
@@ -40,7 +41,7 @@ class AuthService(BaseService[User, UserCreate, dict]):  # Используем 
 
         except Exception as e:
             print(f"JWT Error: {e}")
-            raise credentials_exception
+            raise credentials_exception from e
 
         user = self._user_repository.get_by_email(email)
         if not user:

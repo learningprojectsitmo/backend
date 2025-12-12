@@ -6,7 +6,7 @@ from core.database import BaseModel
 
 class User(BaseModel):
     __tablename__ = "user"
-    
+
     first_name: Mapped[str] = mapped_column(String(30), nullable=False)
     middle_name: Mapped[str] = mapped_column(String(40), nullable=False)
     last_name: Mapped[str | None] = mapped_column(String(30), nullable=True)
@@ -37,7 +37,7 @@ class User(BaseModel):
 
 class Resume(BaseModel):
     __tablename__ = "resume"
-    
+
     author_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
     header: Mapped[str] = mapped_column(nullable=False)
     resume_text: Mapped[str | None] = mapped_column(nullable=True)
@@ -57,7 +57,7 @@ class Resume(BaseModel):
 
 class Project(BaseModel):
     __tablename__ = "project"
-    
+
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     author_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
     description: Mapped[str | None] = mapped_column(nullable=True)
@@ -80,7 +80,7 @@ class Project(BaseModel):
 
 class ProjectParticipation(BaseModel):
     __tablename__ = 'project_participation'
-    
+
     project_id: Mapped[int] = mapped_column(ForeignKey("project.id"), nullable=False)
     participant_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
 
@@ -90,7 +90,7 @@ class ProjectParticipation(BaseModel):
 
 class Response(BaseModel):
     __tablename__ = "response"
-    
+
     respondent_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
     project_id: Mapped[int] = mapped_column(ForeignKey("project.id"), nullable=False)
     note: Mapped[str] = mapped_column(String(200), nullable=True)

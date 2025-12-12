@@ -3,4 +3,4 @@ from src.services.project_service import ProjectService
 from src.services.resume_service import ResumeService
 from src.services.user_service import UserService
 
-# __all__ = ["AuthService", "UserService", "ProjectService", "ResumeService"]
+__all__ = ["AuthService", "UserService", "ProjectService", "ResumeService"]

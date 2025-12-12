@@ -1,13 +1,21 @@
 import math
 
-from dependency_injector.wiring import Provide, inject
+from dependency_injector.wiring import Provide
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from src.core.container import Container
 from src.core.dependencies import get_current_user
 from src.core.middleware import inject
 from src.model.models import User
-from src.schemas import *
+from src.schemas import (
+    DeleteResponse,
+    ProjectCreate,
+    ProjectFull,
+    ProjectListItem,
+    ProjectListResponse,
+    ProjectResponse,
+    ProjectUpdate,
+)
 from src.services.project_service import ProjectService
 
 project_router = APIRouter(prefix="/projects", tags=['project'])
@@ -18,7 +26,7 @@ project_router = APIRouter(prefix="/projects", tags=['project'])
 async def fetch_project(
     project_id: int,
     project_service: ProjectService = Depends(Provide[Container.project_service]),
-    current_user: User = Depends(get_current_user)
+    _current_user: User = Depends(get_current_user)
 ):
     """Получить проект по ID"""
     project = project_service.get_project_by_id(project_id)
@@ -48,7 +56,7 @@ async def update_project(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=str(e),
             headers={"WWW-Authenticate": "Bearer"},
-        )
+        ) from e
 
 
 @project_router.delete("/{project_id}", response_model=DeleteResponse)
@@ -70,7 +78,7 @@ async def delete_project(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=str(e),
             headers={"WWW-Authenticate": "Bearer"},
-        )
+        ) from e
 
 
 @project_router.post("/", response_model=ProjectResponse, status_code=201)
@@ -91,7 +99,7 @@ async def fetch_projects(
     page: int = Query(1, ge=1, description="Номер страницы"),
     limit: int = Query(10, ge=1, le=100, description="Количество проектов на странице"),
     project_service: ProjectService = Depends(Provide[Container.project_service]),
-    current_user: User = Depends(get_current_user)
+    _current_user: User = Depends(get_current_user)
 ):
     """Получить список проектов с пагинацией"""
     projects, total = project_service.get_projects_paginated(page, limit)

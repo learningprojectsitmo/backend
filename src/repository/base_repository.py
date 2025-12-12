@@ -41,7 +41,7 @@ class RepositoryProtocol(Protocol):
 
 class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
     """Упрощенный базовый репозиторий для работы с базой данных"""
-    
+
     def __init__(self, session_factory):
         self._session_factory = session_factory
         self._session = None
@@ -93,29 +93,29 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
     def create(self, obj_data: CreateSchemaType) -> ModelType:
         """Создать новый объект"""
         db = self._get_session()
-        
+
         # Поддержка как dict, так и Pydantic models
         if hasattr(obj_data, 'model_dump'):
             obj_dict = obj_data.model_dump(exclude_unset=True)
         else:
             obj_dict = obj_data
-            
+
         db_obj = self._model(**obj_dict)
         db.add(db_obj)
-        
+
         try:
             self._commit_session()
             self._refresh_session(db_obj)
             return db_obj
         except IntegrityError as e:
             db.rollback()
-            raise ValueError(f"Error creating object: {e}")
+            raise ValueError(f"Error creating object: {e}") from e
 
     def update(self, id: int, obj_data: UpdateSchemaType) -> ModelType | None:
         """Обновить объект"""
         db = self._get_session()
         db_obj = db.query(self._model).filter(self._model.id == id).first() if self._model else None
-        
+
         if not db_obj:
             return None
 
@@ -124,7 +124,7 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             update_data = obj_data.model_dump(exclude_unset=True)
         else:
             update_data = obj_data
-            
+
         for field, value in update_data.items():
             if hasattr(db_obj, field):
                 setattr(db_obj, field, value)
@@ -135,13 +135,13 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             return db_obj
         except SQLAlchemyError as e:
             db.rollback()
-            raise ValueError(f"Error updating object: {e}")
+            raise ValueError(f"Error updating object: {e}") from e
 
     def delete(self, id: int) -> bool:
         """Удалить объект"""
         db = self._get_session()
         db_obj = db.query(self._model).filter(self._model.id == id).first() if self._model else None
-        
+
         if not db_obj:
             return False
 
@@ -151,7 +151,7 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             return True
         except SQLAlchemyError as e:
             db.rollback()
-            raise ValueError(f"Error deleting object: {e}")
+            raise ValueError(f"Error deleting object: {e}") from e
 
     def count(self) -> int:
         """Подсчитать количество объектов"""
@@ -162,17 +162,17 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         """Создать несколько объектов за один раз"""
         db = self._get_session()
         db_objects = []
-        
+
         for obj_data in obj_data_list:
             # Поддержка как dict, так и Pydantic models
             if hasattr(obj_data, 'model_dump'):
                 obj_dict = obj_data.model_dump(exclude_unset=True)
             else:
                 obj_dict = obj_data
-                
+
             db_obj = self._model(**obj_dict)
             db_objects.append(db_obj)
-        
+
         try:
             db.add_all(db_objects)
             self._commit_session()
@@ -181,7 +181,7 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             return db_objects
         except IntegrityError as e:
             db.rollback()
-            raise ValueError(f"Error creating objects: {e}")
+            raise ValueError(f"Error creating objects: {e}") from e
 
     def exists(self, id: int) -> bool:
         """Проверить существование объекта с данным ID"""
