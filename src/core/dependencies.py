@@ -3,15 +3,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from fastapi import Depends, HTTPException
-from fastapi.security import OAuth2PasswordBearer
 
 from core.container import get_auth_service
+from src.core.security import oauth2_scheme
 
 if TYPE_CHECKING:
     from src.model.models import User
     from src.services.auth_service import AuthService
-
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
 
 
 async def get_current_user(

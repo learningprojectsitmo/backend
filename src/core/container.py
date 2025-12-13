@@ -33,19 +33,22 @@ async def get_user_repository(uow: IUnitOfWork = Depends(get_uow)) -> UserReposi
 
 
 # Service
-async def get_project_service(
-    project_repository: ProjectRepository = Depends(get_project_repository),
-) -> ProjectService:
-    return ProjectService(project_repository)
+async def get_auth_service(user_repository: UserRepository = Depends(get_user_repository)) -> AuthService:
+    return AuthService(user_repository)
+
+
+async def get_user_service(
+    user_repository: UserRepository = Depends(get_user_repository),
+    auth_service: AuthService = Depends(get_auth_service),
+) -> UserService:
+    return UserService(user_repository, auth_service)
 
 
 async def get_resume_service(resume_repository: ResumeRepository = Depends(get_resume_repository)) -> ResumeService:
     return ResumeService(resume_repository)
 
 
-async def get_user_service(user_repository: UserRepository = Depends(get_user_repository)) -> UserService:
-    return UserService(user_repository)
-
-
-async def get_auth_service(user_repository: UserRepository = Depends(get_user_repository)) -> AuthService:
-    return AuthService(user_repository)
+async def get_project_service(
+    project_repository: ProjectRepository = Depends(get_project_repository),
+) -> ProjectService:
+    return ProjectService(project_repository)

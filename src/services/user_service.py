@@ -1,20 +1,21 @@
 from __future__ import annotations
 
-from core.security import hash_password
 from src.model.models import User
 from src.repository.user_repository import UserRepository
 from src.schema.user import UserCreate, UserFull, UserListResponse, UserUpdate
+from src.services.auth_service import AuthService
 from src.services.base_service import BaseService
 
 
 class UserService(BaseService[User, UserCreate, UserUpdate]):
-    def __init__(self, user_repository: UserRepository):
+    def __init__(self, user_repository: UserRepository, auth_service: AuthService):
         super().__init__(user_repository)
         self._user_repository = user_repository
+        self._auth_service = auth_service
 
     async def create_user(self, user_data: UserCreate) -> User:
         """Создать нового пользователя с хешированием пароля"""
-        hashed_password = hash_password(user_data.password_string)
+        hashed_password = self._auth_service.get_password_hash(user_data.password_string)
 
         # Создаем словарь с правильными ключами для модели User
         user_data_dict = {

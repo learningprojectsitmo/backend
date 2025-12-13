@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from fastapi import HTTPException, status
-from fastapi.params import Depends
+from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from jose import JWTError, jwt
-from passlib.context import CryptContext
+from pwdlib import PasswordHash
 
+from core.config import settings
 from src.model.models import User
 from src.repository.user_repository import UserRepository
 from src.schema.auth import Token
@@ -16,14 +16,18 @@ from src.schema.auth import Token
 class AuthService:
     def __init__(self, user_repository: UserRepository):
         self._user_repository = user_repository
-        self._pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-        self._secret_key = "your-secret-key-here"  # Получить из настроек
-        self._algorithm = "HS256"
-        self._access_token_expire_minutes = 30
+        self._pwd_context = PasswordHash.recommended()
+        self._secret_key = settings.SECRET_KEY
+        self._algorithm = settings.ALGORITHM
+        self._access_token_expire_minutes = settings.ACCESS_TOKEN_EXPIRE_MINUTES
 
     def verify_password(self, plain_password: str, hashed_password: str) -> bool:
         """Проверить пароль"""
         return self._pwd_context.verify(plain_password, hashed_password)
+
+    def get_password_hash(self, password: str) -> str:
+        """Хешировать пароль"""
+        return self._pwd_context.hash(password)
 
     async def authenticate_user(self, email: str, password: str) -> User | None:
         """Аутентификация пользователя"""
