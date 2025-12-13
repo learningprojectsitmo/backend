@@ -29,6 +29,13 @@ class Settings(BaseSettings):
         "http://fpin-projects.ru:12683/",
     ]
 
+    # Logging
+    LOG_LEVEL: str = "INFO"
+    LOG_FORMAT: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    LOG_FILE: str = "app.log"
+    ENABLE_FILE_LOGGING: bool = True
+    ENABLE_CONSOLE_LOGGING: bool = True
+
     class Config:
         env_file = "../.env"
         extra = "ignore"
