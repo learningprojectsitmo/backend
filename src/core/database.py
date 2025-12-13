@@ -1,29 +1,11 @@
 from __future__ import annotations
 
-from datetime import datetime
-from typing import ClassVar
-
-from sqlalchemy import DateTime, Integer, func
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import declarative_base
 
 from .config import settings
 
-
-class Base(DeclarativeBase):
-    pass
-
-
-class BaseModel(Base):
-    __abstract__ = True
-    __table_args__: ClassVar[dict] = {"extend_existing": True}  # TODO remove this
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
-    )
-
+Base = declarative_base()
 
 # Асинхронный движок БД
 engine = create_async_engine(

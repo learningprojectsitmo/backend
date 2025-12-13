@@ -1,13 +1,17 @@
 from __future__ import annotations
 
-from sqlalchemy import ForeignKey, String
+from datetime import datetime
+
+from sqlalchemy import DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from core.database import BaseModel
+from core.database import Base
 
 
-class User(BaseModel):
+class User(Base):
     __tablename__ = "user"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
     first_name: Mapped[str] = mapped_column(String(30), nullable=False)
     middle_name: Mapped[str] = mapped_column(String(40), nullable=False)
@@ -35,19 +39,28 @@ class User(BaseModel):
         back_populates="participant",
         cascade="all, delete-orphan",
     )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
 
     def __repr__(self) -> str:
         return f"User(id={self.id!r}, first_name={self.first_name!r}, isu_number={self.isu_number!r})"
 
 
-class Resume(BaseModel):
+class Resume(Base):
     __tablename__ = "resume"
 
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     author_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
     header: Mapped[str] = mapped_column(nullable=False)
     resume_text: Mapped[str | None] = mapped_column(nullable=True)
 
     user: Mapped[User] = relationship(back_populates="resumes")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
 
     # skills (particular, like docker, git etc.)
     # roles (general, like backend, Project Management etc.)
@@ -56,9 +69,10 @@ class Resume(BaseModel):
         return f"Resume(id={self.id!r}, author_id={self.author_id!r}, header={self.header!r})"
 
 
-class Project(BaseModel):
+class Project(Base):
     __tablename__ = "project"
 
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     author_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
     description: Mapped[str | None] = mapped_column(nullable=True)
@@ -75,24 +89,34 @@ class Project(BaseModel):
     # skills (particular, like docker, git etc.)
     # roles (general, like backend, Project Management etc.)
     participants: Mapped[list[ProjectParticipation]] = relationship(back_populates="project")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
 
     def __repr__(self) -> str:
         return f"Project(id={self.id!r}, author_id={self.author_id!r}, description={self.description!r})"
 
 
-class ProjectParticipation(BaseModel):
+class ProjectParticipation(Base):
     __tablename__ = "project_participation"
 
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     project_id: Mapped[int] = mapped_column(ForeignKey("project.id"), nullable=False)
     participant_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
 
     project: Mapped[Project] = relationship(back_populates="participants")
     participant: Mapped[User] = relationship(back_populates="projects_in")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
 
 
-class Response(BaseModel):
+class Response(Base):
     __tablename__ = "response"
 
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     respondent_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
     project_id: Mapped[int] = mapped_column(ForeignKey("project.id"), nullable=False)
     note: Mapped[str] = mapped_column(String(200), nullable=True)
@@ -100,6 +124,10 @@ class Response(BaseModel):
     # TODO not all relationships are needed. Remove unneeded
     respondent: Mapped[User] = relationship(back_populates="responses")
     project: Mapped[Project] = relationship(back_populates="responses")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
 
     def __repr__(self) -> str:
         return f"Response(id={self.id!r}, respondent_id={self.respondent_id!r}, note={self.note!r})"
