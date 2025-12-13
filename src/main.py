@@ -18,9 +18,6 @@ async def lifespan(_app: FastAPI):
         await conn.run_sync(Base.metadata.create_all)
     yield
 
-    print("Shutting down...")
-    await engine.dispose()
-
 
 app = FastAPI(
     title="API",
