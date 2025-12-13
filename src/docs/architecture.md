@@ -94,37 +94,40 @@
 ## Примеры использования
 
 #### `backend/src/api/v1/endpoints/auth_new.py`
+
 ```python
 @auth_router.post("/token")
 @inject
 async def login_for_access_token(
-    form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
-    auth_service: AuthService = Depends(Provide[Container.auth_service])
+        form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
+        auth_service: AuthService = Depends(Provide[Container.get_auth_service])
 ) -> Token:
     return await auth_service.login_for_access_token(form_data)
 ```
 
 #### `backend/src/api/v1/endpoints/user.py`
+
 ```python
 @user_router.get("/{user_id}", response_model=UserFull)
 @inject
 async def get_user(
-    user_id: int,
-    user_service: UserService = Depends(Provide[Container.user_service]),
-    current_user: User = Depends(get_current_user)
+        user_id: int,
+        user_service: UserService = Depends(Provide[Container.get_user_service]),
+        current_user: User = Depends(get_current_user)
 ):
     user = user_service.get_user_by_id(user_id)
     return UserFull.model_validate(user)
 ```
 
 #### `backend/src/api/v1/endpoints/project.py`
+
 ```python
 @project_router.get("/{project_id}", response_model=ProjectFull)
 @inject
 async def fetch_project(
-    project_id: int,
-    project_service: ProjectService = Depends(Provide[Container.project_service]),
-    current_user: User = Depends(get_current_user)
+        project_id: int,
+        project_service: ProjectService = Depends(Provide[Container.get_project_service]),
+        current_user: User = Depends(get_current_user)
 ):
     project = project_service.get_project_by_id(project_id)
     if not project:
@@ -134,13 +137,14 @@ async def fetch_project(
 ```
 
 #### `backend/src/api/v1/endpoints/resume.py`
+
 ```python
 @resume_router.get("/{resume_id}", response_model=ResumeFull)
 @inject
 async def fetch_resume(
-    resume_id: int,
-    resume_service: ResumeService = Depends(Provide[Container.resume_service]),
-    current_user: User = Depends(get_current_user)
+        resume_id: int,
+        resume_service: ResumeService = Depends(Provide[Container.get_resume_service]),
+        current_user: User = Depends(get_current_user)
 ):
     resume = resume_service.get_resume_by_id(resume_id)
     if not resume:

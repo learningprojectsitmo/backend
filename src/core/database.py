@@ -7,6 +7,9 @@ from typing import TYPE_CHECKING, ClassVar
 from sqlalchemy import DateTime, Integer, create_engine, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from .config import settings
+
 if TYPE_CHECKING:
     from collections.abc import Generator
 
@@ -25,26 +28,16 @@ class BaseModel(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
+# Асинхронный движок БД
+engine = create_async_engine(
+    settings.DATABASE_URL,
+    echo=settings.DEBUG,
+    future=True,
+    pool_pre_ping=True,
+    pool_size=20,
+    max_overflow=30,
+)
 
-class Database:
-    def __init__(self, db_url: str) -> None:
-        self._engine = create_engine(db_url, echo=True)
-        self._session_factory = sessionmaker(
-            autocommit=False,
-            autoflush=False,
-            bind=self._engine,
-        )
-
-    def create_database(self) -> None:
-        Base.metadata.create_all(self._engine)
-
-    @contextmanager
-    def session(self) -> Generator[Session, None, None]:
-        session = self._session_factory()
-        try:
-            yield session
-        except Exception:
-            session.rollback()
-            raise
-        finally:
-            session.close()
+AsyncSessionLocal = async_sessionmaker(
+    engine, class_=AsyncSession, expire_on_commit=False, autoflush=False
+)

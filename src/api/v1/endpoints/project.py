@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-from dependency_injector.wiring import Provide
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from src.core.container import Container
+from src.core.container import get_project_service
 from src.core.dependencies import get_current_user
-from src.core.middleware import inject
 from src.model.models import User
 from src.schema.project import ProjectCreate, ProjectFull, ProjectListResponse, ProjectUpdate
 from src.services.project_service import ProjectService
@@ -14,10 +12,9 @@ project_router = APIRouter(prefix="/projects", tags=["project"])
 
 
 @project_router.get("/{project_id}", response_model=ProjectFull)
-@inject
 async def fetch_project(
     project_id: int,
-    project_service: ProjectService = Depends(Provide[Container.project_service]),
+    project_service: ProjectService = Depends(get_project_service),
     _current_user: User = Depends(get_current_user),
 ):
     """Получить проект по ID"""
@@ -29,11 +26,10 @@ async def fetch_project(
 
 
 @project_router.get("/", response_model=ProjectListResponse)
-@inject
 async def fetch_projects(
     page: int = Query(1, ge=1, description="Номер страницы"),
     limit: int = Query(10, ge=1, le=100, description="Количество проектов на странице"),
-    project_service: ProjectService = Depends(Provide[Container.project_service]),
+    project_service: ProjectService = Depends(get_project_service),
     _current_user: User = Depends(get_current_user),
 ):
     """Получить список проектов с пагинацией"""
@@ -52,10 +48,9 @@ async def fetch_projects(
 
 
 @project_router.post("/", response_model=ProjectFull)
-@inject
 async def create_project(
     project_data: ProjectCreate,
-    project_service: ProjectService = Depends(Provide[Container.project_service]),
+    project_service: ProjectService = Depends(get_project_service),
     current_user: User = Depends(get_current_user),
 ):
     """Создать новый проект"""
@@ -64,11 +59,10 @@ async def create_project(
 
 
 @project_router.put("/{project_id}", response_model=ProjectFull)
-@inject
 async def update_project(
     project_id: int,
-    project_data: ProjectUpdate,
-    project_service: ProjectService = Depends(Provide[Container.project_service]),
+    project_data: ProjectUpdate = Depends(ProjectUpdate),
+    project_service: ProjectService = Depends(get_project_service),
     current_user: User = Depends(get_current_user),
 ):
     """Обновить проект (только автор может обновлять)"""
@@ -85,10 +79,9 @@ async def update_project(
 
 
 @project_router.delete("/{project_id}")
-@inject
 async def delete_project(
     project_id: int,
-    project_service: ProjectService = Depends(Provide[Container.project_service]),
+    project_service: ProjectService = Depends(get_project_service),
     current_user: User = Depends(get_current_user),
 ):
     """Удалить проект (только автор может удалять)"""

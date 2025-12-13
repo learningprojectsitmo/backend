@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 
 from fastapi import HTTPException, status
+from fastapi.params import Depends
+from fastapi.security import OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.model.models import User
 from src.repository.user_repository import UserRepository
@@ -13,9 +14,8 @@ from src.schema.auth import LoginRequest, Token
 
 
 class AuthService:
-    def __init__(self, user_repository: UserRepository, db_session: AsyncSession):
+    def __init__(self, user_repository: UserRepository):
         self._user_repository = user_repository
-        self._db_session = db_session
         self._pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
         self._secret_key = "your-secret-key-here"  # Получить из настроек
         self._algorithm = "HS256"
@@ -24,10 +24,6 @@ class AuthService:
     def verify_password(self, plain_password: str, hashed_password: str) -> bool:
         """Проверить пароль"""
         return self._pwd_context.verify(plain_password, hashed_password)
-
-    def get_password_hash(self, password: str) -> str:
-        """Хешировать пароль"""
-        return self._pwd_context.hash(password)
 
     async def authenticate_user(self, email: str, password: str) -> User | None:
         """Аутентификация пользователя"""
@@ -61,16 +57,16 @@ class AuthService:
         """Создать токен доступа"""
         to_encode = data.copy()
         if expires_delta:
-            expire = datetime.utcnow() + expires_delta
+            expire = datetime.now(UTC) + expires_delta
         else:
-            expire = datetime.utcnow() + timedelta(minutes=self._access_token_expire_minutes)
+            expire = datetime.now(UTC) + timedelta(minutes=self._access_token_expire_minutes)
         to_encode.update({"exp": expire})
         encoded_jwt = jwt.encode(to_encode, self._secret_key, algorithm=self._algorithm)
         return encoded_jwt
 
     async def login_for_access_token(
         self,
-        form_data: LoginRequest,
+        form_data: OAuth2PasswordRequestForm = Depends(OAuth2PasswordRequestForm),
     ) -> Token:
         """Вход в систему и получение токена"""
         user = await self.authenticate_user(form_data.username, form_data.password)

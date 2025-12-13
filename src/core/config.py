@@ -5,9 +5,8 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     # Database
-    # DATABASE_URL: str = "postgresql://postgres:password@127.0.0.1/backend_db" TODO learn postgresql
-    DATABASE_URL: str = "sqlite:///test.db"
-    DEBUG: str = ""
+    DATABASE_URL: str = "postgresql+asyncpg://postgres:password@postgres/backend_db"
+    DEBUG: bool = False
 
     # JWT
     SECRET_KEY: str = "your-secret-key-here"

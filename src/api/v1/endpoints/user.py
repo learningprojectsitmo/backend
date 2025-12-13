@@ -2,12 +2,11 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from dependency_injector.wiring import Provide
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from src.core.container import Container
+from src.core.container import get_user_service
 from src.core.dependencies import get_current_user
-from src.core.middleware import inject
 from src.model.models import User
 from src.schema.user import UserCreate, UserFull, UserListResponse
 from src.services.user_service import UserService
@@ -16,13 +15,9 @@ user_router = APIRouter(prefix="/users", tags=["users"])
 
 
 @user_router.post("/", response_model=UserFull)
-@inject
 async def create_user(
     user_data: UserCreate,
-    user_service: Annotated[
-        UserService,
-        Depends(Provide[Container.user_service]),
-    ],
+    user_service: UserService = Depends(get_user_service),
 ):
     """Создать нового пользователя"""
     user = await user_service.create_user(user_data)
@@ -30,10 +25,9 @@ async def create_user(
 
 
 @user_router.get("/{user_id}", response_model=UserFull)
-@inject
 async def get_user(
     user_id: int,
-    user_service: UserService = Depends(Provide[Container.user_service]),
+    user_service: UserService = Depends(get_user_service),
     _current_user: User = Depends(get_current_user),
 ):
     """Получить пользователя по ID"""
@@ -45,11 +39,10 @@ async def get_user(
 
 
 @user_router.put("/{user_id}", response_model=UserFull)
-@inject
 async def update_user(
     user_id: int,
     user_data: UserCreate,
-    user_service: UserService = Depends(Provide[Container.user_service]),
+    user_service: UserService = Depends(get_user_service),
     current_user: User = Depends(get_current_user),
 ):
     """Обновить пользователя (только сам пользователь или админ)"""
@@ -73,10 +66,9 @@ async def update_user(
 
 
 @user_router.delete("/{user_id}")
-@inject
 async def delete_user(
     user_id: int,
-    user_service: UserService = Depends(Provide[Container.user_service]),
+    user_service: UserService = Depends(get_user_service),
     current_user: User = Depends(get_current_user),
 ):
     """Удалить пользователя (только сам пользователь или админ)"""
@@ -94,11 +86,10 @@ async def delete_user(
 
 
 @user_router.get("/", response_model=UserListResponse)
-@inject
 async def get_users(
     page: int = Query(1, ge=1, description="Номер страницы"),
     limit: int = Query(10, ge=1, le=100, description="Количество пользователей на странице"),
-    user_service: UserService = Depends(Provide[Container.user_service]),
+    user_service: UserService = Depends(get_user_service),
     _current_user: User = Depends(get_current_user),
 ):
     """Получить список пользователей с пагинацией"""

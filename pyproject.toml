@@ -22,8 +22,8 @@ dependencies = [
     "bcrypt==4.3.0",
     "pyjwt>=2.10.1",
     "pwdlib[argon2]>=0.3.0",
-    "dependency-injector>=4.48.3",
-    "loguru>=0.7.3"
+    "loguru>=0.7.3",
+    "asyncpg>=0.31.0",
 ]
 
 [project.optional-dependencies]

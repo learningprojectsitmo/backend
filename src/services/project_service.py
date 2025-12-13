@@ -14,10 +14,9 @@ if TYPE_CHECKING:
 
 
 class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
-    def __init__(self, project_repository: ProjectRepository, db_session: AsyncSession):
+    def __init__(self, project_repository: ProjectRepository):
         super().__init__(project_repository)
         self._project_repository = project_repository
-        self._db_session = db_session
 
     async def get_project_by_id(self, project_id: int) -> Project | None:
         """Получить проект по ID"""

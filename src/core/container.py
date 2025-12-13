@@ -1,10 +1,9 @@
 from __future__ import annotations
+from typing import AsyncGenerator
 
-from dependency_injector import containers, providers
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
+from fastapi import Depends
 
-from src.core.config import settings
+from src.core.uow import IUnitOfWork, SqlAlchemyUoW
 from src.repository.project_repository import ProjectRepository
 from src.repository.resume_repository import ResumeRepository
 from src.repository.user_repository import UserRepository
@@ -14,40 +13,30 @@ from src.services.resume_service import ResumeService
 from src.services.user_service import UserService
 
 
-class Container(containers.DeclarativeContainer):
-    wiring_config = containers.WiringConfiguration(
-        modules=[
-            "api.v1.endpoints.auth",
-            "api.v1.endpoints.user",
-            "api.v1.endpoints.project",
-            "api.v1.endpoints.resume",
-            "core.dependencies",
-        ],
-    )
+async def get_uow() -> AsyncGenerator[IUnitOfWork, None]:
+    async with SqlAlchemyUoW() as uow:
+        yield uow
 
-    # Database configuration for async operations
-    engine = providers.Singleton(create_async_engine, settings.DATABASE_URL, echo=settings.DEBUG)
+# Repository
+async def get_project_repository(uow: IUnitOfWork = Depends(get_uow)) -> ProjectRepository:
+    return ProjectRepository(uow)
 
-    # Async session factory
-    async_session_factory = providers.Singleton(
-        sessionmaker, bind=engine.provided, class_=AsyncSession, expire_on_commit=False
-    )
+async def get_resume_repository(uow: IUnitOfWork = Depends(get_uow)) -> ResumeRepository:
+    return ResumeRepository(uow)
 
-    # Database session provider (async)
-    session = providers.Factory(AsyncSession, bind=engine.provided)
+async def get_user_repository(uow: IUnitOfWork = Depends(get_uow)) -> UserRepository:
+    return UserRepository(uow)
 
-    # Repositories
-    user_repository = providers.Factory(UserRepository, session_factory=async_session_factory)
 
-    project_repository = providers.Factory(ProjectRepository, session_factory=async_session_factory)
+# Service
+async def get_project_service(project_repository: ProjectRepository = Depends(get_project_repository)) -> ProjectService:
+    return ProjectService(project_repository)
 
-    resume_repository = providers.Factory(ResumeRepository, session_factory=async_session_factory)
+async def get_resume_service(resume_repository: ResumeRepository = Depends(get_resume_repository)) -> ResumeService:
+    return ResumeService(resume_repository)
 
-    # Services
-    auth_service = providers.Factory(AuthService, user_repository=user_repository, db_session=session)
+async def get_user_service(user_repository: UserRepository = Depends(get_user_repository)) -> UserService:
+    return UserService(user_repository)
 
-    user_service = providers.Factory(UserService, user_repository=user_repository, db_session=session)
-
-    project_service = providers.Factory(ProjectService, project_repository=project_repository, db_session=session)
-
-    resume_service = providers.Factory(ResumeService, resume_repository=resume_repository, db_session=session)
+async def get_auth_service(user_repository: UserRepository = Depends(get_user_repository)) -> AuthService:
+    return AuthService(user_repository)

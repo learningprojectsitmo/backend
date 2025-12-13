@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from dependency_injector.wiring import Provide
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from src.core.container import Container
+from src.core.container import get_resume_service
 from src.core.dependencies import get_current_user
-from src.core.middleware import inject
 from src.model.models import User
 from src.schema.resume import ResumeCreate, ResumeFull, ResumeListResponse, ResumeUpdate
 from src.services.resume_service import ResumeService
@@ -14,10 +13,9 @@ resume_router = APIRouter(prefix="/resumes", tags=["resume"])
 
 
 @resume_router.get("/{resume_id}", response_model=ResumeFull)
-@inject
 async def fetch_resume(
     resume_id: int,
-    resume_service: ResumeService = Depends(Provide[Container.resume_service]),
+    resume_service: ResumeService = Depends(get_resume_service),
     _current_user: User = Depends(get_current_user),
 ):
     """Получить резюме по ID"""
@@ -29,11 +27,10 @@ async def fetch_resume(
 
 
 @resume_router.get("/", response_model=ResumeListResponse)
-@inject
 async def fetch_resumes(
     page: int = Query(1, ge=1, description="Номер страницы"),
     limit: int = Query(10, ge=1, le=100, description="Количество резюме на странице"),
-    resume_service: ResumeService = Depends(Provide[Container.resume_service]),
+    resume_service: ResumeService = Depends(get_resume_service),
     _current_user: User = Depends(get_current_user),
 ):
     """Получить список резюме с пагинацией"""
@@ -52,10 +49,9 @@ async def fetch_resumes(
 
 
 @resume_router.post("/", response_model=ResumeFull)
-@inject
 async def create_resume(
     resume_data: ResumeCreate,
-    resume_service: ResumeService = Depends(Provide[Container.resume_service]),
+    resume_service: ResumeService = Depends(get_resume_service),
     current_user: User = Depends(get_current_user),
 ):
     """Создать новое резюме"""
@@ -64,11 +60,10 @@ async def create_resume(
 
 
 @resume_router.put("/{resume_id}", response_model=ResumeFull)
-@inject
 async def update_resume(
     resume_id: int,
     resume_data: ResumeUpdate,
-    resume_service: ResumeService = Depends(Provide[Container.resume_service]),
+    resume_service: ResumeService = Depends(get_resume_service),
     current_user: User = Depends(get_current_user),
 ):
     """Обновить резюме (только автор может обновлять)"""
@@ -85,10 +80,9 @@ async def update_resume(
 
 
 @resume_router.delete("/{resume_id}")
-@inject
 async def delete_resume(
     resume_id: int,
-    resume_service: ResumeService = Depends(Provide[Container.resume_service]),
+    resume_service: ResumeService = Depends(get_resume_service),
     current_user: User = Depends(get_current_user),
 ):
     """Удалить резюме (только автор может удалять)"""

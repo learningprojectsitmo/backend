@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.v1.routes import routers as v1_router
 from src.core.config import settings
-from src.core.container import Container
+
 
 
 @asynccontextmanager
@@ -16,14 +16,12 @@ async def lifespan(_app: FastAPI):
     yield
 
 
-container = Container()
 app = FastAPI(
     title="API",
     description="",
     version="1.0.0",
     lifespan=lifespan,
 )
-app.container = container
 app.include_router(v1_router)
 
 app.add_middleware(

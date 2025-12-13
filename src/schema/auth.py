@@ -22,5 +22,5 @@ class LoginRequest(BaseModel):
     password: str = Field(..., description="Пароль пользователя")
 
 
-# Type alias для обратной совместимости
-OAuth2PasswordRequestForm = LoginRequest
+# # Type alias для обратной совместимости
+# OAuth2PasswordRequestForm = LoginRequest

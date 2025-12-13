@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from dependency_injector.wiring import Provide, inject
+
 from fastapi import Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
 
-from src.core.container import Container
+from core.container import get_auth_service
 
 if TYPE_CHECKING:
     from src.model.models import User
@@ -15,19 +15,19 @@ if TYPE_CHECKING:
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
 
 
-@inject
+
 async def get_current_user(
     token: str = Depends(oauth2_scheme),
-    auth_service: AuthService = Depends(Provide[Container.auth_service]),
+    auth_service: AuthService = Depends(get_auth_service),
 ) -> User:
     """Получить текущего пользователя с использованием AuthService (асинхронно)"""
     return await auth_service.get_current_user(token)
 
 
-@inject
+
 async def get_current_user_no_exception(
     token: str = Depends(oauth2_scheme),
-    auth_service: AuthService = Depends(Provide[Container.auth_service]),
+    auth_service: AuthService = Depends(get_auth_service),
 ) -> User | None:
     """Получить текущего пользователя без исключения (возвращает None если ошибка)"""
     try:

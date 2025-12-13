@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.security import hash_password
 from src.model.models import User
 from src.repository.user_repository import UserRepository
 from src.schema.user import UserCreate, UserFull, UserListResponse, UserUpdate
@@ -10,15 +11,13 @@ from src.services.base_service import BaseService
 
 
 class UserService(BaseService[User, UserCreate, UserUpdate]):
-    def __init__(self, user_repository: UserRepository, db_session: AsyncSession):
+    def __init__(self, user_repository: UserRepository):
         super().__init__(user_repository)
         self._user_repository = user_repository
-        self._db_session = db_session
 
     async def create_user(self, user_data: UserCreate) -> User:
         """Создать нового пользователя с хешированием пароля"""
-        auth_service = AuthService(self._user_repository, self._db_session)
-        hashed_password = auth_service.get_password_hash(user_data.password_string)
+        hashed_password = hash_password(user_data.password_string)
 
         # Создаем объект с хешированным паролем
         user_data_with_hash = UserCreate(

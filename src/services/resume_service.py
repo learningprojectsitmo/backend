@@ -14,10 +14,9 @@ if TYPE_CHECKING:
 
 
 class ResumeService(BaseService[Resume, ResumeCreate, ResumeUpdate]):
-    def __init__(self, resume_repository: ResumeRepository, db_session: AsyncSession):
+    def __init__(self, resume_repository: ResumeRepository):
         super().__init__(resume_repository)
         self._resume_repository = resume_repository
-        self._db_session = db_session
 
     async def get_resume_by_id(self, resume_id: int) -> Resume | None:
         """Получить резюме по ID"""

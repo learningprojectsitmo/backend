@@ -2,12 +2,11 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from dependency_injector.wiring import Provide
 from fastapi import APIRouter, Depends
+from fastapi.security import OAuth2PasswordRequestForm
 
-from src.core.container import Container
+from src.core.container import get_auth_service
 from src.core.dependencies import get_current_user
-from src.core.middleware import inject
 from src.schema.auth import LoginRequest, Token
 from src.services.auth_service import AuthService
 
@@ -15,17 +14,15 @@ auth_router = APIRouter(prefix="/auth", tags=["authentication"])
 
 
 @auth_router.post("/token", response_model=Token)
-@inject
 async def login_for_access_token(
-    form_data: LoginRequest,
-    auth_service: AuthService = Depends(Provide[Container.auth_service]),
+    form_data: OAuth2PasswordRequestForm = Depends(OAuth2PasswordRequestForm),
+    auth_service: AuthService = Depends(get_auth_service),
 ) -> Token:
     """Вход в систему и получение токена доступа"""
     return await auth_service.login_for_access_token(form_data)
 
 
 @auth_router.post("/logout")
-@inject
 async def logout(
     _current_user: Annotated[str, Depends(get_current_user)],
 ):
@@ -34,7 +31,6 @@ async def logout(
 
 
 @auth_router.get("/me")
-@inject
 async def get_current_user_info(
     current_user: Annotated[str, Depends(get_current_user)],
 ):

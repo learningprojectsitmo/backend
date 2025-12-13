@@ -1,36 +1,14 @@
 from __future__ import annotations
 
-from typing import Any, Protocol, TypeVar
+from typing import Any, TypeVar
 
+from src.repository.base_repository import RepositoryProtocol
 from src.core.exceptions import NotFoundError
 
 ModelType = TypeVar("ModelType")
 CreateSchemaType = TypeVar("CreateSchemaType")
 UpdateSchemaType = TypeVar("UpdateSchemaType")
 
-
-class RepositoryProtocol(Protocol):
-    """Protocol для типизации репозиториев (асинхронный)"""
-
-    async def get_by_id(self, id: int) -> ModelType | None: ...
-
-    async def get_multi(
-        self,
-        skip: int = 0,
-        limit: int = 100,
-    ) -> list[ModelType]: ...
-
-    async def create(self, obj_data: CreateSchemaType) -> ModelType: ...
-
-    async def update(self, id: int, obj_data: UpdateSchemaType) -> ModelType | None: ...
-
-    async def delete(self, id: int) -> bool: ...
-
-    async def count(self) -> int: ...
-
-    async def bulk_create(self, obj_data_list: list[CreateSchemaType]) -> list[ModelType]: ...
-
-    async def exists(self, id: int) -> bool: ...
 
 
 class BaseService[ModelType, CreateSchemaType, UpdateSchemaType]:
