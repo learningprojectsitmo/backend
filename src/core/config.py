@@ -5,8 +5,11 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     # Database
-    DATABASE_URL: str = "postgresql+asyncpg://postgres:password@postgres/backend_db"
+    DATABASE_URL: str = "postgresql+asyncpg://postgres:password@localhost/backend_db"
     DEBUG: bool = False
+
+    # Environment
+    ENVIRONMENT: str = "development"
 
     # JWT
     SECRET_KEY: str = "your-secret-key-here"

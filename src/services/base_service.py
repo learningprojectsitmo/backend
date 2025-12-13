@@ -2,13 +2,12 @@ from __future__ import annotations
 
 from typing import Any, TypeVar
 
-from src.repository.base_repository import RepositoryProtocol
 from src.core.exceptions import NotFoundError
+from src.repository.base_repository import RepositoryProtocol
 
 ModelType = TypeVar("ModelType")
 CreateSchemaType = TypeVar("CreateSchemaType")
 UpdateSchemaType = TypeVar("UpdateSchemaType")
-
 
 
 class BaseService[ModelType, CreateSchemaType, UpdateSchemaType]:

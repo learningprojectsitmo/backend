@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from src.core.container import get_resume_service

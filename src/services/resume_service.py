@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from src.core.exceptions import PermissionError
 from src.model.models import Resume
 from src.schema.resume import ResumeCreate, ResumeUpdate

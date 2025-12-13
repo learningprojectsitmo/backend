@@ -8,8 +8,6 @@ from src.schema.project import ProjectCreate, ProjectUpdate
 from src.services.base_service import BaseService
 
 if TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import AsyncSession
-
     from src.repository.project_repository import ProjectRepository
 
 

@@ -19,6 +19,19 @@ services:
      timeout: 5s
      retries: 5
 
+  pgadmin:
+    restart: always
+    container_name: pgadmin
+    image: dpage/pgadmin4:9.9.0
+    environment:
+      PGADMIN_DEFAULT_EMAIL: pgadmin@email.com
+      PGADMIN_DEFAULT_PASSWORD: pgadmin
+      MAX_LOGIN_ATTEMPTS: 5
+    volumes:
+      - ./data/pgdata:/var/lib/postgresql/data/pgdata
+    ports:
+      - "28080:80"
+
   backend:
     build: .
     container_name: backend

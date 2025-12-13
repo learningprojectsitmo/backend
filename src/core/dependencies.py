@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-
 from fastapi import Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
 
@@ -15,14 +14,12 @@ if TYPE_CHECKING:
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
 
 
-
 async def get_current_user(
     token: str = Depends(oauth2_scheme),
     auth_service: AuthService = Depends(get_auth_service),
 ) -> User:
     """Получить текущего пользователя с использованием AuthService (асинхронно)"""
     return await auth_service.get_current_user(token)
-
 
 
 async def get_current_user_no_exception(

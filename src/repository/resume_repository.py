@@ -19,5 +19,3 @@ class ResumeRepository(BaseRepository[Resume, ResumeCreate, ResumeUpdate]):
             select(Resume).where(Resume.author_id == author_id),
         )
         return result.scalars().all()
-
-

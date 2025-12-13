@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, UTC
+from datetime import UTC, datetime, timedelta
 
 from fastapi import HTTPException, status
 from fastapi.params import Depends
@@ -10,7 +10,7 @@ from passlib.context import CryptContext
 
 from src.model.models import User
 from src.repository.user_repository import UserRepository
-from src.schema.auth import LoginRequest, Token
+from src.schema.auth import Token
 
 
 class AuthService:

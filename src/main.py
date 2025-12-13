@@ -8,12 +8,18 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.v1.routes import routers as v1_router
 from src.core.config import settings
-
+from src.core.database import Base, engine
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    print("Starting API...")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
     yield
+
+    print("Shutting down...")
+    await engine.dispose()
 
 
 app = FastAPI(
