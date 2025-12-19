@@ -7,10 +7,12 @@ from fastapi import Depends
 from src.core.uow import IUnitOfWork, SqlAlchemyUoW
 from src.repository.project_repository import ProjectRepository
 from src.repository.resume_repository import ResumeRepository
+from src.repository.session_repository import SessionRepository
 from src.repository.user_repository import UserRepository
 from src.services.auth_service import AuthService
 from src.services.project_service import ProjectService
 from src.services.resume_service import ResumeService
+from src.services.session_service import SessionService
 from src.services.user_service import UserService
 
 
@@ -30,6 +32,10 @@ async def get_resume_repository(uow: IUnitOfWork = Depends(get_uow)) -> ResumeRe
 
 async def get_user_repository(uow: IUnitOfWork = Depends(get_uow)) -> UserRepository:
     return UserRepository(uow)
+
+
+async def get_session_repository(uow: IUnitOfWork = Depends(get_uow)) -> SessionRepository:
+    return SessionRepository(uow)
 
 
 # Service
@@ -52,3 +58,9 @@ async def get_project_service(
     project_repository: ProjectRepository = Depends(get_project_repository),
 ) -> ProjectService:
     return ProjectService(project_repository)
+
+
+async def get_session_service(
+    session_repository: SessionRepository = Depends(get_session_repository),
+) -> SessionService:
+    return SessionService(session_repository)

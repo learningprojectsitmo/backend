@@ -131,3 +131,41 @@ class Response(Base):
 
     def __repr__(self) -> str:
         return f"Response(id={self.id!r}, respondent_id={self.respondent_id!r}, note={self.note!r})"
+
+
+class Session(Base):
+    __tablename__ = "session"
+
+    id: Mapped[str] = mapped_column(String(255), primary_key=True)  # UUID для уникальности
+    user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
+
+    # Информация об устройстве и браузере
+    device_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    browser_name: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    browser_version: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    operating_system: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    device_type: Mapped[str | None] = mapped_column(String(20), nullable=True)  # desktop, mobile, tablet
+
+    # Сетевая информация
+    ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)  # IPv4 или IPv6
+    country: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    city: Mapped[str | None] = mapped_column(String(50), nullable=True)
+
+    # Временные метки
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    last_activity: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Статус сессии
+    is_active: Mapped[bool] = mapped_column(default=True, nullable=False)
+    is_current: Mapped[bool] = mapped_column(default=False, nullable=False)  # Текущая сессия пользователя
+
+    # Дополнительная информация
+    user_agent: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    fingerprint: Mapped[str | None] = mapped_column(String(255), nullable=True)  # Отпечаток браузера
+
+    # Отношения
+    user: Mapped[User] = relationship()
+
+    def __repr__(self) -> str:
+        return f"Session(id={self.id!r}, user_id={self.user_id!r}, device_name={self.device_name!r}, is_active={self.is_active!r})"

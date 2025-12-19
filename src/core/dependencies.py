@@ -3,13 +3,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from fastapi import Depends, HTTPException
-from fastapi.security import OAuth2PasswordBearer
 
 from core.container import get_auth_service
 from src.core.logging_config import get_logger
-
-# OAuth2PasswordBearer импорт заменен для корректной работы с логированием
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
+from src.core.security import oauth2_scheme
 
 if TYPE_CHECKING:
     from src.model.models import User
