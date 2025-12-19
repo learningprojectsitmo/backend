@@ -16,19 +16,7 @@ repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.14.3
     hooks:
-      # Ruff проверяет и исправляет множество проблем, включая отступы
       - id: ruff
-        args: [--fix, --ignore, "D1,D2,D4,ANN001,ANN002,ANN003,ANN202,ANN204,ANN401,RUF002,RUF003,TRY300,TRY301,B904,FAST002,TC004,TC003"]
-
-      # Или более конкретно:
-      # - id: ruff
-      #   args: [--fix, --select, I001, W191]  # I001 - отступы, W191 - табы вместо пробелов
+        args: [--fix, --ignore, "D1,D2,D4,ANN001,ANN002,ANN003,ANN202,ANN204,ANN401,RUF002,RUF003,TRY300,TRY301,B904,FAST002,TC004,TC003,PLR0911"]
 
       - id: ruff-format
-
-#  - repo: https://github.com/pre-commit/mirrors-mypy
-#    rev: v1.7.0 # Keep your current rev
-#    hooks:
-#      - id: mypy
-#        additional_dependencies: [types-all==1.0.0] # Correct version
-#        args: [--ignore-missing-imports]

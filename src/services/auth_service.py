@@ -12,11 +12,14 @@ from src.core.logging_config import get_logger, security_logger
 from src.model.models import User
 from src.repository.user_repository import UserRepository
 from src.schema.auth import Token
+from src.schema.session import SessionCreate, SessionTerminateRequest
+from src.services.session_service import SessionService
 
 
 class AuthService:
-    def __init__(self, user_repository: UserRepository):
+    def __init__(self, user_repository: UserRepository, session_service: SessionService):
         self._user_repository = user_repository
+        self._session_service = session_service
         self._pwd_context = PasswordHash.recommended()
         self._secret_key = settings.SECRET_KEY
         self._algorithm = settings.ALGORITHM
@@ -115,6 +118,41 @@ class AuthService:
             expires_delta=access_token_expires,
         )
 
+        # Создаем сессию при входе (если есть request)
+        if request:
+            try:
+                # Извлекаем информацию об устройстве и браузере
+                user_agent = request.headers.get("user-agent", "")
+                ip_address = request.client.host if request.client else "unknown"
+
+                # Парсим user_agent для получения информации о браузере и ОС
+                browser_name, browser_version = self._parse_user_agent(user_agent)
+                device_name = self._get_device_name(user_agent)
+                operating_system = self._get_os_name(user_agent)
+                device_type = self._get_device_type(user_agent)
+
+                # Создаем сессию
+                session_data = SessionCreate(
+                    user_id=user.id,
+                    device_name=device_name,
+                    browser_name=browser_name,
+                    browser_version=browser_version,
+                    operating_system=operating_system,
+                    device_type=device_type,
+                    ip_address=ip_address,
+                    user_agent=user_agent,
+                    expires_at=datetime.now(UTC) + access_token_expires,
+                )
+
+                # Создаем сессию и устанавливаем как текущую
+                session = await self._session_service.create_session(session_data)
+                await self._session_service.set_current_session(user.id, session.id)
+
+                self._logger.info(f"Session created for user {user.id} with ID: {session.id}")
+
+            except Exception:
+                self._logger.exception("Failed to create session for user %s", user.id)
+
         # Логируем успешный вход
         if request:
             ip_address = request.client.host if request.client else "unknown"
@@ -128,3 +166,180 @@ class AuthService:
     async def get_user_by_token(self, token: str) -> User:
         """Получить пользователя по токену"""
         return await self.get_current_user(token)
+
+    def _parse_user_agent(self, user_agent: str) -> tuple[str | None, str | None]:
+        """Парсить User-Agent для получения информации о браузере"""
+        if not user_agent:
+            return None, None
+
+        user_agent = user_agent.lower()
+
+        # Определяем браузер с максимальной оптимизацией
+        if "chrome" in user_agent:
+            if "edg" in user_agent and (version := self._extract_version(user_agent, "edg/")):
+                return "Edge", version
+            elif version := self._extract_version(user_agent, "chrome/"):
+                return "Chrome", version
+        elif "firefox" in user_agent and (version := self._extract_version(user_agent, "firefox/")):
+            return "Firefox", version
+        elif ("opera" in user_agent or "opr" in user_agent) and (version := self._extract_version(user_agent, "opr/")):
+            return "Opera", version
+        elif (
+            "safari" in user_agent
+            and "chrome" not in user_agent
+            and (version := self._extract_version(user_agent, "version/"))
+        ):
+            return "Safari", version
+
+        return "Unknown Browser", None
+
+    def _extract_version(self, user_agent: str, pattern: str) -> str | None:
+        """Извлечь версию из User-Agent"""
+        try:
+            index = user_agent.find(pattern)
+            if index == -1:
+                return None
+            version_start = index + len(pattern)
+            version_end = user_agent.find(" ", version_start)
+            if version_end == -1:
+                version_end = len(user_agent)
+            return user_agent[version_start:version_end]
+        except Exception:
+            return None
+
+    def _get_device_name(self, user_agent: str) -> str | None:
+        """Определить имя устройства из User-Agent"""
+        if not user_agent:
+            return None
+
+        user_agent = user_agent.lower()
+
+        # Определяем устройство в порядке приоритета
+        if "iphone" in user_agent:
+            return "iPhone"
+        elif "ipad" in user_agent:
+            return "iPad"
+        elif "android" in user_agent:
+            return "Android Phone" if "mobile" in user_agent else "Android Device"
+        elif "mobile" in user_agent or "tablet" in user_agent:
+            return "Mobile Device" if "mobile" in user_agent else "Tablet"
+        return "Desktop"
+
+    def _get_os_name(self, user_agent: str) -> str | None:
+        """Определить операционную систему из User-Agent"""
+        if not user_agent:
+            return None
+
+        user_agent = user_agent.lower()
+
+        # Определяем ОС в порядке приоритета
+        if "windows nt" in user_agent or ("mac os x" in user_agent or "macintosh" in user_agent):
+            return "Windows" if "windows nt" in user_agent else "macOS"
+        elif "android" in user_agent:
+            return "Android"
+        elif "iphone" in user_agent or "ipad" in user_agent or "ios" in user_agent:
+            return "iOS"
+        elif "linux" in user_agent or "cros" in user_agent:
+            return "Linux" if "linux" in user_agent else "Chrome OS"
+        return "Unknown OS"
+
+    def _get_device_type(self, user_agent: str) -> str | None:
+        """Определить тип устройства из User-Agent"""
+        if not user_agent:
+            return None
+
+        user_agent = user_agent.lower()
+
+        if "mobile" in user_agent or "android" in user_agent or "iphone" in user_agent:
+            return "mobile"
+        elif "tablet" in user_agent or "ipad" in user_agent:
+            return "tablet"
+        else:
+            return "desktop"
+
+    async def logout(self, token: str, request: Request | None = None) -> bool:
+        """Выход из системы - завершить текущую сессию"""
+        try:
+            # Получаем пользователя по токену
+            user = await self.get_current_user(token)
+
+            # Завершаем все сессии пользователя
+            sessions = await self._session_service.get_user_sessions(user.id)
+            if sessions.sessions:
+                session_ids = [session.id for session in sessions.sessions]
+
+                terminate_request = SessionTerminateRequest(session_ids=session_ids)
+                await self._session_service.terminate_sessions(terminate_request)
+
+                self._logger.info(f"Terminated {len(session_ids)} sessions for user {user.id}")
+
+            # Логируем выход
+            if request:
+                ip_address = request.client.host if request.client else "unknown"
+                user_agent = request.headers.get("user-agent", "unknown")
+                security_logger.log_logout_attempt(email=user.email, ip_address=ip_address, user_agent=user_agent)
+
+            return True
+
+        except Exception:
+            self._logger.exception("Error during logout")
+            return False
+
+    async def terminate_all_other_sessions(self, token: str, current_session_id: str | None = None) -> dict:
+        """Завершить все сессии кроме текущей"""
+        try:
+            user = await self.get_current_user(token)
+
+            if current_session_id:
+                # Завершаем все сессии кроме указанной
+                sessions = await self._session_service.get_user_sessions(user.id)
+                other_sessions = [s.id for s in sessions.sessions if s.id != current_session_id]
+
+                if other_sessions:
+                    terminate_request = SessionTerminateRequest(session_ids=other_sessions)
+                    result = await self._session_service.terminate_sessions(terminate_request)
+
+                    self._logger.info(f"Terminated {len(other_sessions)} sessions for user {user.id} except current")
+                    return {"terminated_count": len(result.terminated_sessions), "message": result.message}
+
+            return {"terminated_count": 0, "message": "No other sessions found"}
+
+        except Exception:
+            self._logger.exception("Error terminating other sessions")
+            raise
+
+    async def get_user_sessions_info(self, token: str) -> dict:
+        """Получить информацию о сессиях пользователя"""
+        try:
+            user = await self.get_current_user(token)
+            sessions_summary = await self._session_service.get_sessions_summary(user.id)
+            sessions_stats = await self._session_service.get_session_stats(user.id)
+
+            return {"summary": sessions_summary, "stats": sessions_stats.model_dump()}
+
+        except Exception:
+            self._logger.exception("Error getting user sessions info")
+            raise
+
+    async def refresh_session_activity(self, token: str, session_id: str | None = None) -> bool:
+        """Обновить активность сессии для продления срока действия"""
+        try:
+            user = await self.get_current_user(token)
+
+            # Если session_id не указан, получаем текущую сессию
+            if not session_id:
+                sessions = await self._session_service.get_user_sessions(user.id)
+                if sessions.current_session_id:
+                    session_id = sessions.current_session_id
+                else:
+                    self._logger.warning(f"No current session found for user {user.id}")
+                    return False
+
+            # Обновляем активность сессии
+            await self._session_service.update_session_activity(session_id)
+            self._logger.debug(f"Refreshed activity for session {session_id}")
+            return True
+
+        except Exception:
+            self._logger.exception("Error refreshing session activity")
+            return False
