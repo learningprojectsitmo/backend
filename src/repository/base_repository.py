@@ -6,16 +6,17 @@ from typing import Any, Protocol, TypeVar
 
 from sqlalchemy import Row, RowMapping, func, select
 
-from core.uow import IUnitOfWork
 from src.core.logging_config import get_logger
+from src.core.uow import IUnitOfWork
 
 ModelType = TypeVar("ModelType")
 CreateType = TypeVar("CreateType")
 UpdateType = TypeVar("UpdateType")
 
 
-# ----------- контракт -----------
 class RepositoryProtocol(Protocol[ModelType, CreateType, UpdateType]):
+    """Протокол репозитория для базовых CRUD операций."""
+
     async def get_by_id(self, id: int) -> ModelType | None: ...
     async def get_multi(self, skip: int = 0, limit: int = 100) -> Sequence[Row[Any] | RowMapping | Any]: ...
     async def count(self) -> int: ...
@@ -24,17 +25,50 @@ class RepositoryProtocol(Protocol[ModelType, CreateType, UpdateType]):
     async def delete(self, id: int) -> bool: ...
 
 
-# ----------- реализация -----------
 class BaseRepository(RepositoryProtocol[ModelType, CreateType, UpdateType]):
-    """Базовый CRUD-репозиторий. С транзакциями им занимается UoW."""
+    """Базовый CRUD-репозиторий с транзакциями.
+
+    Предоставляет базовые операции для работы с базой данных:
+    создание, чтение, обновление и удаление объектов.
+
+    Транзакции управляются через Unit of Work (UoW).
+
+    Наследники должны устанавливать атрибут _model для указания
+    соответствующей модели базы данных.
+
+    Attributes:
+        uow: Unit of Work для управления транзакциями
+        _model: Класс модели базы данных (должен быть установлен наследником)
+        _logger: Логгер для записи операций
+    """
 
     def __init__(self, uow: IUnitOfWork) -> None:
+        """Инициализация базового репозитория.
+
+        Args:
+            uow: Unit of Work для управления транзакциями и сессией БД
+        """
         self.uow = uow
         self._model: type[ModelType] | None = None  # наследник заполняет
         self._logger = get_logger(self.__class__.__name__)
 
-    # ---------- чтение ----------
     async def get_by_id(self, id: int) -> ModelType | None:
+        """Получить объект модели по идентификатору.
+
+        Выполняет поиск объекта в базе данных по его первичному ключу.
+
+        Args:
+            id: Идентификатор объекта для поиска
+
+        Returns:
+            Объект модели, если найден, иначе None
+
+        Raises:
+            Exception: При ошибке выполнения запроса к базе данных
+
+        Note:
+            Метод логирует время выполнения операции и результат поиска
+        """
         start_time = time.time()
         self._logger.debug(f"Getting {self._model.__name__} by ID: {id}")
 
@@ -54,6 +88,24 @@ class BaseRepository(RepositoryProtocol[ModelType, CreateType, UpdateType]):
             raise
 
     async def get_multi(self, skip: int = 0, limit: int = 100) -> list[ModelType]:
+        """Получить список объектов с пагинацией.
+
+        Извлекает объекты из базы данных с возможностью пропуска
+        определенного количества записей и ограничения количества результатов.
+
+        Args:
+            skip: Количество записей для пропуска (пагинация)
+            limit: Максимальное количество возвращаемых запитей
+
+        Returns:
+            Список объектов модели
+
+        Raises:
+            Exception: При ошибке выполнения запроса к базе данных
+
+        Note:
+            Метод логирует количество извлеченных объектов и время выполнения
+        """
         start_time = time.time()
         self._logger.debug(f"Getting {self._model.__name__} list - skip: {skip}, limit: {limit}")
 
@@ -70,6 +122,20 @@ class BaseRepository(RepositoryProtocol[ModelType, CreateType, UpdateType]):
             raise
 
     async def count(self) -> int:
+        """Подсчитать общее количество объектов модели в базе данных.
+
+        Выполняет SQL COUNT запрос для подсчета всех записей
+        соответствующей модели в базе данных.
+
+        Returns:
+            Общее количество объектов в базе данных
+
+        Raises:
+            Exception: При ошибке выполнения запроса к базе данных
+
+        Note:
+            Метод логирует подсчитанное количество и время выполнения
+        """
         start_time = time.time()
         self._logger.debug(f"Counting {self._model.__name__} objects")
 
@@ -85,8 +151,26 @@ class BaseRepository(RepositoryProtocol[ModelType, CreateType, UpdateType]):
             self._logger.exception(f"Error counting {self._model.__name__} objects in {duration:.3f}s")
             raise
 
-    # ---------- создание ----------
     async def create(self, obj_data: CreateType) -> ModelType:
+        """Создать новый объект в базе данных.
+
+        Добавляет новый объект в сессию базы данных и выполняет flush
+        для получения сгенерированного ID.
+
+        Args:
+            obj_data: Данные для создания объекта. Может быть Pydantic моделью
+                     или словарем с атрибутами объекта
+
+        Returns:
+            Созданный объект модели с присвоенным ID
+
+        Raises:
+            Exception: При ошибке создания объекта
+
+        Note:
+            Метод автоматически извлекает данные из Pydantic модели
+            или использует словарь напрямую
+        """
         start_time = time.time()
 
         try:
@@ -104,8 +188,26 @@ class BaseRepository(RepositoryProtocol[ModelType, CreateType, UpdateType]):
             self._logger.exception(f"Error creating {self._model.__name__} in {duration:.3f}s")
             raise
 
-    # ---------- обновление ----------
     async def update(self, id: int, obj_data: UpdateType) -> ModelType | None:
+        """Обновить существующий объект в базе данных.
+
+        Находит объект по ID и обновляет его поля переданными данными.
+
+        Args:
+            id: Идентификатор объекта для обновления
+            obj_data: Новые данные для объекта. Может быть Pydantic моделью
+                     или словарем с атрибутами объекта
+
+        Returns:
+            Обновленный объект модели, если найден, иначе None
+
+        Raises:
+            Exception: При ошибке обновления объекта
+
+        Note:
+            - Обновляются только поля, присутствующие в obj_data
+            - Метод логирует список обновленных полей
+        """
         start_time = time.time()
         self._logger.info(f"Updating {self._model.__name__} with ID {id}")
 
@@ -133,8 +235,20 @@ class BaseRepository(RepositoryProtocol[ModelType, CreateType, UpdateType]):
             self._logger.exception(f"Error updating {self._model.__name__} with ID {id} in {duration:.3f}s")
             raise
 
-    # ---------- удаление ----------
     async def delete(self, id: int) -> bool:
+        """Удалить объект из базы данных.
+
+        Находит объект по ID и удаляет его из сессии базы данных.
+
+        Args:
+            id: Идентификатор объекта для удаления
+
+        Returns:
+            True, если объект был успешно удален, False если объект не найден
+
+        Raises:
+            Exception: При ошибке удаления объекта
+        """
         start_time = time.time()
         self._logger.info(f"Deleting {self._model.__name__} with ID {id}")
 
