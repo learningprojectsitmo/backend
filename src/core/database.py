@@ -10,7 +10,7 @@ Base = declarative_base()
 # Асинхронный движок БД
 engine = create_async_engine(
     settings.DATABASE_URL,
-    echo=settings.DEBUG,
+    echo=settings.DEBUG.lower() == "true",
     future=True,
     pool_pre_ping=True,
     pool_size=20,
