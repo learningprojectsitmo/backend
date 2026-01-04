@@ -65,13 +65,13 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             # Добавляем заголовок с временем выполнения
             response.headers["X-Process-Time"] = str(process_time)
 
-            return response
-
         except Exception:
             # Логируем ошибки
             process_time = time.time() - start_time
             self.logger.exception(f"Request failed - {method} {path} - Time: {process_time:.3f}s - IP: {client_ip}")
             raise
+        else:
+            return response
 
     def _get_client_ip(self, request: Request) -> str:
         """Получить IP адрес клиента"""

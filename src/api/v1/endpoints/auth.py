@@ -36,11 +36,12 @@ async def login_for_access_token(
             status_code=200,
             response_time=0.0,  # Можно добавить измерение времени
         )
-        return result
     except Exception as e:
         # Логируем ошибку
         api_logger.log_error(method="POST", path="/auth/token", error=e, user_id=None)
         raise
+    else:
+        return result
 
 
 @auth_router.post("/logout")

@@ -61,14 +61,13 @@ class SessionService:
 
         try:
             session = await self._repository.get_by_id(session_id)
-            if not session:
-                raise NotFoundError(f"Session with id {session_id} not found")
-            return SessionResponse.model_validate(session)
-        except NotFoundError:
-            raise
         except Exception:
             self._logger.exception(f"Error getting session {session_id}")
             raise
+        else:
+            if not session:
+                raise NotFoundError(f"Session with id {session_id} not found")
+            return SessionResponse.model_validate(session)
 
     async def update_session(self, session_id: str, session_data: SessionUpdate) -> SessionResponse:
         """Обновить сессию"""
@@ -76,14 +75,13 @@ class SessionService:
 
         try:
             session = await self._repository.update(session_id, session_data)
-            if not session:
-                raise NotFoundError(f"Session with id {session_id} not found")
-            return SessionResponse.model_validate(session)
-        except NotFoundError:
-            raise
         except Exception:
             self._logger.exception(f"Error updating session {session_id}")
             raise
+        else:
+            if not session:
+                raise NotFoundError(f"Session with id {session_id} not found")
+            return SessionResponse.model_validate(session)
 
     async def update_session_activity(self, session_id: str) -> SessionResponse:
         """Обновить время последней активности сессии"""
@@ -91,14 +89,13 @@ class SessionService:
 
         try:
             session = await self._repository.update_last_activity(session_id)
-            if not session:
-                raise NotFoundError(f"Session with id {session_id} not found")
-            return SessionResponse.model_validate(session)
-        except NotFoundError:
-            raise
         except Exception:
             self._logger.exception(f"Error updating session activity {session_id}")
             raise
+        else:
+            if not session:
+                raise NotFoundError(f"Session with id {session_id} not found")
+            return SessionResponse.model_validate(session)
 
     async def set_current_session(self, user_id: int, session_id: str) -> bool:
         """Установить сессию как текущую для пользователя"""
@@ -210,6 +207,10 @@ class SessionService:
 
         try:
             session = await self._repository.get_by_id(session_id)
+        except Exception:
+            self._logger.exception(f"Error validating session {session_id}")
+            return False
+        else:
             if not session:
                 return False
 
@@ -226,9 +227,6 @@ class SessionService:
             # Обновляем время последней активности
             await self._repository.update_last_activity(session_id)
             return True
-        except Exception:
-            self._logger.exception(f"Error validating session {session_id}")
-            return False
 
     async def get_sessions_summary(self, user_id: int) -> dict:
         """Получить краткую информацию о сессиях пользователя"""
@@ -257,8 +255,8 @@ class SessionService:
                     else "Unknown Location",
                 }
                 summary["sessions"].append(session_info)
-
-            return summary
         except Exception:
             self._logger.exception(f"Error getting sessions summary for user {user_id}")
             raise
+        else:
+            return summary

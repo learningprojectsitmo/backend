@@ -33,7 +33,10 @@ async def get_user_sessions(
 
     try:
         result = await session_service.get_user_sessions(current_user.id)
-
+    except Exception as e:
+        api_logger.log_error(method="GET", path="/sessions", error=e, user_id=current_user.id)
+        raise
+    else:
         api_logger.log_request(
             method="GET",
             path="/sessions",
@@ -43,11 +46,7 @@ async def get_user_sessions(
             response_time=0.0,
             user_agent=user_agent,
         )
-
         return result
-    except Exception as e:
-        api_logger.log_error(method="GET", path="/sessions", error=e, user_id=current_user.id)
-        raise
 
 
 @sessions_router.get("/stats", response_model=SessionStats)
@@ -62,7 +61,10 @@ async def get_session_stats(
 
     try:
         result = await session_service.get_session_stats(current_user.id)
-
+    except Exception as e:
+        api_logger.log_error(method="GET", path="/sessions/stats", error=e, user_id=current_user.id)
+        raise
+    else:
         api_logger.log_request(
             method="GET",
             path="/sessions/stats",
@@ -72,11 +74,7 @@ async def get_session_stats(
             response_time=0.0,
             user_agent=user_agent,
         )
-
         return result
-    except Exception as e:
-        api_logger.log_error(method="GET", path="/sessions/stats", error=e, user_id=current_user.id)
-        raise
 
 
 @sessions_router.get("/summary")
@@ -91,7 +89,10 @@ async def get_sessions_summary(
 
     try:
         result = await session_service.get_sessions_summary(current_user.id)
-
+    except Exception as e:
+        api_logger.log_error(method="GET", path="/sessions/summary", error=e, user_id=current_user.id)
+        raise
+    else:
         api_logger.log_request(
             method="GET",
             path="/sessions/summary",
@@ -101,11 +102,7 @@ async def get_sessions_summary(
             response_time=0.0,
             user_agent=user_agent,
         )
-
         return result
-    except Exception as e:
-        api_logger.log_error(method="GET", path="/sessions/summary", error=e, user_id=current_user.id)
-        raise
 
 
 @sessions_router.get("/{session_id}", response_model=SessionResponse)
@@ -119,13 +116,17 @@ async def get_session(
     client_ip = request.client.host if request.client else "unknown"
     user_agent = request.headers.get("user-agent", "")
 
-    try:
-        result = await session_service.get_session_by_id(session_id)
-
-        # Проверяем, что сессия принадлежит пользователю
+    def _check_session_ownership() -> None:
         if result.user_id != current_user.id:
             raise HTTPException(status_code=404, detail="Session not found")
 
+    try:
+        result = await session_service.get_session_by_id(session_id)
+        _check_session_ownership()
+    except Exception as e:
+        api_logger.log_error(method="GET", path=f"/sessions/{session_id}", error=e, user_id=current_user.id)
+        raise
+    else:
         api_logger.log_request(
             method="GET",
             path=f"/sessions/{session_id}",
@@ -135,11 +136,7 @@ async def get_session(
             response_time=0.0,
             user_agent=user_agent,
         )
-
         return result
-    except Exception as e:
-        api_logger.log_error(method="GET", path=f"/sessions/{session_id}", error=e, user_id=current_user.id)
-        raise
 
 
 @sessions_router.put("/{session_id}", response_model=SessionResponse)
@@ -154,14 +151,18 @@ async def update_session(
     client_ip = request.client.host if request.client else "unknown"
     user_agent = request.headers.get("user-agent", "")
 
-    try:
-        # Сначала проверяем, что сессия принадлежит пользователю
-        existing_session = await session_service.get_session_by_id(session_id)
+    def _check_session_ownership() -> None:
         if existing_session.user_id != current_user.id:
             raise HTTPException(status_code=404, detail="Session not found")
 
+    try:
+        existing_session = await session_service.get_session_by_id(session_id)
+        _check_session_ownership()
         result = await session_service.update_session(session_id, session_data)
-
+    except Exception as e:
+        api_logger.log_error(method="PUT", path=f"/sessions/{session_id}", error=e, user_id=current_user.id)
+        raise
+    else:
         api_logger.log_request(
             method="PUT",
             path=f"/sessions/{session_id}",
@@ -171,11 +172,7 @@ async def update_session(
             response_time=0.0,
             user_agent=user_agent,
         )
-
         return result
-    except Exception as e:
-        api_logger.log_error(method="PUT", path=f"/sessions/{session_id}", error=e, user_id=current_user.id)
-        raise
 
 
 @sessions_router.post("/terminate", response_model=SessionTerminateResponse)
@@ -191,7 +188,10 @@ async def terminate_sessions(
 
     try:
         result = await session_service.terminate_sessions(terminate_request)
-
+    except Exception as e:
+        api_logger.log_error(method="POST", path="/sessions/terminate", error=e, user_id=current_user.id)
+        raise
+    else:
         api_logger.log_request(
             method="POST",
             path="/sessions/terminate",
@@ -201,11 +201,7 @@ async def terminate_sessions(
             response_time=0.0,
             user_agent=user_agent,
         )
-
         return result
-    except Exception as e:
-        api_logger.log_error(method="POST", path="/sessions/terminate", error=e, user_id=current_user.id)
-        raise
 
 
 @sessions_router.post("/set-current/{session_id}")
@@ -219,17 +215,25 @@ async def set_current_session(
     client_ip = request.client.host if request.client else "unknown"
     user_agent = request.headers.get("user-agent", "")
 
-    try:
-        # Сначала проверяем, что сессия принадлежит пользователю
-        existing_session = await session_service.get_session_by_id(session_id)
+    def _check_session_ownership() -> None:
         if existing_session.user_id != current_user.id:
             raise HTTPException(status_code=404, detail="Session not found")
 
-        success = await session_service.set_current_session(current_user.id, session_id)
-
-        if not success:
+    def _check_success_or_raise(success_value: bool) -> None:
+        if not success_value:
             raise HTTPException(status_code=400, detail="Failed to set current session")
 
+    try:
+        existing_session = await session_service.get_session_by_id(session_id)
+        _check_session_ownership()
+        success = await session_service.set_current_session(current_user.id, session_id)
+        _check_success_or_raise(success)
+    except Exception as e:
+        api_logger.log_error(
+            method="POST", path=f"/sessions/set-current/{session_id}", error=e, user_id=current_user.id
+        )
+        raise
+    else:
         api_logger.log_request(
             method="POST",
             path=f"/sessions/set-current/{session_id}",
@@ -239,13 +243,7 @@ async def set_current_session(
             response_time=0.0,
             user_agent=user_agent,
         )
-
         return {"message": "Current session updated successfully"}
-    except Exception as e:
-        api_logger.log_error(
-            method="POST", path=f"/sessions/set-current/{session_id}", error=e, user_id=current_user.id
-        )
-        raise
 
 
 @sessions_router.post("/validate/{session_id}")
@@ -261,7 +259,10 @@ async def validate_session(
 
     try:
         is_valid = await session_service.validate_session(session_id, current_user.id)
-
+    except Exception as e:
+        api_logger.log_error(method="POST", path=f"/sessions/validate/{session_id}", error=e, user_id=current_user.id)
+        raise
+    else:
         api_logger.log_request(
             method="POST",
             path=f"/sessions/validate/{session_id}",
@@ -271,11 +272,7 @@ async def validate_session(
             response_time=0.0,
             user_agent=user_agent,
         )
-
         return {"is_valid": is_valid}
-    except Exception as e:
-        api_logger.log_error(method="POST", path=f"/sessions/validate/{session_id}", error=e, user_id=current_user.id)
-        raise
 
 
 @sessions_router.post("/cleanup")
@@ -291,7 +288,10 @@ async def cleanup_expired_sessions(
     try:
         # В реальном приложении здесь должна быть проверка прав администратора
         cleaned_count = await session_service.cleanup_expired_sessions()
-
+    except Exception as e:
+        api_logger.log_error(method="POST", path="/sessions/cleanup", error=e, user_id=current_user.id)
+        raise
+    else:
         api_logger.log_request(
             method="POST",
             path="/sessions/cleanup",
@@ -301,8 +301,4 @@ async def cleanup_expired_sessions(
             response_time=0.0,
             user_agent=user_agent,
         )
-
         return {"cleaned_sessions": cleaned_count}
-    except Exception as e:
-        api_logger.log_error(method="POST", path="/sessions/cleanup", error=e, user_id=current_user.id)
-        raise

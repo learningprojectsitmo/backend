@@ -66,7 +66,7 @@ class AuthService:
                 raise credentials_exception
         except JWTError as e:
             self._logger.warning(f"Token validation failed: JWT error - {e!s}")
-            raise credentials_exception
+            raise credentials_exception from e
 
         user = await self._user_repository.get_by_email(email)
         if user is None:
@@ -279,11 +279,11 @@ class AuthService:
                 user_agent = request.headers.get("user-agent", "unknown")
                 security_logger.log_logout_attempt(email=user.email, ip_address=ip_address, user_agent=user_agent)
 
-            return True
-
         except Exception:
             self._logger.exception("Error during logout")
             return False
+        else:
+            return True
 
     async def terminate_all_other_sessions(self, token: str, current_session_id: str | None = None) -> dict:
         """Завершить все сессии кроме текущей"""
@@ -302,11 +302,11 @@ class AuthService:
                     self._logger.info(f"Terminated {len(other_sessions)} sessions for user {user.id} except current")
                     return {"terminated_count": len(result.terminated_sessions), "message": result.message}
 
-            return {"terminated_count": 0, "message": "No other sessions found"}
-
         except Exception:
             self._logger.exception("Error terminating other sessions")
             raise
+        else:
+            return {"terminated_count": 0, "message": "No other sessions found"}
 
     async def get_user_sessions_info(self, token: str) -> dict:
         """Получить информацию о сессиях пользователя"""
@@ -337,9 +337,9 @@ class AuthService:
 
             # Обновляем активность сессии
             await self._session_service.update_session_activity(session_id)
-            self._logger.debug(f"Refreshed activity for session {session_id}")
-            return True
-
         except Exception:
             self._logger.exception("Error refreshing session activity")
             return False
+        else:
+            self._logger.debug(f"Refreshed activity for session {session_id}")
+            return True

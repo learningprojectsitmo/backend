@@ -25,14 +25,15 @@ class SessionRepository:
 
         try:
             result = await self.uow.session.get(Session, session_id)
+        except Exception:
+            self._logger.exception(f"Error getting session {session_id}")
+            raise
+        else:
             if result:
                 self._logger.info(f"Retrieved session {session_id}")
             else:
                 self._logger.warning(f"Session {session_id} not found")
             return result
-        except Exception:
-            self._logger.exception(f"Error getting session {session_id}")
-            raise
 
     async def get_by_user_id(self, user_id: int) -> Sequence[Session]:
         """Получить все сессии пользователя"""
@@ -43,11 +44,12 @@ class SessionRepository:
                 select(Session).where(Session.user_id == user_id).order_by(Session.last_activity.desc())
             )
             sessions = result.scalars().all()
-            self._logger.info(f"Retrieved {len(sessions)} sessions for user {user_id}")
-            return sessions
         except Exception:
             self._logger.exception(f"Error getting sessions for user {user_id}")
             raise
+        else:
+            self._logger.info(f"Retrieved {len(sessions)} sessions for user {user_id}")
+            return sessions
 
     async def get_active_sessions_by_user_id(self, user_id: int) -> Sequence[Session]:
         """Получить активные сессии пользователя"""
@@ -60,11 +62,12 @@ class SessionRepository:
                 .order_by(Session.last_activity.desc())
             )
             sessions = result.scalars().all()
-            self._logger.info(f"Retrieved {len(sessions)} active sessions for user {user_id}")
-            return sessions
         except Exception:
             self._logger.exception(f"Error getting active sessions for user {user_id}")
             raise
+        else:
+            self._logger.info(f"Retrieved {len(sessions)} active sessions for user {user_id}")
+            return sessions
 
     async def get_current_session(self, user_id: int) -> Session | None:
         """Получить текущую сессию пользователя"""
@@ -75,14 +78,15 @@ class SessionRepository:
                 select(Session).where(and_(Session.user_id == user_id, Session.is_current, Session.is_active))
             )
             session = result.scalar_one_or_none()
+        except Exception:
+            self._logger.exception(f"Error getting current session for user {user_id}")
+            raise
+        else:
             if session:
                 self._logger.info(f"Found current session for user {user_id}: {session.id}")
             else:
                 self._logger.warning(f"No current session found for user {user_id}")
             return session
-        except Exception:
-            self._logger.exception(f"Error getting current session for user {user_id}")
-            raise
 
     async def create(self, session_data: SessionCreate) -> Session:
         """Создать новую сессию"""
@@ -103,23 +107,28 @@ class SessionRepository:
             db_session = Session(**session_dict)
             self.uow.session.add(db_session)
             await self.uow.session.flush()
-
-            self._logger.info(f"Created session {session_id} for user {session_data.user_id}")
-            return db_session
         except Exception:
             self._logger.exception(f"Error creating session for user {session_data.user_id}")
             raise
+        else:
+            self._logger.info(f"Created session {session_id} for user {session_data.user_id}")
+            return db_session
 
     async def update(self, session_id: str, session_data: SessionUpdate) -> Session | None:
         """Обновить сессию"""
         self._logger.debug(f"Updating session {session_id}")
 
-        try:
-            db_session = await self.get_by_id(session_id)
+        def _check_session_exists() -> None:
             if not db_session:
                 self._logger.warning(f"Session {session_id} not found for update")
-                return None
 
+        try:
+            db_session = await self.get_by_id(session_id)
+            _check_session_exists()
+        except Exception:
+            self._logger.exception(f"Error updating session {session_id}")
+            raise
+        else:
             update_data = session_data.model_dump(exclude_unset=True)
             updated_fields = list(update_data.keys())
 
@@ -128,26 +137,25 @@ class SessionRepository:
 
             self._logger.info(f"Updated session {session_id} - fields: {updated_fields}")
             return db_session
-        except Exception:
-            self._logger.exception(f"Error updating session {session_id}")
-            raise
 
     async def update_last_activity(self, session_id: str) -> Session | None:
         """Обновить время последней активности сессии"""
         self._logger.debug(f"Updating last activity for session {session_id}")
 
-        try:
-            db_session = await self.get_by_id(session_id)
+        def _check_session_exists() -> None:
             if not db_session:
                 self._logger.warning(f"Session {session_id} not found for activity update")
-                return None
 
-            db_session.last_activity = datetime.utcnow()
-            self._logger.debug(f"Updated last activity for session {session_id}")
-            return db_session
+        try:
+            db_session = await self.get_by_id(session_id)
+            _check_session_exists()
         except Exception:
             self._logger.exception(f"Error updating last activity for session {session_id}")
             raise
+        else:
+            db_session.last_activity = datetime.utcnow()
+            self._logger.debug(f"Updated last activity for session {session_id}")
+            return db_session
 
     async def set_current_session(self, user_id: int, session_id: str) -> bool:
         """Установить сессию как текущую для пользователя"""
@@ -181,6 +189,10 @@ class SessionRepository:
 
         try:
             db_session = await self.get_by_id(session_id)
+        except Exception:
+            self._logger.exception(f"Error terminating session {session_id}")
+            raise
+        else:
             if not db_session:
                 self._logger.warning(f"Session {session_id} not found for termination")
                 return False
@@ -189,9 +201,6 @@ class SessionRepository:
             db_session.is_current = False
             self._logger.info(f"Terminated session {session_id}")
             return True
-        except Exception:
-            self._logger.exception(f"Error terminating session {session_id}")
-            raise
 
     async def terminate_sessions(self, session_ids: list[str]) -> list[str]:
         """Завершить несколько сессий"""
@@ -202,12 +211,12 @@ class SessionRepository:
             for session_id in session_ids:
                 if await self.terminate_session(session_id):
                     terminated_sessions.append(session_id)
-
-            self._logger.info(f"Terminated {len(terminated_sessions)} sessions")
-            return terminated_sessions
         except Exception:
             self._logger.exception("Error terminating sessions")
             raise
+        else:
+            self._logger.info(f"Terminated {len(terminated_sessions)} sessions")
+            return terminated_sessions
 
     async def terminate_all_sessions_except(self, user_id: int, except_session_id: str) -> int:
         """Завершить все сессии пользователя кроме указанной"""
@@ -226,12 +235,12 @@ class SessionRepository:
                 session.is_active = False
                 session.is_current = False
                 terminated_count += 1
-
-            self._logger.info(f"Terminated {terminated_count} sessions for user {user_id}")
-            return terminated_count
         except Exception:
             self._logger.exception(f"Error terminating sessions for user {user_id}")
             raise
+        else:
+            self._logger.info(f"Terminated {terminated_count} sessions for user {user_id}")
+            return terminated_count
 
     async def cleanup_expired_sessions(self) -> int:
         """Очистить истекшие сессии"""
@@ -246,12 +255,12 @@ class SessionRepository:
             for session in expired_sessions:
                 session.is_active = False
                 session.is_current = False
-
-            self._logger.info(f"Cleaned up {len(expired_sessions)} expired sessions")
-            return len(expired_sessions)
         except Exception:
             self._logger.exception("Error cleaning up expired sessions")
             raise
+        else:
+            self._logger.info(f"Cleaned up {len(expired_sessions)} expired sessions")
+            return len(expired_sessions)
 
     async def count_user_sessions(self, user_id: int) -> int:
         """Подсчитать количество сессий пользователя"""
@@ -262,11 +271,12 @@ class SessionRepository:
                 select(func.count()).select_from(Session).where(Session.user_id == user_id)
             )
             count = result.scalar_one()
-            self._logger.info(f"User {user_id} has {count} sessions")
-            return count
         except Exception:
             self._logger.exception(f"Error counting sessions for user {user_id}")
             raise
+        else:
+            self._logger.info(f"User {user_id} has {count} sessions")
+            return count
 
     async def count_active_user_sessions(self, user_id: int) -> int:
         """Подсчитать количество активных сессий пользователя"""
@@ -277,8 +287,9 @@ class SessionRepository:
                 select(func.count()).select_from(Session).where(and_(Session.user_id == user_id, Session.is_active))
             )
             count = result.scalar_one()
-            self._logger.info(f"User {user_id} has {count} active sessions")
-            return count
         except Exception:
             self._logger.exception(f"Error counting active sessions for user {user_id}")
             raise
+        else:
+            self._logger.info(f"User {user_id} has {count} active sessions")
+            return count

@@ -49,17 +49,20 @@ async def update_user(
             detail="Not enough permissions",
         )
 
-    try:
-        user = await user_service.update_user(user_id, user_data)
+    def _check_user_exists_or_raise_not_found() -> None:
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
-        return UserFull.model_validate(user)
+    try:
+        user = await user_service.update_user(user_id, user_data)
+        _check_user_exists_or_raise_not_found()
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Failed to update user: {e!s}",
         ) from e
+    else:
+        return UserFull.model_validate(user)
 
 
 @user_router.delete("/{user_id}")

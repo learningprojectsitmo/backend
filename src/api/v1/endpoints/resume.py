@@ -66,16 +66,20 @@ async def update_resume(
     current_user: User = Depends(get_current_user),
 ) -> ResumeFull:
     """Обновить резюме (только автор может обновлять)"""
-    try:
-        resume = await resume_service.update_resume(resume_id, resume_data, current_user.id)
+
+    def _get_resume_or_raise_not_found() -> None:
         if not resume:
             raise HTTPException(status_code=404, detail="Resume not found")
 
-        return ResumeFull.model_validate(resume)
+    try:
+        resume = await resume_service.update_resume(resume_id, resume_data, current_user.id)
+        _get_resume_or_raise_not_found()
     except PermissionError as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise HTTPException(status_code=403, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to update resume: {e!s}") from e
+    else:
+        return ResumeFull.model_validate(resume)
 
 
 @resume_router.delete("/{resume_id}")
@@ -85,11 +89,15 @@ async def delete_resume(
     current_user: User = Depends(get_current_user),
 ) -> dict[str, str]:
     """Удалить резюме (только автор может удалять)"""
-    try:
-        success = await resume_service.delete_resume(resume_id, current_user.id)
+
+    def _check_success_or_raise_not_found() -> None:
         if not success:
             raise HTTPException(status_code=404, detail="Resume not found")
 
-        return {"message": "Resume deleted successfully"}
+    try:
+        success = await resume_service.delete_resume(resume_id, current_user.id)
+        _check_success_or_raise_not_found()
     except PermissionError as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise HTTPException(status_code=403, detail=str(e)) from e
+    else:
+        return {"message": "Resume deleted successfully"}
