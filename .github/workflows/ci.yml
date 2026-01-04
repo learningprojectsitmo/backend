@@ -99,7 +99,7 @@ jobs:
       #     EOF
 
       - name: Run pytest
-        run: pytest -v --tb=short
+        run: pytest
 
       - name: Upload coverage report
         uses: codecov/codecov-action@v4
