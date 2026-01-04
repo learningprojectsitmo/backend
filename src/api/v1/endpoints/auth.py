@@ -8,6 +8,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from src.core.container import get_auth_service
 from src.core.dependencies import get_current_user
 from src.core.logging_config import api_logger
+from src.model.models import User
 from src.schema.auth import Token
 from src.services.auth_service import AuthService
 
@@ -45,8 +46,8 @@ async def login_for_access_token(
 @auth_router.post("/logout")
 async def logout(
     request: Request,
-    _current_user: Annotated[str, Depends(get_current_user)],
-):
+    _current_user: Annotated[User, Depends(get_current_user)],
+) -> dict[str, str]:
     """Выход из системы (простое удаление токена на клиенте)"""
     client_ip = request.client.host if request.client else "unknown"
 
@@ -65,8 +66,8 @@ async def logout(
 @auth_router.get("/me")
 async def get_current_user_info(
     request: Request,
-    current_user: Annotated[str, Depends(get_current_user)],
-):
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> dict[str, object]:
     """Получить информацию о текущем пользователе"""
     client_ip = request.client.host if request.client else "unknown"
 

@@ -16,7 +16,7 @@ async def fetch_resume(
     resume_id: int,
     resume_service: ResumeService = Depends(get_resume_service),
     _current_user: User = Depends(get_current_user),
-):
+) -> ResumeFull:
     """Получить резюме по ID"""
     resume = await resume_service.get_resume_by_id(resume_id)
     if not resume:
@@ -31,7 +31,7 @@ async def fetch_resumes(
     limit: int = Query(10, ge=1, le=100, description="Количество резюме на странице"),
     resume_service: ResumeService = Depends(get_resume_service),
     _current_user: User = Depends(get_current_user),
-):
+) -> ResumeListResponse:
     """Получить список резюме с пагинацией"""
     resumes, total = await resume_service.get_resumes_paginated(page, limit)
     resumes_list = [ResumeFull.model_validate(resume) for resume in resumes]
@@ -52,7 +52,7 @@ async def create_resume(
     resume_data: ResumeCreate,
     resume_service: ResumeService = Depends(get_resume_service),
     current_user: User = Depends(get_current_user),
-):
+) -> ResumeFull:
     """Создать новое резюме"""
     resume = await resume_service.create_resume(resume_data, current_user.id)
     return ResumeFull.model_validate(resume)
@@ -64,7 +64,7 @@ async def update_resume(
     resume_data: ResumeUpdate,
     resume_service: ResumeService = Depends(get_resume_service),
     current_user: User = Depends(get_current_user),
-):
+) -> ResumeFull:
     """Обновить резюме (только автор может обновлять)"""
     try:
         resume = await resume_service.update_resume(resume_id, resume_data, current_user.id)
@@ -83,7 +83,7 @@ async def delete_resume(
     resume_id: int,
     resume_service: ResumeService = Depends(get_resume_service),
     current_user: User = Depends(get_current_user),
-):
+) -> dict[str, str]:
     """Удалить резюме (только автор может удалять)"""
     try:
         success = await resume_service.delete_resume(resume_id, current_user.id)

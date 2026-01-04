@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Sequence
-from typing import Any, Protocol, TypeVar, cast
+from typing import Any, Protocol, TypeVar
 
 from sqlalchemy import Row, RowMapping, func, select
 
@@ -21,7 +21,9 @@ class RepositoryProtocol(Protocol[ModelType_co, CreateType_contra, UpdateType_co
     async def get_multi(self, skip: int = 0, limit: int = 100) -> Sequence[Row[Any] | RowMapping | Any]: ...
     async def count(self) -> int: ...
     async def create(self, obj_data: CreateType_contra) -> ModelType_co: ...
-    async def update(self, id: int, obj_data: UpdateType_contra) -> ModelType_co | None: ...
+    async def update(
+        self, id: int, obj_data: UpdateType_contra = TypeVar("UpdateType_contra", contravariant=True)
+    ) -> ModelType_co | None: ...
     async def delete(self, id: int) -> bool: ...
 
 
@@ -73,7 +75,7 @@ class BaseRepository(RepositoryProtocol[ModelType_co, CreateType_contra, UpdateT
         self._logger.debug(f"Getting {self._model.__name__} by ID: {id}")
 
         try:
-            result = await self.uow.session.get(cast("type[ModelType_co]", self._model), id)
+            result = await self.uow.session.get(self._model, id)  # type: ignore[arg-type]
             duration = time.time() - start_time
 
             if result:
@@ -111,7 +113,7 @@ class BaseRepository(RepositoryProtocol[ModelType_co, CreateType_contra, UpdateT
 
         try:
             result = await self.uow.session.execute(
-                select(cast("type[ModelType_co]", self._model)).offset(skip).limit(limit)
+                select(self._model).offset(skip).limit(limit)  # type: ignore[arg-type]
             )
             objects = list(result.scalars().all())
             duration = time.time() - start_time
@@ -143,7 +145,7 @@ class BaseRepository(RepositoryProtocol[ModelType_co, CreateType_contra, UpdateT
 
         try:
             result = await self.uow.session.execute(
-                select(func.count()).select_from(cast("type[ModelType_co]", self._model))
+                select(func.count()).select_from(self._model)  # type: ignore[arg-type]
             )
             count = result.scalar_one()
             duration = time.time() - start_time
@@ -222,7 +224,9 @@ class BaseRepository(RepositoryProtocol[ModelType_co, CreateType_contra, UpdateT
                 self._logger.warning(f"{self._model.__name__} with ID {id} not found for update in {duration:.3f}s")
                 return None
 
-            data = obj_data.model_dump(exclude_unset=True) if hasattr(obj_data, "model_dump") else obj_data
+            data: dict[str, Any] = (
+                obj_data.model_dump(exclude_unset=True) if hasattr(obj_data, "model_dump") else obj_data
+            )  # type: ignore[assignment]
             updated_fields = list(data.keys())
 
             for field, value in data.items():

@@ -84,7 +84,7 @@ async def get_sessions_summary(
     request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
     session_service: SessionService = Depends(get_session_service),
-):
+) -> dict[str, object]:
     """Получить краткую информацию о сессиях пользователя"""
     client_ip = request.client.host if request.client else "unknown"
     user_agent = request.headers.get("user-agent", "")
@@ -214,7 +214,7 @@ async def set_current_session(
     session_id: str,
     current_user: Annotated[User, Depends(get_current_user)],
     session_service: SessionService = Depends(get_session_service),
-):
+) -> dict[str, str]:
     """Установить сессию как текущую"""
     client_ip = request.client.host if request.client else "unknown"
     user_agent = request.headers.get("user-agent", "")
@@ -254,7 +254,7 @@ async def validate_session(
     session_id: str,
     current_user: Annotated[User, Depends(get_current_user)],
     session_service: SessionService = Depends(get_session_service),
-):
+) -> dict[str, bool]:
     """Проверить валидность сессии"""
     client_ip = request.client.host if request.client else "unknown"
     user_agent = request.headers.get("user-agent", "")
@@ -283,7 +283,7 @@ async def cleanup_expired_sessions(
     request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
     session_service: SessionService = Depends(get_session_service),
-):
+) -> dict[str, int]:
     """Очистить истекшие сессии (административная функция)"""
     client_ip = request.client.host if request.client else "unknown"
     user_agent = request.headers.get("user-agent", "")
