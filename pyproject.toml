@@ -24,6 +24,7 @@ dependencies = [
     "pwdlib[argon2]>=0.3.0",
     "loguru>=0.7.3",
     "asyncpg>=0.31.0",
+    "anyio>=4.11.0",
 ]
 
 [project.optional-dependencies]
@@ -33,9 +34,11 @@ dev = [
     "pytest-cov>=4.1.0",
     "httpx>=0.25.0",
     "ruff>=0.14.3",
-    "mypy>=1.7.0",
     "pre-commit>=3.6.0",
     "pytest>=8.4.2",
+    "pytest-asyncio>=1.2.0",
+    "pytest-tornasync>=0.6.0.post2",
+    "pytest-trio>=0.8.0",
 ]
 
 ci = [
@@ -43,7 +46,6 @@ ci = [
     "pytest-asyncio>=0.21.0",
     "pytest-cov>=4.1.0",
     "ruff>=0.14.3",
-    "mypy>=1.7.0",
 ]
 
 [build-system]
@@ -66,11 +68,16 @@ warn_unreachable = true
 strict_equality = true
 
 [tool.pytest]
+asyncio_default_fixture_loop_scope = "session"
 asyncio_mode = "auto"
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
-addopts = "-v --cov=src --cov-report=term-missing"
+addopts = [
+    "-v",
+    "--cov=src",
+    "--cov-report=term-missing"
+]
 
 [tool.ruff]
 #python-target = "py312"
