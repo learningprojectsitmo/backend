@@ -65,13 +65,12 @@ warn_no_return = true
 warn_unreachable = true
 strict_equality = true
 
-[tool.pytest.ini_options]
+[tool.pytest]
+asyncio_mode = "auto"
 testpaths = ["tests"]
 python_files = ["test_*.py"]
-python_classes = ["Test*"]
 python_functions = ["test_*"]
-addopts = "-v --tb=short"
-asyncio_mode = "auto"
+addopts = "-v --cov=src --cov-report=term-missing"
 
 [tool.ruff]
 #python-target = "py312"
@@ -162,67 +161,3 @@ skip-magic-trailing-comma = false
 line-ending = "auto"
 docstring-code-format = true
 docstring-code-line-length = "dynamic"
-
-[tool.pytest]
-# Основные настройки pytest
-
-# Директории для поиска тестов
-testpaths = "tests"
-
-# Шаблоны для поиска файлов тестов
-python_files = "test_*.py *_test.py"
-
-# Шаблоны для поиска классов тестов
-python_classes = "Test*"
-
-# Шаблоны для поиска функций тестов
-python_functions = "test_*"
-
-# Дополнительные опции командной строки
-addopts = [
-    "-v",
-    "--strict-markers",
-    "--strict-config",
-    "--tb=short",
-    "--color=yes",
-    "--disable-warnings",
-    "--cov=src",
-    "--cov-report=term-missing",
-    "--cov-report=html:htmlcov",
-    "--cov-fail-under=80"
-]
-
-# Маркеры для группировки тестов
-markers = [
-    "unit: Unit тесты",
-    "integration: Интеграционные тесты",
-    "slow: Медленные тесты",
-    "auth: Тесты аутентификации",
-    "user: Тесты пользователей",
-    "project: Тесты проектов",
-    "resume: Тесты резюме",
-    "service: Тесты сервисов",
-    "repository: Тесты репозиториев",
-    "api: Тесты API",
-    "database: Тесты базы данных",
-    "asyncio: Асинхронные тесты"
-]
-
-# Настройки фильтрации предупреждений
-filterwarnings = [
-    "ignore::UserWarning",
-    "ignore::DeprecationWarning",
-    "ignore::PendingDeprecationWarning"
-]
-
-# Настройки для асинхронных тестов
-asyncio_mode = "auto"
-
-# Минимальная версия Python
-minversion = "6.0"
-
-# Тестовое окружение
-env = [
-    "PYTEST_CURRENT_TEST=True",
-    "TESTING=True"
-]
