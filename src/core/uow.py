@@ -22,7 +22,7 @@ class SqlAlchemyUoW:
         self.session = self.session_factory()
         return self
 
-    async def __aexit__(self, exc_type, exc, tb) -> None:
+    async def __aexit__(self, _exc_type: object, exc: object, tb: object) -> None:  # type: ignore[override]
         if exc:
             await self.session.rollback()
         else:

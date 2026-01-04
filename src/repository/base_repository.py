@@ -2,30 +2,30 @@ from __future__ import annotations
 
 import time
 from collections.abc import Sequence
-from typing import Any, Protocol, TypeVar
+from typing import Any, Protocol, TypeVar, cast
 
 from sqlalchemy import Row, RowMapping, func, select
 
 from src.core.logging_config import get_logger
 from src.core.uow import IUnitOfWork
 
-ModelType = TypeVar("ModelType")
-CreateType = TypeVar("CreateType")
-UpdateType = TypeVar("UpdateType")
+ModelType_co = TypeVar("ModelType_co", bound="Any", covariant=True)
+CreateType_contra = TypeVar("CreateType_contra", contravariant=True)
+UpdateType_contra = TypeVar("UpdateType_contra", contravariant=True)
 
 
-class RepositoryProtocol(Protocol[ModelType, CreateType, UpdateType]):
+class RepositoryProtocol(Protocol[ModelType_co, CreateType_contra, UpdateType_contra]):
     """Протокол репозитория для базовых CRUD операций."""
 
-    async def get_by_id(self, id: int) -> ModelType | None: ...
+    async def get_by_id(self, id: int) -> ModelType_co | None: ...
     async def get_multi(self, skip: int = 0, limit: int = 100) -> Sequence[Row[Any] | RowMapping | Any]: ...
     async def count(self) -> int: ...
-    async def create(self, obj_data: CreateType) -> ModelType: ...
-    async def update(self, id: int, obj_data: UpdateType) -> ModelType | None: ...
+    async def create(self, obj_data: CreateType_contra) -> ModelType_co: ...
+    async def update(self, id: int, obj_data: UpdateType_contra) -> ModelType_co | None: ...
     async def delete(self, id: int) -> bool: ...
 
 
-class BaseRepository(RepositoryProtocol[ModelType, CreateType, UpdateType]):
+class BaseRepository(RepositoryProtocol[ModelType_co, CreateType_contra, UpdateType_contra]):
     """Базовый CRUD-репозиторий с транзакциями.
 
     Предоставляет базовые операции для работы с базой данных:
@@ -49,10 +49,10 @@ class BaseRepository(RepositoryProtocol[ModelType, CreateType, UpdateType]):
             uow: Unit of Work для управления транзакциями и сессией БД
         """
         self.uow = uow
-        self._model: type[ModelType] | None = None  # наследник заполняет
+        self._model: type[ModelType_co]  # наследник заполняет
         self._logger = get_logger(self.__class__.__name__)
 
-    async def get_by_id(self, id: int) -> ModelType | None:
+    async def get_by_id(self, id: int) -> ModelType_co | None:
         """Получить объект модели по идентификатору.
 
         Выполняет поиск объекта в базе данных по его первичному ключу.
@@ -73,7 +73,7 @@ class BaseRepository(RepositoryProtocol[ModelType, CreateType, UpdateType]):
         self._logger.debug(f"Getting {self._model.__name__} by ID: {id}")
 
         try:
-            result = await self.uow.session.get(self._model, id)
+            result = await self.uow.session.get(cast("type[ModelType_co]", self._model), id)
             duration = time.time() - start_time
 
             if result:
@@ -87,7 +87,7 @@ class BaseRepository(RepositoryProtocol[ModelType, CreateType, UpdateType]):
             self._logger.exception(f"Error getting {self._model.__name__} by ID {id} in {duration:.3f}s")
             raise
 
-    async def get_multi(self, skip: int = 0, limit: int = 100) -> list[ModelType]:
+    async def get_multi(self, skip: int = 0, limit: int = 100) -> list[ModelType_co]:
         """Получить список объектов с пагинацией.
 
         Извлекает объекты из базы данных с возможностью пропуска
@@ -110,8 +110,10 @@ class BaseRepository(RepositoryProtocol[ModelType, CreateType, UpdateType]):
         self._logger.debug(f"Getting {self._model.__name__} list - skip: {skip}, limit: {limit}")
 
         try:
-            result = await self.uow.session.execute(select(self._model).offset(skip).limit(limit))
-            objects = result.scalars().all()
+            result = await self.uow.session.execute(
+                select(cast("type[ModelType_co]", self._model)).offset(skip).limit(limit)
+            )
+            objects = list(result.scalars().all())
             duration = time.time() - start_time
 
             self._logger.info(f"Retrieved {len(objects)} {self._model.__name__} objects in {duration:.3f}s")
@@ -140,7 +142,9 @@ class BaseRepository(RepositoryProtocol[ModelType, CreateType, UpdateType]):
         self._logger.debug(f"Counting {self._model.__name__} objects")
 
         try:
-            result = await self.uow.session.execute(select(func.count()).select_from(self._model))
+            result = await self.uow.session.execute(
+                select(func.count()).select_from(cast("type[ModelType_co]", self._model))
+            )
             count = result.scalar_one()
             duration = time.time() - start_time
 
@@ -151,7 +155,7 @@ class BaseRepository(RepositoryProtocol[ModelType, CreateType, UpdateType]):
             self._logger.exception(f"Error counting {self._model.__name__} objects in {duration:.3f}s")
             raise
 
-    async def create(self, obj_data: CreateType) -> ModelType:
+    async def create(self, obj_data: CreateType_contra) -> ModelType_co:
         """Создать новый объект в базе данных.
 
         Добавляет новый объект в сессию базы данных и выполняет flush
@@ -175,7 +179,7 @@ class BaseRepository(RepositoryProtocol[ModelType, CreateType, UpdateType]):
 
         try:
             data = obj_data.model_dump(exclude_unset=True) if hasattr(obj_data, "model_dump") else obj_data
-            db_obj = self._model(**data)
+            db_obj = self._model(**data)  # type: ignore[arg-type]
             self.uow.session.add(db_obj)
             await self.uow.session.flush()
 
@@ -188,7 +192,7 @@ class BaseRepository(RepositoryProtocol[ModelType, CreateType, UpdateType]):
             self._logger.exception(f"Error creating {self._model.__name__} in {duration:.3f}s")
             raise
 
-    async def update(self, id: int, obj_data: UpdateType) -> ModelType | None:
+    async def update(self, id: int, obj_data: UpdateType_contra) -> ModelType_co | None:
         """Обновить существующий объект в базе данных.
 
         Находит объект по ID и обновляет его поля переданными данными.

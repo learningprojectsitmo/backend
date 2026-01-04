@@ -12,5 +12,5 @@ routers = APIRouter(prefix="/v1")
 router_list = [auth_router, user_router, resume_router, project_router, sessions_router]
 
 for router in router_list:
-    router.tags = routers.tags.append("v1")
+    routers.tags.append("v1")  # type: ignore[attr-defined]
     routers.include_router(router)
