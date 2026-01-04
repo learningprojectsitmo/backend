@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class ProjectCreate(BaseModel):
@@ -26,8 +26,7 @@ class ProjectFull(ProjectCreate):
     description: str | None = None
     max_participants: int | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ProjectResponse(BaseModel):
@@ -36,8 +35,7 @@ class ProjectResponse(BaseModel):
     id: int
     name: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ProjectListItem(BaseModel):
@@ -49,8 +47,7 @@ class ProjectListItem(BaseModel):
     max_participants: str | None = None
     author_id: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ProjectListResponse(BaseModel):

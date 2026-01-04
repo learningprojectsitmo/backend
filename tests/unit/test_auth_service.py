@@ -27,15 +27,16 @@ class TestAuthService:
 
         auth_service = AuthService(mock_repository, Mock())
 
-        # when
-        result = await auth_service.authenticate_user("test@example.com", "password")
+        with patch.object(auth_service, "verify_password", return_value=True):
+            # when
+            result = await auth_service.authenticate_user("test@example.com", "password")
 
-        # then
-        assert result.id == mock_user.id
-        assert result.email == mock_user.email
-        assert result.first_name == mock_user.first_name
-        assert result.middle_name == mock_user.middle_name
-        mock_repository.get_by_email.assert_called_once_with("test@example.com")
+            # then
+            assert result.id == mock_user.id
+            assert result.email == mock_user.email
+            assert result.first_name == mock_user.first_name
+            assert result.middle_name == mock_user.middle_name
+            mock_repository.get_by_email.assert_called_once_with("test@example.com")
 
     async def test_should_return_none_for_invalid_credentials(self):
         """Тест должен вернуть None при некорректных учетных данных"""
@@ -89,7 +90,10 @@ class TestAuthService:
 
         form_data = OAuth2PasswordRequestForm(username="test@example.com", password="password")
 
-        with patch.object(auth_service, "create_access_token") as mock_create_token:
+        with (
+            patch.object(auth_service, "verify_password", return_value=True),
+            patch.object(auth_service, "create_access_token") as mock_create_token,
+        ):
             mock_create_token.return_value = "fake_jwt_token"
 
             # when

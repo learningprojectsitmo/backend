@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr
 
 
 class UserBase(BaseModel):
@@ -26,8 +26,7 @@ class UserFull(UserBase):
     isu_number: int | None = None
     tg_nickname: str | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UserUpdate(BaseModel):
@@ -47,8 +46,7 @@ class UserResponse(BaseModel):
     id: int
     email: EmailStr
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UserListItem(BaseModel):
@@ -62,8 +60,7 @@ class UserListItem(BaseModel):
     isu_number: int | None = None
     tg_nickname: str | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UserListResponse(BaseModel):

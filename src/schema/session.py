@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class SessionBase(BaseModel):
@@ -51,8 +51,7 @@ class SessionResponse(SessionBase):
     is_active: bool
     is_current: bool
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SessionListItem(SessionResponse):

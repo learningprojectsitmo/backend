@@ -104,13 +104,21 @@ class APILogger:
         self.logger = get_logger("api")
 
     def log_request(
-        self, method: str, path: str, user_id: int | None, ip_address: str, status_code: int, response_time: float
+        self,
+        method: str,
+        path: str,
+        user_id: int | None,
+        ip_address: str,
+        status_code: int,
+        response_time: float,
+        user_agent: str | None = None,
     ) -> None:
         """Логирование API запросов"""
         user_info = f"User: {user_id}" if user_id else "Anonymous"
+        ua_info = f"User-Agent: {user_agent}" if user_agent else ""
         self.logger.info(
             f"API Request - {method} {path} - {user_info} - IP: {ip_address} - "
-            f"Status: {status_code} - Time: {response_time:.3f}s"
+            f"Status: {status_code} - Time: {response_time:.3f}s {ua_info}"
         )
 
     def log_error(self, method: str, path: str, error: Exception, user_id: int | None) -> None:

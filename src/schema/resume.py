@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class ResumeCreate(BaseModel):
@@ -23,8 +23,7 @@ class ResumeFull(ResumeCreate):
     id: int
     resume_text: str | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ResumeResponse(BaseModel):
@@ -34,8 +33,7 @@ class ResumeResponse(BaseModel):
     header: str
     author_id: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ResumeListResponse(BaseModel):

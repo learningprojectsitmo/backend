@@ -20,7 +20,7 @@ This project uses **Ruff** for code linting, formatting, and import sorting. Ruf
 
 ```bash
 # Install development dependencies including Ruff
-uv sync --dev
+uv sync --extra dev
 ```
 
 ### Using Ruff
@@ -121,6 +121,7 @@ ignore = [
 ```
 
 To ignore rules for specific files, add a comment at the top of the file:
+
 ```python
 # ruff: ignore: E501, B008
 ```
