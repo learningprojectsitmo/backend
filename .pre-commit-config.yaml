@@ -17,6 +17,6 @@ repos:
     rev: v0.14.3
     hooks:
       - id: ruff
-        args: [--fix, --ignore, "D1,D2,D4,ANN001,ANN002,ANN003,ANN202,ANN204,ANN401,RUF002,RUF003,TRY300,TRY301,B904,FAST002,TC004,TC003,PLR0911"]
+        args: [--fix]
 
       - id: ruff-format

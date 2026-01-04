@@ -75,19 +75,19 @@ class BaseRepository(RepositoryProtocol[ModelType_co, CreateType_contra, UpdateT
         self._logger.debug(f"Getting {self._model.__name__} by ID: {id}")
 
         try:
-            result = await self.uow.session.get(self._model, id)  # type: ignore[arg-type]
+            result = await self.uow.session.get(self._model, id)
             duration = time.time() - start_time
 
             if result:
                 self._logger.info(f"Successfully retrieved {self._model.__name__} with ID {id} in {duration:.3f}s")
             else:
                 self._logger.warning(f"{self._model.__name__} with ID {id} not found in {duration:.3f}s")
-
-            return result
         except Exception:
             duration = time.time() - start_time
             self._logger.exception(f"Error getting {self._model.__name__} by ID {id} in {duration:.3f}s")
             raise
+        else:
+            return result
 
     async def get_multi(self, skip: int = 0, limit: int = 100) -> list[ModelType_co]:
         """Получить список объектов с пагинацией.
@@ -119,11 +119,12 @@ class BaseRepository(RepositoryProtocol[ModelType_co, CreateType_contra, UpdateT
             duration = time.time() - start_time
 
             self._logger.info(f"Retrieved {len(objects)} {self._model.__name__} objects in {duration:.3f}s")
-            return objects
         except Exception:
             duration = time.time() - start_time
             self._logger.exception(f"Error getting {self._model.__name__} list in {duration:.3f}s")
             raise
+        else:
+            return objects
 
     async def count(self) -> int:
         """Подсчитать общее количество объектов модели в базе данных.
@@ -151,11 +152,12 @@ class BaseRepository(RepositoryProtocol[ModelType_co, CreateType_contra, UpdateT
             duration = time.time() - start_time
 
             self._logger.info(f"Counted {count} {self._model.__name__} objects in {duration:.3f}s")
-            return count
         except Exception:
             duration = time.time() - start_time
             self._logger.exception(f"Error counting {self._model.__name__} objects in {duration:.3f}s")
             raise
+        else:
+            return count
 
     async def create(self, obj_data: CreateType_contra) -> ModelType_co:
         """Создать новый объект в базе данных.
@@ -187,12 +189,12 @@ class BaseRepository(RepositoryProtocol[ModelType_co, CreateType_contra, UpdateT
 
             duration = time.time() - start_time
             self._logger.info(f"Created {self._model.__name__} with ID {db_obj.id} in {duration:.3f}s")
-
-            return db_obj
         except Exception:
             duration = time.time() - start_time
             self._logger.exception(f"Error creating {self._model.__name__} in {duration:.3f}s")
             raise
+        else:
+            return db_obj
 
     async def update(self, id: int, obj_data: UpdateType_contra) -> ModelType_co | None:
         """Обновить существующий объект в базе данных.
@@ -236,12 +238,12 @@ class BaseRepository(RepositoryProtocol[ModelType_co, CreateType_contra, UpdateT
             self._logger.info(
                 f"Updated {self._model.__name__} with ID {id} - fields: {updated_fields} in {duration:.3f}s"
             )
-
-            return db_obj
         except Exception:
             duration = time.time() - start_time
             self._logger.exception(f"Error updating {self._model.__name__} with ID {id} in {duration:.3f}s")
             raise
+        else:
+            return db_obj
 
     async def delete(self, id: int) -> bool:
         """Удалить объект из базы данных.
@@ -271,8 +273,9 @@ class BaseRepository(RepositoryProtocol[ModelType_co, CreateType_contra, UpdateT
             duration = time.time() - start_time
 
             self._logger.info(f"Deleted {self._model.__name__} with ID {id} in {duration:.3f}s")
-            return True
         except Exception:
             duration = time.time() - start_time
             self._logger.exception(f"Error deleting {self._model.__name__} with ID {id} in {duration:.3f}s")
             raise
+        else:
+            return True

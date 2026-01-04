@@ -105,23 +105,3 @@ uv run ruff format . --check
 #### Common Issues
 
 1. **Import sorting conflicts**: Ruff uses isort-compatible sorting. Configure in `[tool.ruff.lint.isort]`
-2. **Too many complexity warnings**: Adjust `max-complexity` in `[tool.ruff.lint.mccabe]`
-3. **Type checking issues**: Ruff doesn't replace mypy - use both tools together
-
-#### Rule Customization
-
-To ignore specific rules globally, add them to the `ignore` list in `[tool.ruff.lint]`:
-
-```toml
-[tool.ruff.lint]
-ignore = [
-    "E501",  # line too long
-    "B008",  # function call in argument defaults
-]
-```
-
-To ignore rules for specific files, add a comment at the top of the file:
-
-```python
-# ruff: ignore: E501, B008
-```
