@@ -177,7 +177,7 @@ class AuditLog(Base):
 
     entity_type: Mapped[str] = mapped_column(String(100), nullable=False)  # user, project, resume, etc
     entity_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    action: Mapped[str] = mapped_column(String(10), nullable=False)  # INSERT, UPDATE, DELETE
+    action: Mapped[str] = mapped_column(String(10), nullable=False)  # INSERT, UPDATE
     old_values: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     new_values: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     performed_by: Mapped[int | None] = mapped_column(ForeignKey("user.id"), nullable=True)

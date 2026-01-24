@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
 
 from src.core.container import get_user_service
 from src.core.dependencies import get_current_user
 from src.model.models import User
 from src.schema.user import UserCreate, UserFull, UserListResponse, UserUpdate
 from src.services.user_service import UserService
+from src.core.audit_context import set_audit_context
 
 user_router = APIRouter(prefix="/users", tags=["users"])
 
@@ -14,9 +15,19 @@ user_router = APIRouter(prefix="/users", tags=["users"])
 @user_router.post("/", response_model=UserFull)
 async def create_user(
     user_data: UserCreate,
+    request: Request,
     user_service: UserService = Depends(get_user_service),
 ) -> UserFull:
     """Создать нового пользователя"""
+
+    ip_address = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+    set_audit_context(
+        user_id=None,
+        ip_address=ip_address,
+        user_agent=user_agent
+    )
+
     user = await user_service.create_user(user_data)
     return UserFull.model_validate(user)
 
@@ -39,6 +50,7 @@ async def get_user(
 async def update_user(
     user_id: int,
     user_data: UserUpdate,
+    request: Request,
     user_service: UserService = Depends(get_user_service),
     current_user: User = Depends(get_current_user),
 ) -> UserFull:
@@ -48,6 +60,14 @@ async def update_user(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions",
         )
+    
+    ip_address = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+    set_audit_context(
+        user_id=current_user.id,
+        ip_address=ip_address,
+        user_agent=user_agent
+    )
 
     def _check_user_exists_or_raise_not_found() -> None:
         if not user:
