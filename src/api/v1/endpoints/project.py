@@ -7,7 +7,6 @@ from src.core.dependencies import get_current_user, setup_audit
 from src.model.models import User
 from src.schema.project import ProjectCreate, ProjectFull, ProjectListItem, ProjectListResponse, ProjectUpdate
 from src.services.project_service import ProjectService
-from src.core.audit_context import set_audit_context
 
 project_router = APIRouter(prefix="/projects", tags=["project"])
 
@@ -51,7 +50,6 @@ async def fetch_projects(
 @project_router.post("/", response_model=ProjectFull)
 async def create_project(
     project_data: ProjectCreate,
-    request: Request,
     project_service: ProjectService = Depends(get_project_service),
     current_user: User = Depends(get_current_user),
     _audit=Depends(setup_audit),
@@ -65,7 +63,6 @@ async def create_project(
 @project_router.put("/{project_id}", response_model=ProjectFull)
 async def update_project(
     project_id: int,
-    request: Request,
     project_data: ProjectUpdate = Depends(ProjectUpdate),
     project_service: ProjectService = Depends(get_project_service),
     current_user: User = Depends(get_current_user),

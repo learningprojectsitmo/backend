@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from src.core.container import get_user_service
 from src.core.dependencies import get_current_user, setup_audit
 from src.model.models import User
 from src.schema.user import UserCreate, UserFull, UserListResponse, UserUpdate
 from src.services.user_service import UserService
-from src.core.audit_context import set_audit_context
 
 user_router = APIRouter(prefix="/users", tags=["users"])
 
