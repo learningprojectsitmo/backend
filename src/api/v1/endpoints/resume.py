@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from src.core.container import get_resume_service
-from src.core.dependencies import get_current_user
+from src.core.dependencies import get_current_user, setup_audit
 from src.model.models import User
 from src.schema.resume import ResumeCreate, ResumeFull, ResumeListResponse, ResumeUpdate
 from src.services.resume_service import ResumeService
@@ -51,19 +51,11 @@ async def fetch_resumes(
 @resume_router.post("/", response_model=ResumeFull)
 async def create_resume(
     resume_data: ResumeCreate,
-    request: Request,
     resume_service: ResumeService = Depends(get_resume_service),
     current_user: User = Depends(get_current_user),
+    _audit=Depends(setup_audit),
 ) -> ResumeFull:
     """Создать новое резюме"""
-
-    ip_address = request.client.host if request.client else None
-    user_agent = request.headers.get("user-agent")
-    set_audit_context(
-        user_id=current_user.id,
-        ip_address=ip_address,
-        user_agent=user_agent
-    )
 
     resume = await resume_service.create_resume(resume_data, current_user.id)
     return ResumeFull.model_validate(resume)
@@ -73,19 +65,11 @@ async def create_resume(
 async def update_resume(
     resume_id: int,
     resume_data: ResumeUpdate,
-    request: Request,
     resume_service: ResumeService = Depends(get_resume_service),
     current_user: User = Depends(get_current_user),
+    _audit=Depends(setup_audit),
 ) -> ResumeFull:
     """Обновить резюме (только автор может обновлять)"""
-
-    ip_address = request.client.host if request.client else None
-    user_agent = request.headers.get("user-agent")
-    set_audit_context(
-        user_id=current_user.id,
-        ip_address=ip_address,
-        user_agent=user_agent
-    )
 
     def _get_resume_or_raise_not_found() -> None:
         if not resume:
