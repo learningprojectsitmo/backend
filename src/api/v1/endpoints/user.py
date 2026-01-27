@@ -51,7 +51,7 @@ async def update_user(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions",
         )
-    
+
     def _check_user_exists_or_raise_not_found() -> None:
         if not user:
             raise HTTPException(status_code=404, detail="User not found")

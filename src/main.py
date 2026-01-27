@@ -7,11 +7,12 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.v1.routes import routers as v1_router
+from src.core.audit_listeners import setup_audit_listeners
 from src.core.config import settings
 from src.core.database import Base, engine
 from src.core.logging_config import get_logger, setup_logging
 from src.core.middleware.logging_middleware import setup_logging_middleware
-from src.core.audit_listeners import setup_audit_listeners
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
@@ -29,7 +30,6 @@ async def lifespan(_app: FastAPI):
         logger.info("Database tables created/verified")
 
     setup_audit_listeners()
-
 
     logger.info("API startup completed successfully")
     yield
