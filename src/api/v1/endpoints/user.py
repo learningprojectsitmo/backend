@@ -15,7 +15,6 @@ user_router = APIRouter(prefix="/users", tags=["users"])
 async def create_user(
     user_data: UserCreate,
     user_service: UserService = Depends(get_user_service),
-    _audit=Depends(setup_audit),
 ) -> UserFull:
     """Создать нового пользователя"""
 
