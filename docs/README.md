@@ -8,22 +8,14 @@ Domain areas description:
 
 # Development
 
-[All modules explained](modules_docs.md)
-
-[Application architecture](architecture.md)
-
-[Ruff - the Code Quality Tool](ruff.md)
-
-[Code practices](code_practices.md)
-
-[Tests](testing_instructions.md)
-
-[Logging system](logging_system.md)
-
-[Docker](docker.md)
-
-[Database design](database_schema.md)
+- [All modules explained](modules_docs.md)
+- [Application architecture](architecture.md)
+- [Ruff - the Code Quality Tool](ruff.md)
+- [Code practices](code_practices.md)
+- [Tests](testing_instructions.md)
+- [Logging system](logging_system.md)
+- [Docker](docker.md)
+- [Database design](database_schema.md)
 
 # Ideas and notes for future
-
 Are stored in a separate directory `wiki/for-future`

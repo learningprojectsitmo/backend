@@ -8,7 +8,7 @@ Redis for caching of the notifications and chats.
 
 # Visualizing the schema
 
-![The schema](images/ItmoLP_database.jpeg)
+![The schema](images/ItmoLP_database_schema.png)
 
 ChartDB is used to visualize the database scheme. Run it with:
 
