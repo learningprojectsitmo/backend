@@ -16,4 +16,4 @@ ChartDB is used to visualize the database scheme. Run it with:
 
 If you turn off this docker container gracefully, the progress should persist.
 
-The schema of the database is available on [google drive](https://drive.google.com/file/d/1Uku6pBJYtDYfgEmAUHThRT7drhrdTb8R/view?usp=sharing). 
+The schema of the database is available on google drive.

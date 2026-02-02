@@ -8,6 +8,7 @@ Domain areas description:
 
 # Project architecture
 
+The schema can be edited on google drive:
 ![architecture](images/backend_architecture.png)
 
 # Development
