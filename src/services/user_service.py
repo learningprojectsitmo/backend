@@ -37,6 +37,14 @@ class UserService(BaseService[User, UserCreate, UserUpdate]):
         """Получить пользователя по email"""
         return await self._user_repository.get_by_email(email)
 
+    async def get_user_by_telegram(self, telegram: str) -> User | None:
+        '''Получить пользователя по телеграмму'''
+        return await self._user_repository.get_by_telegram(telegram)
+
+    async def get_user_by_itmo_id(self, itmo_id: int) -> User | None:
+        '''Получим пользователя по его ITMO ID '''
+        return await self._user_repository.get_by_itmo_id(itmo_id)
+
     async def get_users_paginated(self, page: int = 1, limit: int = 10) -> UserListResponse:
         """Получить пользователей с пагинацией"""
         skip = (page - 1) * limit

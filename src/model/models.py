@@ -21,6 +21,13 @@ class User(Base):
     isu_number: Mapped[int | None] = mapped_column(nullable=True)
     tg_nickname: Mapped[str | None] = mapped_column(String(40), nullable=True)
 
+    telegram: Mapped[str | None] = mapped_column(
+        String(33),
+        nullable=True,
+        unique=True,
+        doc="Telegram username в формате @username"
+    )
+
     password_hashed: Mapped[str] = mapped_column(String, nullable=False)
 
     resumes: Mapped[list[Resume]] = relationship(
