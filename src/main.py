@@ -12,6 +12,7 @@ from src.core.database import Base, engine
 from src.core.logging_config import get_logger, setup_logging
 from src.core.middleware.logging_middleware import setup_logging_middleware
 
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     # Инициализация логирования при запуске

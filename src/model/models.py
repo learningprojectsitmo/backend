@@ -48,6 +48,7 @@ class User(Base):
     def __repr__(self) -> str:
         return f"User(id={self.id!r}, first_name={self.first_name!r}, isu_number={self.isu_number!r})"
 
+
 class Role(Base):
     __tablename__ = "role"
 
@@ -67,6 +68,7 @@ class Permission(Base):
     def __repr__(self) -> str:
         return f"Permission(id={self.id!r}, permission_name={self.name!r}"
 
+
 class RolePermission(Base):
     __tablename__ = "role_permission"
 
@@ -77,6 +79,7 @@ class RolePermission(Base):
     def __repr__(self) -> str:
         return f"Role_id({self.role_id!r}, perm_id={self.permission_id!r}"
 
+
 class UserPermission(Base):
     __tablename__ = "user_permission"
 
@@ -86,6 +89,7 @@ class UserPermission(Base):
 
     def __repr__(self) -> str:
         return f"User_id({self.user_id!r}, perm_id={self.permission_id!r}"
+
 
 class Resume(Base):
     __tablename__ = "resume"
