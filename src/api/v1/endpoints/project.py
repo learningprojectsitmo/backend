@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from src.core.container import get_project_service
-from src.core.dependencies import get_current_user
+from src.core.dependencies import get_current_user, setup_audit
 from src.model.models import User
 from src.schema.project import ProjectCreate, ProjectFull, ProjectListItem, ProjectListResponse, ProjectUpdate
 from src.services.project_service import ProjectService
@@ -52,8 +52,10 @@ async def create_project(
     project_data: ProjectCreate,
     project_service: ProjectService = Depends(get_project_service),
     current_user: User = Depends(get_current_user),
+    _audit=Depends(setup_audit),
 ) -> ProjectFull:
     """Создать новый проект"""
+
     project = await project_service.create_project(project_data, current_user.id)
     return ProjectFull.model_validate(project)
 
@@ -64,6 +66,7 @@ async def update_project(
     project_data: ProjectUpdate = Depends(ProjectUpdate),
     project_service: ProjectService = Depends(get_project_service),
     current_user: User = Depends(get_current_user),
+    _audit=Depends(setup_audit),
 ) -> ProjectFull:
     """Обновить проект (только автор может обновлять)"""
 

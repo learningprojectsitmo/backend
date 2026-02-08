@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from src.core.container import get_user_service
-from src.core.dependencies import get_current_user
+from src.core.dependencies import get_current_user, setup_audit
 from src.model.models import User
 from src.schema.user import UserCreate, UserFull, UserListResponse, UserUpdate
 from src.services.user_service import UserService
@@ -17,6 +17,7 @@ async def create_user(
     user_service: UserService = Depends(get_user_service),
 ) -> UserFull:
     """Создать нового пользователя"""
+
     user = await user_service.create_user(user_data)
     return UserFull.model_validate(user)
 
@@ -41,6 +42,7 @@ async def update_user(
     user_data: UserUpdate,
     user_service: UserService = Depends(get_user_service),
     current_user: User = Depends(get_current_user),
+    _audit=Depends(setup_audit),
 ) -> UserFull:
     """Обновить пользователя (только сам пользователь или админ)"""
     if current_user.id != user_id:

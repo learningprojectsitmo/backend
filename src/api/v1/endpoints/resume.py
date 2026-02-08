@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from src.core.container import get_resume_service
-from src.core.dependencies import get_current_user
+from src.core.dependencies import get_current_user, setup_audit
 from src.model.models import User
 from src.schema.resume import ResumeCreate, ResumeFull, ResumeListResponse, ResumeUpdate
 from src.services.resume_service import ResumeService
@@ -52,8 +52,10 @@ async def create_resume(
     resume_data: ResumeCreate,
     resume_service: ResumeService = Depends(get_resume_service),
     current_user: User = Depends(get_current_user),
+    _audit=Depends(setup_audit),
 ) -> ResumeFull:
     """Создать новое резюме"""
+
     resume = await resume_service.create_resume(resume_data, current_user.id)
     return ResumeFull.model_validate(resume)
 
@@ -64,6 +66,7 @@ async def update_resume(
     resume_data: ResumeUpdate,
     resume_service: ResumeService = Depends(get_resume_service),
     current_user: User = Depends(get_current_user),
+    _audit=Depends(setup_audit),
 ) -> ResumeFull:
     """Обновить резюме (только автор может обновлять)"""
 

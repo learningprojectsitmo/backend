@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 
 from core.container import get_auth_service
+from src.core.audit_context import set_audit_context
 from src.core.logging_config import get_logger
 from src.core.security import oauth2_scheme
 
@@ -57,3 +58,16 @@ async def get_current_super_user(current_user: User = Depends(get_current_user))
     """Получить текущего супер-пользователя (для будущего использования)"""
     # В будущем здесь можно добавить проверку ролей
     return current_user
+
+
+async def setup_audit(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
+    """Установить контекстных переменных для аудита пользователей"""
+    ip_address = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+
+    user_id = current_user.id
+
+    set_audit_context(user_id=user_id, ip_address=ip_address, user_agent=user_agent)
