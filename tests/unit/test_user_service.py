@@ -31,7 +31,7 @@ class TestUserService:
             first_name="Test",
             middle_name="User",
             password_hashed="hashed_password",
-            role_id=None,
+            role_id=1,
         )
         mock_repository.create.return_value = mock_user
 
@@ -42,7 +42,7 @@ class TestUserService:
             first_name="Test",
             middle_name="User",
             password_string="plain_password",
-            role_id=None,
+            role_id=1,
         )
 
         # when
