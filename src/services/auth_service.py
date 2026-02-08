@@ -367,7 +367,7 @@ class AuthService:
         reset_data = {"user_id": user.id, "token": token, "expires_at": expires_at}
 
         await self._password_reset_repository.create(reset_data)
-
+        # TODO: добавить генерацию и отправку ссылки
         self._logger.info(f"Password reset requested for user {user.id}")
         return True
 
@@ -375,7 +375,12 @@ class AuthService:
         """Подтвердить сброс пароля"""
 
         reset = await self._password_reset_repository.get_by_token(token)
-        if not reset or datetime.now(UTC) > reset.expires_at:
+        
+        if not reset:
+            self._logger.warning(f"Password reset attempted with invalid token")
+            return False
+        
+        if datetime.now(UTC) > reset.expires_at:
             self._logger.warning(f"Password reset attempted with expired token for user {reset.user_id}")
             await self._password_reset_repository.delete(reset.id)
             return False

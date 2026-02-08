@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 
 from src.core.container import get_auth_service
 from src.core.dependencies import get_current_user
 from src.core.logging_config import api_logger
 from src.model.models import User
-from src.schema.auth import Token
+from src.schema.auth import PasswordResetRequest, PasswordResetResponse, PasswordResetSuccessfulResponse, PasswordResetConfirm, Token
 from src.services.auth_service import AuthService
 
 auth_router = APIRouter(prefix="/auth", tags=["authentication"])
@@ -83,3 +83,30 @@ async def get_current_user_info(
         "middle_name": current_user.middle_name,
         "last_name": current_user.last_name,
     }
+
+
+@auth_router.post("/password-reset/request", response_model=PasswordResetResponse)
+async def request_password_reset(
+    data: PasswordResetRequest,
+    auth_service: AuthService = Depends(get_auth_service),
+) -> PasswordResetResponse:
+    """Запрос на сброс пароля"""
+
+    await auth_service.request_password_reset(data.email)
+
+    return PasswordResetResponse()
+
+@auth_router.post("/password-reset/confirm", response_model=PasswordResetSuccessfulResponse)
+async def confirm_password_reset(
+    data: PasswordResetConfirm,
+    auth_service: AuthService = Depends(get_auth_service),
+)->PasswordResetConfirm:
+    """Подтвердить сброс пароля """
+    sucess = await auth_service.confirm_password_reset(data.token, data.new_password)
+
+    if not sucess:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired reset token"
+        )
+    return PasswordResetSuccessfulResponse()

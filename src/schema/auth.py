@@ -19,8 +19,12 @@ class PasswordResetRequest(BaseModel):
 class PasswordResetResponse(BaseModel):
     """Схема для ответа при запросе сброса"""
 
-    message: str = "Письмо отправлено, если адрес существует"
+    message: str = "The email has been sent"
 
+class PasswordResetSuccessfulResponse(BaseModel):
+    """Схема для успешного ответа при запросе сброса пароля"""
+
+    message: str = "Password reset successfully"
 
 class PasswordResetConfirm(BaseModel):
     """Схема для подтверждения нового пароля"""
