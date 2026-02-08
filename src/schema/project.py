@@ -44,7 +44,7 @@ class ProjectListItem(BaseModel):
     id: int
     name: str
     description: str | None = None
-    max_participants: str | None = None
+    max_participants: int | None = None
     author_id: int
 
     model_config = ConfigDict(from_attributes=True)

@@ -63,7 +63,7 @@ async def create_project(
 @project_router.put("/{project_id}", response_model=ProjectFull)
 async def update_project(
     project_id: int,
-    project_data: ProjectUpdate = Depends(ProjectUpdate),
+    project_data: ProjectUpdate,
     project_service: ProjectService = Depends(get_project_service),
     current_user: User = Depends(get_current_user),
     _audit=Depends(setup_audit),

@@ -76,7 +76,7 @@ class Project(Base):
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     author_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
     description: Mapped[str | None] = mapped_column(nullable=True)
-    max_participants: Mapped[str | None] = mapped_column(nullable=True)
+    max_participants: Mapped[int | None] = mapped_column(nullable=True)
 
     author: Mapped[User] = relationship(back_populates="projects_led")
     responses: Mapped[list[Response]] = relationship(
