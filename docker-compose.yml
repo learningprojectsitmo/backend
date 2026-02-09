@@ -1,28 +1,32 @@
 services:
   # PostgreSQL Database
   postgres:
-   image: postgres:15-alpine
-   container_name: postgres
-   restart: unless-stopped
-   environment:
-     POSTGRES_DB: backend_db
-     POSTGRES_USER: postgres
-     POSTGRES_PASSWORD: password
-   ports:
-     - "5432:5432"
-   volumes:
-     - ./data/postgres_data:/var/lib/postgresql/data
-     #     - ./backend/init.sql:/docker-entrypoint-initdb.d/init.sql
-   healthcheck:
-     test: ["CMD-SHELL", "pg_isready -U postgres -d backend_db"]
-     interval: 10s
-     timeout: 5s
-     retries: 5
+    image: postgres:15-alpine
+    container_name: postgres
+    restart: unless-stopped
+    networks:
+      - learning_projects_network
+    environment:
+      POSTGRES_DB: backend_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./data/postgres_data:/var/lib/postgresql/data
+      #     - ./backend/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d backend_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   pgadmin:
     restart: always
     container_name: pgadmin
     image: dpage/pgadmin4:9.9.0
+    networks:
+      - learning_projects_network
     environment:
       PGADMIN_DEFAULT_EMAIL: pgadmin@email.com
       PGADMIN_DEFAULT_PASSWORD: pgadmin
@@ -42,6 +46,11 @@ services:
       - "8083:8000"
     volumes:
       - ./:/app
+    env_file:
+      - .env
+    depends_on:  # ← ДОБАВИТЬ ЭТО
+      postgres:
+        condition: service_healthy
 
   frontend:
     build:
