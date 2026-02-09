@@ -227,7 +227,7 @@ class Notification(Base):
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=True)
-    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=True)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     recipient: Mapped[User] = relationship(
         foreign_keys=[recipient_id],
@@ -256,6 +256,7 @@ class NotificationSettings(Base):
     in_app_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
     project_invitation_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    project_removal_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     join_request_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     join_response_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     project_announcement_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
