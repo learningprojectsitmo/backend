@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class NotificationType(str, Enum):
+class NotificationType(StrEnum):
     """Типы уведомлений"""
 
     PROJECT_INVITATION = "project_invitation"
@@ -22,13 +22,11 @@ class NotificationType(str, Enum):
 class NotificationSendToUserRequest(BaseModel):
     """Запрос на отправку уведомления пользователю"""
 
-    user_id: int
+    user_id: int | None = None
     project_id: int | None = None
     template_key: NotificationType
     payload: dict[str, Any] = Field(default_factory=dict)
 
-    invitation_from: int | None = None
-    response_to: int | None = None
 
 
 class NotificationSendToProjectRequest(BaseModel):
@@ -84,7 +82,7 @@ class NotificationResponse(BaseModel):
     recipient_id: int
     sender_id: int | None = None
     project_id: int | None = None
-    type: str
+    type: NotificationType
     status: str
     title: str
     body: str
