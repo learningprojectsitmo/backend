@@ -28,7 +28,6 @@ class NotificationSendToUserRequest(BaseModel):
     payload: dict[str, Any] = Field(default_factory=dict)
 
 
-
 class NotificationSendToProjectRequest(BaseModel):
     """Запрос на отправку уведомления участникам проекта"""
 
