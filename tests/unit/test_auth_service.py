@@ -25,7 +25,7 @@ class TestAuthService:
         )
         mock_repository.get_by_email.return_value = mock_user
 
-        auth_service = AuthService(mock_repository, Mock())
+        auth_service = AuthService(mock_repository, Mock(), Mock())
 
         with patch.object(auth_service, "verify_password", return_value=True):
             # when
@@ -44,7 +44,7 @@ class TestAuthService:
         mock_repository = Mock(spec=UserRepository)
         mock_repository.get_by_email.return_value = None
 
-        auth_service = AuthService(mock_repository, Mock())
+        auth_service = AuthService(mock_repository, Mock(), Mock())
 
         # when
         result = await auth_service.authenticate_user("test@example.com", "wrong_password")
@@ -60,7 +60,7 @@ class TestAuthService:
         mock_user = User(id=1, email="test@example.com")
         mock_repository.get_by_email.return_value = mock_user
 
-        auth_service = AuthService(mock_repository, Mock())
+        auth_service = AuthService(mock_repository, Mock(), Mock())
 
         with patch("src.services.auth_service.jwt.decode") as mock_decode:
             mock_decode.return_value = {"sub": "test@example.com"}
@@ -86,7 +86,7 @@ class TestAuthService:
         )
         mock_repository.get_by_email.return_value = mock_user
 
-        auth_service = AuthService(mock_repository, Mock())
+        auth_service = AuthService(mock_repository, Mock(), Mock())
 
         form_data = OAuth2PasswordRequestForm(username="test@example.com", password="password")
 
