@@ -5,7 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     # Database
-    DATABASE_URL: str = "postgresql+asyncpg://postgres:password@localhost/backend_db"
+    DATABASE_URL: str = "postgresql+asyncpg://postgres:password@postgres/backend_db"
     DEBUG: str = "false"
 
     # Environment
