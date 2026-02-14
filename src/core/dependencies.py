@@ -31,6 +31,16 @@ async def get_current_user(
         return user
 
 
+async def require_teacher(current_user: User = Depends(get_current_user)) -> User:
+    """Проверить, что текущий пользователь — преподаватель."""
+    if current_user.role != "teacher":
+        raise HTTPException(
+            status_code=403,
+            detail="Only teachers can perform this action",
+        )
+    return current_user
+
+
 async def get_current_user_no_exception(
     token: str = Depends(oauth2_scheme),
     auth_service: AuthService = Depends(get_auth_service),

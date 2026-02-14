@@ -25,6 +25,7 @@ class UserService(BaseService[User, UserCreate, UserUpdate]):
             "last_name": user_data.last_name,
             "isu_number": user_data.isu_number,
             "password_hashed": hashed_password,
+            "role": user_data.role,
         }
 
         return await self._user_repository.create(user_data_dict)

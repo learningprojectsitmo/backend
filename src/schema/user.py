@@ -17,6 +17,7 @@ class UserCreate(UserBase):
 
     password_string: str
     isu_number: int | None = None
+    role: str = "student"
 
 
 class UserFull(UserBase):
@@ -25,6 +26,7 @@ class UserFull(UserBase):
     id: int
     isu_number: int | None = None
     tg_nickname: str | None = None
+    role: str
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -38,6 +40,7 @@ class UserUpdate(BaseModel):
     last_name: str | None = None
     isu_number: int | None = None
     tg_nickname: str | None = None
+    role: str | None = None
 
 
 class UserResponse(BaseModel):
@@ -59,6 +62,7 @@ class UserListItem(BaseModel):
     last_name: str | None = None
     isu_number: int | None = None
     tg_nickname: str | None = None
+    role: str
 
     model_config = ConfigDict(from_attributes=True)
 
