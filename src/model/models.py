@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime, time, timedelta, timezone
+from enum import Enum
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import Date, DateTime, ForeignKey, Integer, JSON, String, Time, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.core.database import Base
@@ -22,6 +23,7 @@ class User(Base):
     tg_nickname: Mapped[str | None] = mapped_column(String(40), nullable=True)
 
     password_hashed: Mapped[str] = mapped_column(String, nullable=False)
+    role: Mapped[str] = mapped_column(String(20), nullable=False, default="student")
 
     resumes: Mapped[list[Resume]] = relationship(
         back_populates="user",
@@ -190,3 +192,97 @@ class AuditLog(Base):
 
     def __repr__(self) -> str:
         return f"AuditLog(id={self.id}, entity_type={self.entity_type!r}, entity_id={self.entity_id}, action={self.action!r})"
+
+
+class DefenseProjectType(Base):
+    __tablename__ = "defense_project_type"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
+    description: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
+    slots: Mapped[list["DefenseSlot"]] = relationship(back_populates="project_type")
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    def __repr__(self) -> str:
+        return f"DefenseProjectType(id={self.id!r}, name={self.name!r})"
+
+
+class DefenseDay(Base):
+    __tablename__ = "defense_day"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+
+    date: Mapped[date] = mapped_column(Date, nullable=False)
+    max_slots: Mapped[int] = mapped_column(Integer, nullable=False)
+    first_slot_time: Mapped[time] = mapped_column(Time, nullable=False)
+
+    slots: Mapped[list["DefenseSlot"]] = relationship(
+        back_populates="defense_day",
+        cascade="all, delete-orphan",
+    )
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    def __repr__(self) -> str:
+        return f"DefenseDay(id={self.id!r}, date={self.date!r}, max_slots={self.max_slots!r})"
+
+
+class DefenseSlot(Base):
+    __tablename__ = "defense_slot"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+
+    defense_day_id: Mapped[int] = mapped_column(ForeignKey("defense_day.id"), nullable=False)
+    slot_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    project_type_id: Mapped[int] = mapped_column(ForeignKey("defense_project_type.id"), nullable=False)
+
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+
+    start_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    end_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    location: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
+    capacity: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    defense_day: Mapped[DefenseDay] = relationship(back_populates="slots")
+    project_type: Mapped[DefenseProjectType] = relationship(back_populates="slots")
+    registrations: Mapped[list["DefenseRegistration"]] = relationship(
+        back_populates="slot",
+        cascade="all, delete-orphan",
+    )
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    def __repr__(self) -> str:
+        return f"DefenseSlot(id={self.id!r}, title={self.title!r}, start_at={self.start_at!r})"
+
+
+class DefenseRegistration(Base):
+    __tablename__ = "defense_registration"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+
+    slot_id: Mapped[int] = mapped_column(ForeignKey("defense_slot.id"), nullable=False)
+    user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
+
+    slot: Mapped[DefenseSlot] = relationship(back_populates="registrations")
+    user: Mapped[User] = relationship()
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    def __repr__(self) -> str:
+        return f"DefenseRegistration(id={self.id!r}, slot_id={self.slot_id!r}, user_id={self.user_id!r})"
