@@ -3,8 +3,6 @@ services:
   postgres:
    image: postgres:15-alpine
    container_name: postgres
-   # networks:
-   #   - learning_projects_network  # ADD THIS LINE
    restart: unless-stopped
    environment:
      POSTGRES_DB: backend_db
@@ -38,16 +36,10 @@ services:
     build: .
     container_name: backend
     restart: unless-stopped
-    # networks:
-    #  - learning_projects_network
     ports:
       - "8083:8000"
     volumes:
       - ./:/app
-    # ADDED now:
-    depends_on:
-      postgres:
-        condition: service_healthy  # ENSURES DB IS READY BEFORE STARTING
 
   frontend:
     build:
@@ -55,8 +47,6 @@ services:
       dockerfile: Dockerfile
     container_name: frontend
     restart: unless-stopped
-    # networks:
-    #   - learning_projects_network
     ports:
       - "80:80"
     environment:
@@ -67,8 +57,3 @@ services:
       - backend
     stdin_open: true
     tty: true
-
-
-networks:
-  default:
-    learning_projects_network:

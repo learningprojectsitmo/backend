@@ -18,6 +18,7 @@ class Settings(BaseSettings):
 
     # CORS - исправленные настройки для Docker
     CORS_ORIGINS: list = [
+        "http://localhost:3000/",
         "http://localhost:5173/",
         "http://localhost:8000",
         "http://localhost:5173",
