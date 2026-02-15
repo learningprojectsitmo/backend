@@ -18,12 +18,14 @@ class UserService(BaseService[User, UserCreate, UserUpdate]):
         hashed_password = self._auth_service.get_password_hash(user_data.password_string)
 
         # Создаем словарь с правильными ключами для модели User
+        # TODO сделать распаковку как было раньше? model dump
         user_data_dict = {
             "email": user_data.email,
             "first_name": user_data.first_name,
             "middle_name": user_data.middle_name,
             "last_name": user_data.last_name,
             "isu_number": user_data.isu_number,
+            "role_id": user_data.role_id,
             "password_hashed": hashed_password,
         }
 
