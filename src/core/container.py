@@ -10,6 +10,7 @@ from fastapi import Depends
 
 from src.core.uow import IUnitOfWork, SqlAlchemyUoW
 from src.repository.audit_repository import AuditRepository
+from src.repository.password_reset_repository import PasswordResetRepository
 from src.repository.project_repository import ProjectRepository
 from src.repository.resume_repository import ResumeRepository
 from src.repository.session_repository import SessionRepository
@@ -69,6 +70,8 @@ async def get_defense_slot_repository(uow: IUnitOfWork = Depends(get_uow)) -> De
 
 async def get_defense_registration_repository(uow: IUnitOfWork = Depends(get_uow)) -> DefenseRegistrationRepository:
     return DefenseRegistrationRepository(uow)
+async def get_password_reset_repository(uow: IUnitOfWork = Depends(get_uow)) -> PasswordResetRepository:
+    return PasswordResetRepository(uow)
 
 
 # Service
@@ -91,8 +94,9 @@ async def get_project_service(
 async def get_auth_service(
     user_repository: UserRepository = Depends(get_user_repository),
     session_service: SessionService = Depends(get_session_service),
+    password_reset_repository: PasswordResetRepository = Depends(get_password_reset_repository),
 ) -> AuthService:
-    return AuthService(user_repository, session_service)
+    return AuthService(user_repository, session_service, password_reset_repository)
 
 
 async def get_user_service(

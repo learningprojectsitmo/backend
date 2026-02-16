@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import secrets
 from datetime import UTC, datetime, timedelta
 
 from fastapi import HTTPException, Request, status
@@ -10,6 +11,7 @@ from pwdlib import PasswordHash
 from core.config import settings
 from src.core.logging_config import get_logger, security_logger
 from src.model.models import User
+from src.repository.password_reset_repository import PasswordResetRepository
 from src.repository.user_repository import UserRepository
 from src.schema.auth import Token
 from src.schema.session import SessionCreate, SessionTerminateRequest
@@ -17,9 +19,15 @@ from src.services.session_service import SessionService
 
 
 class AuthService:
-    def __init__(self, user_repository: UserRepository, session_service: SessionService):
+    def __init__(
+        self,
+        user_repository: UserRepository,
+        session_service: SessionService,
+        password_reset_repository: PasswordResetRepository,
+    ):
         self._user_repository = user_repository
         self._session_service = session_service
+        self._password_reset_repository = password_reset_repository
         self._pwd_context = PasswordHash.recommended()
         self._secret_key = settings.SECRET_KEY
         self._algorithm = settings.ALGORITHM
@@ -343,3 +351,44 @@ class AuthService:
         else:
             self._logger.debug(f"Refreshed activity for session {session_id}")
             return True
+
+    async def request_password_reset(self, email: str) -> bool:
+        """Запрос сброса пароля"""
+
+        user = await self._user_repository.get_by_email(email)
+
+        if not user:
+            self._logger.warning(f"Password reset request for non-existent email: {email}")
+            return False
+
+        token = secrets.token_urlsafe(32)
+        expires_at = datetime.now(UTC) + timedelta(hours=1)
+
+        reset_data = {"user_id": user.id, "token": token, "expires_at": expires_at}
+
+        await self._password_reset_repository.create(reset_data)
+
+        # TODO: добавить генерацию и отправку ссылки через email-клиент, сейчас токен для сброса доступен в БД
+        self._logger.info(f"Password reset requested for user {user.id}")
+        return True
+
+    async def confirm_password_reset(self, token: str, new_password: str) -> bool:
+        """Подтвердить сброс пароля"""
+
+        reset = await self._password_reset_repository.get_by_token(token)
+
+        if not reset:
+            self._logger.warning("Password reset attempted with invalid token")
+            return False
+
+        if datetime.now(UTC) > reset.expires_at:
+            self._logger.warning(f"Password reset attempted with expired token for user {reset.user_id}")
+            await self._password_reset_repository.delete(reset.id)
+            return False
+
+        hashed_password = self.get_password_hash(new_password)
+        await self._user_repository.update(reset.user_id, {"password_hashed": hashed_password})
+        await self._password_reset_repository.delete(reset.id)
+
+        self._logger.info(f"Password reset successful for user {reset.user_id}")
+        return True

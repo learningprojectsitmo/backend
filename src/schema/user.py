@@ -10,6 +10,7 @@ class UserBase(BaseModel):
     first_name: str
     middle_name: str
     last_name: str | None = None
+    role_id: int
 
 
 class UserCreate(UserBase):
@@ -41,6 +42,7 @@ class UserUpdate(BaseModel):
     isu_number: int | None = None
     tg_nickname: str | None = None
     role: str | None = None
+    role_id: int | None = None
 
 
 class UserResponse(BaseModel):

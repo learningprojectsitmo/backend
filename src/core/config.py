@@ -5,7 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     # Database
-    DATABASE_URL: str = "postgresql+asyncpg://postgres:password@localhost/backend_db"
+    DATABASE_URL: str = "postgresql+asyncpg://postgres:password@postgres/backend_db"
     DEBUG: str = "false"
 
     # Environment
@@ -18,6 +18,7 @@ class Settings(BaseSettings):
 
     # CORS - исправленные настройки для Docker
     CORS_ORIGINS: list = [
+        "http://localhost:3000/",
         "http://localhost:5173/",
         "http://localhost:8000",
         "http://localhost:5173",
