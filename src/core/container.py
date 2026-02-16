@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from collections.abc import AsyncGenerator
 
+from src.repository.grading_criteria_repository import GradingCriteriaRepository
+from src.services.grading_criteria_service import GradingCriteriaService
+
+
 from fastapi import Depends
 
 from src.core.uow import IUnitOfWork, SqlAlchemyUoW
@@ -111,3 +115,14 @@ async def get_defense_service(
     registration_repository: DefenseRegistrationRepository = Depends(get_defense_registration_repository),
 ) -> DefenseService:
     return DefenseService(project_type_repository, day_repository, slot_repository, registration_repository)
+
+
+async def get_grading_criteria_repository(uow: IUnitOfWork = Depends(get_uow)) -> GradingCriteriaRepository:
+    return GradingCriteriaRepository(uow)
+
+
+async def get_grading_criteria_service(
+    grading_criteria_repository: GradingCriteriaRepository = Depends(get_grading_criteria_repository),
+) -> GradingCriteriaService:
+    return GradingCriteriaService(grading_criteria_repository)
+

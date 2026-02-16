@@ -203,6 +203,11 @@ class DefenseProjectType(Base):
 
     slots: Mapped[list["DefenseSlot"]] = relationship(back_populates="project_type")
 
+    grading_criteria: Mapped[list["GradingCriteria"]] = relationship(
+        back_populates="project_type",
+        cascade="all, delete-orphan"
+    )
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     def __repr__(self) -> str:
@@ -286,3 +291,44 @@ class DefenseRegistration(Base):
 
     def __repr__(self) -> str:
         return f"DefenseRegistration(id={self.id!r}, slot_id={self.slot_id!r}, user_id={self.user_id!r})"
+
+
+class GradingCriteria(Base):
+    """Критерии оценивания для разных типов проектов"""
+    __tablename__ = "grading_criteria"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+
+    # Связь с типом проекта
+    project_type_id: Mapped[int] = mapped_column(
+        ForeignKey("defense_project_type.id"),
+        nullable=False
+    )
+
+    # Данные критерия
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    description: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    max_score: Mapped[float] = mapped_column(Integer, nullable=False)  # Используем Integer вместо Float
+    weight: Mapped[float] = mapped_column(Integer, nullable=False, default=1)
+
+    # Порядок отображения
+    order_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    # Relationships
+    project_type: Mapped["DefenseProjectType"] = relationship(back_populates="grading_criteria")
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False
+    )
+
+    def __repr__(self) -> str:
+        return f"GradingCriteria(id={self.id!r}, name={self.name!r}, max_score={self.max_score!r})"
+
