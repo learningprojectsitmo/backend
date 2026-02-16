@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, EmailStr
-
+from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
+from src.util.validator import TelegramValidator
 
 class UserBase(BaseModel):
     """Базовая схема пользователя"""
@@ -29,6 +29,11 @@ class UserFull(UserBase):
 
     model_config = ConfigDict(from_attributes=True)
 
+    @field_validator('tg_nickname')
+    @classmethod
+    def validate_tg_nickname(cls, v):
+        return TelegramValidator.validate_tg_nickname_optional(v)
+
 
 class UserUpdate(BaseModel):
     """Схема для обновления пользователя"""
@@ -40,6 +45,11 @@ class UserUpdate(BaseModel):
     isu_number: int | None = None
     tg_nickname: str | None = None
     role_id: int | None = None
+
+    @field_validator('tg_nickname')
+    @classmethod
+    def validate_tg_nickname(cls, v):
+        return TelegramValidator.validate_tg_nickname_optional(v)
 
 
 class UserResponse(BaseModel):
@@ -64,6 +74,10 @@ class UserListItem(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+    @field_validator('tg_nickname')
+    @classmethod
+    def validate_tg_nickname(cls, v):
+        return TelegramValidator.validate_tg_nickname_optional(v)
 
 class UserListResponse(BaseModel):
     """Схема ответа со списком пользователей"""
