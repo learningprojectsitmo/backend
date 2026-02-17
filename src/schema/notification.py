@@ -24,14 +24,20 @@ class NotificationSendToUserRequest(BaseModel):
 
     project_id: int | None = None
     template_key: NotificationType
-    payload: dict[str, Any] = Field(default_factory=dict)
+    payload: dict[str, Any] = Field(
+        default_factory=dict,
+        examples=[{"project_name": "Alpha", "message": "Standup at 10:00", "requester_name": "Alex"}],
+    )
 
 
 class NotificationSendToProjectRequest(BaseModel):
     """Запрос на отправку уведомления участникам проекта"""
 
     template_key: NotificationType
-    payload: dict[str, Any] = Field(default_factory=dict)
+    payload: dict[str, Any] = Field(
+        default_factory=dict,
+        examples=[{"project_name": "Alpha", "message": "Standup at 10:00", "requester_name": "Alex"}],
+    )
     include_author: bool = True
 
 
