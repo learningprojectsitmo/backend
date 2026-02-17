@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 
 from src.core.container import get_notification_service, get_notification_settings_service
 from src.core.dependencies import get_current_user
@@ -15,6 +15,7 @@ from src.schema.notification import (
     NotificationSettingsResponse,
     NotificationSettingsUpdate,
 )
+from src.notifications.templates import build_notification_examples
 from src.services.notification_service import NotificationService
 from src.services.notification_settings_service import NotificationSettingsService
 
@@ -42,10 +43,24 @@ async def fetch_my_notifications(
     )
 
 
-@notification_router.post("/users/{user_id}/notifications", response_model=NotificationResponse)
+@notification_router.post(
+    "/users/{user_id}/notifications",
+    response_model=NotificationResponse,
+    responses={
+        400: {
+            "description": "Invalid template or missing payload fields",
+            "content": {"application/json": {"example": {"detail": "Missing payload fields"}}},
+        },
+        401: {"description": "Unauthorized"},
+        422: {"description": "Validation error"},
+    },
+)
 async def send_notification_to_user(
     user_id: int,
-    request_data: NotificationSendToUserRequest,
+    request_data: NotificationSendToUserRequest = Body(
+        ...,  # required
+        examples=build_notification_examples(include_project_id=True, include_author=False),
+    ),
     notification_service: NotificationService = Depends(get_notification_service),
     current_user: User = Depends(get_current_user),
 ) -> NotificationResponse:
@@ -60,10 +75,25 @@ async def send_notification_to_user(
     return NotificationResponse.model_validate(notification)
 
 
-@notification_router.post("/projects/{project_id}/notifications", response_model=list[NotificationResponse])
+@notification_router.post(
+    "/projects/{project_id}/notifications",
+    response_model=list[NotificationResponse],
+    responses={
+        400: {
+            "description": "Invalid template or missing payload fields",
+            "content": {"application/json": {"example": {"detail": "Missing payload fields"}}},
+        },
+        401: {"description": "Unauthorized"},
+        404: {"description": "Project not found"},
+        422: {"description": "Validation error"},
+    },
+)
 async def send_notification_to_project(
     project_id: int,
-    request_data: NotificationSendToProjectRequest,
+    request_data: NotificationSendToProjectRequest = Body(
+        ...,  # required
+        examples=build_notification_examples(include_project_id=False, include_author=True),
+    ),
     notification_service: NotificationService = Depends(get_notification_service),
     current_user: User = Depends(get_current_user),
 ) -> list[NotificationResponse]:
