@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Boolean, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.core.database import Base
@@ -58,15 +58,28 @@ class Role(Base):
     def __repr__(self) -> str:
         return f"Role(id={self.id!r}, role_name={self.name!r}"
 
-
-class Permission(Base):
-    __tablename__ = "permission"
+class Entity(Base):
+    # consider using alembic or !fixtures (see https://github.com/anton0afanasiev0v/backend/blob/main/src/service/fixture_service.py) instead of entity
+    __tablename__ = "entity"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(30), nullable=False)
 
     def __repr__(self) -> str:
-        return f"Permission(id={self.id!r}, permission_name={self.name!r}"
+        return f"Entity(id={self.id!r}, entity_name={self.name!r}"
+
+class Permission(Base):
+    __tablename__ = "permission"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    entity_id: Mapped[int] = mapped_column(ForeignKey("entity.id"), nullable=False)
+    can_create: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    can_read: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    can_update: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    can_delete: Mapped[bool] = mapped_column(Boolean, nullable=False)
+
+    def __repr__(self) -> str:
+        return f"Permission(id={self.id!r}, entity_id={self.entity_id!r}, can_create={self.can_create!r}, can_read={self.can_read!r}, can_update={self.can_update!r}, can_delete={self.can_delete!r})"
 
 
 class RolePermission(Base):

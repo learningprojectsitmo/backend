@@ -39,6 +39,8 @@ class RoleCreate(BaseModel):
     name: str
     model_config = ConfigDict(from_attributes=True)
 
+class RoleUpdate(BaseModel):
+    name: str | None = None
 
 class RoleFull(RoleCreate):
     id: int
@@ -53,15 +55,42 @@ class RoleListResponse(BaseModel):
     total_pages: int
 
 
-class PermissionCreate(BaseModel):
+class EntityCreate(BaseModel):
     name: str
     model_config = ConfigDict(from_attributes=True)
 
+class EntityUpdate(BaseModel):
+    name: str | None = None
+
+class EntityFull(EntityCreate):
+    id: int
+    model_config = ConfigDict(from_attributes=True)
+
+class EntityListResponse(BaseModel):
+    items: list[EntityFull]
+    total: int
+    page: int
+    limit: int
+    total_pages: int
+
+
+class PermissionCreate(BaseModel):
+    entity_id: int
+    can_create: bool
+    can_read: bool
+    can_update: bool
+    can_delete: bool
+    model_config = ConfigDict(from_attributes=True)
+
+class PermissionUpdate(BaseModel):
+    can_create: bool | None = None
+    can_read: bool | None = None
+    can_update: bool | None = None
+    can_delete: bool | None = None
 
 class PermissionFull(PermissionCreate):
     id: int
     model_config = ConfigDict(from_attributes=True)
-
 
 class PermissionListResponse(BaseModel):
     items: list[PermissionFull]
@@ -70,14 +99,18 @@ class PermissionListResponse(BaseModel):
     limit: int
     total_pages: int
 
-
-class UserPermissionFull(BaseModel):
+class UserPermissionCreate(BaseModel):
     user_id: int
     permission_id: int
+
+class UserPermissionFull(UserPermissionCreate):
+    id: int
     model_config = ConfigDict(from_attributes=True)
 
-
-class RolePermissionFull(BaseModel):
+class RolePermissionCreate(BaseModel):
     role_id: int
     permission_id: int
+
+class RolePermissionFull(RolePermissionCreate):
+    id: int
     model_config = ConfigDict(from_attributes=True)
