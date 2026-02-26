@@ -111,7 +111,72 @@ class Resume(Base):
     def __repr__(self) -> str:
         return f"Resume(id={self.id!r}, author_id={self.author_id!r}, header={self.header!r})"
 
+class User_Resume_Interest(Base):
+    __tablename__ = "user_resume_interest"
 
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    interest_id: Mapped[int] = mapped_column(nullable=False)
+    resume_id: Mapped[int] = mapped_column(ForeignKey("resume.id"), nullable=False)
+
+
+    def __repr__(self) -> str:
+        return f"User_Resume_Interest(id={self.id!r}, interest_id={self.interest_id!r}, resume_id={self.resume_id!r})"
+
+
+class User_Wished_Role(Base):
+    __tablename__ = "user_wished_role"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_project_role_id: Mapped[int] = mapped_column(ForeignKey("user_project_role.id"), nullable=False)
+    resume_id: Mapped[int] = mapped_column(ForeignKey("resume.id"), nullable=False)
+
+    def __repr__(self) -> str:
+        return f"User_Wished_Role(id={self.id!r}, user_project_role_id={self.user_project_role_id!r}), resume_id={self.resume_id!r}"
+
+
+class User_Resume_Skill(Base):
+    __tablename__ = "user_resume_skill"
+
+    id: Mapped[int] = mapped_column(Integer, primarily_key=True, autoincrement=True)
+    skill_id: Mapped[int] = mapped_column(ForeignKey("user_skill.id"), nullable=False)
+    resume_id: Mapped[int] = mapped_column(ForeignKey("resume.id"), nullable=False)
+
+    def __repr__(self) -> str:
+        return f"User_Resume_Skill(id={self.id!r}, skill_id={self.skill_id!r}), resume_id={self.resume_id!r}"
+
+class Responce(Base):
+    __tablename__ = "responce"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    respondent_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
+    project_id: Mapped[int] = mapped_column(ForeignKey("project.id"), nullable=False)
+    note: Mapped[str] = mapped_column(String(200), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+    resume_id: Mapped[int] = mapped_column(ForeignKey("resume.id"), nullable=False)
+    invite_id = Mapped[int] = mapped_column(ForeignKey("invite.id"), nullable=False)
+    priority = Mapped[int] = mapped_column(nullable=False)
+
+    def __repr__(self) -> str:
+        return f"Responce(id={self.id!r}, respondent_id={self.user.id!r}, project_id={self.project.id!r}, note={self.note!r})"
+
+class Invite(Base):
+    __tablename__ = "invite"
+
+    id:Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    invited_user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
+    project_id: Mapped[int] = mapped_column(ForeignKey("project.id"), nullable=False)
+    note: Mapped[str] = mapped_column(String(200), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    def __repr__(self) -> str:
+        return f"Invite(id={self.id!r}, invited_user_id={self.invited_user_id!r}), project_id={self.project_id!r}, note={self.note!r})"
 class Project(Base):
     __tablename__ = "project"
 
