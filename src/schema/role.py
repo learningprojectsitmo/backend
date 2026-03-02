@@ -27,10 +27,3 @@ class RolePermissionCreate(BaseModel):
 class RolePermissionFull(RolePermissionCreate):
     id: int
     model_config = ConfigDict(from_attributes=True)
-
-class RolePermissionListResponse(BaseModel):
-    items: list[RolePermissionFull]
-    total: int
-    page: int
-    page_size: int
-    total_pages: int

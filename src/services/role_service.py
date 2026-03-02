@@ -3,8 +3,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from src.core.exceptions import PermissionError
-from src.model.models import Role, RolePermission
-from src.schema.role import RoleCreate, RoleUpdate, RolePermissionCreate, RolePermissionFull, RolePermissionListResponse
+from src.model.models import Role #, RolePermission
+from src.schema.role import RoleCreate, RoleUpdate, RolePermissionCreate, RolePermissionFull, RolePermissionFull
 from src.services.base_service import BaseService
 
 if TYPE_CHECKING:
@@ -19,7 +19,7 @@ class RoleService(BaseService[Role, RoleCreate, RoleUpdate]):
     async def create_role_permission(self, role_permission: RolePermissionCreate) -> RolePermissionFull:
         return await self._role_permission_repository.create(role_permission)
 
-    async def get_role_permissions(self, role_id: int) -> RolePermissionListResponse:
+    async def get_role_permissions(self, role_id: int) -> list[RolePermissionFull]:
         return await self._role_permission_repository.get_role_permissions(role_id)
 
     async def delete_role_permission(self, role_permission_id: int) -> bool:

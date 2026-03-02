@@ -1,1 +1,4 @@
-backend/data/postgres_data
+data/
+logs/
+__pycache__/
+.git/

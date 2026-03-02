@@ -1,4 +1,4 @@
-services
+services:
   # PostgreSQL Database
   postgres:
    image: postgres:15-alpine
