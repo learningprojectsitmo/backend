@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, EmailStr
+from pydantic import BaseModel, EmailStr
 
 
 class Token(BaseModel):
@@ -33,4 +33,3 @@ class PasswordResetConfirm(BaseModel):
 
     token: str
     new_password: str
-

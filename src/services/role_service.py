@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from src.core.exceptions import PermissionError
-from src.model.models import Role #, RolePermission
-from src.schema.role import RoleCreate, RoleUpdate, RolePermissionCreate, RolePermissionFull, RolePermissionFull
+from src.model.models import Role  # , RolePermission
+from src.schema.role import RoleCreate, RolePermissionCreate, RolePermissionFull, RoleUpdate
 from src.services.base_service import BaseService
 
 if TYPE_CHECKING:
-    from src.repository.role_repository import RoleRepository, RolePermissionRepository
+    from src.repository.role_repository import RolePermissionRepository, RoleRepository
+
 
 class RoleService(BaseService[Role, RoleCreate, RoleUpdate]):
     def __init__(self, role_repository: RoleRepository, role_permission_repository: RolePermissionRepository):

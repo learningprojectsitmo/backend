@@ -74,11 +74,12 @@ class UserListResponse(BaseModel):
     limit: int
     total_pages: int
 
+
 class UserPermissionCreate(BaseModel):
     user_id: int
     permission: str
 
+
 class UserPermissionFull(UserPermissionCreate):
     id: int
     model_config = ConfigDict(from_attributes=True)
-

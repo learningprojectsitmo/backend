@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Boolean, func
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.core.database import Base
@@ -58,6 +58,7 @@ class UserPermission(Base):
 
     def __repr__(self) -> str:
         return f"User_id({self.user_id!r}, perm_id={self.permission!r}"
+
 
 class Role(Base):
     __tablename__ = "role"

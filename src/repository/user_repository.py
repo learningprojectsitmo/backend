@@ -1,13 +1,13 @@
 from __future__ import annotations
 
+from pydantic import BaseModel
 from sqlalchemy import select
 
 from src.core.uow import IUnitOfWork
 from src.model.models import User, UserPermission
 from src.repository.base_repository import BaseRepository
-from src.schema.user import UserCreate, UserUpdate, UserPermissionCreate, UserPermissionFull
+from src.schema.user import UserCreate, UserPermissionCreate, UserPermissionFull, UserUpdate
 
-from pydantic import BaseModel
 
 class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
     def __init__(self, uow: IUnitOfWork) -> None:
@@ -19,6 +19,7 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
             select(User).where(User.email == email),
         )
         return result.scalar_one_or_none()
+
 
 class UserPermissionRepository(BaseRepository[UserPermission, UserPermissionCreate, BaseModel]):
     def __init__(self, uow: IUnitOfWork) -> None:
