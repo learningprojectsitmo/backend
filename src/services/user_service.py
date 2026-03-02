@@ -1,16 +1,22 @@
 from __future__ import annotations
 
 from src.model.models import User
-from src.repository.user_repository import UserRepository
-from src.schema.user import UserCreate, UserFull, UserListResponse, UserUpdate
+from src.repository.user_repository import UserPermissionRepository, UserRepository
+from src.schema.user import UserCreate, UserFull, UserListResponse, UserPermissionCreate, UserPermissionFull, UserUpdate
 from src.services.auth_service import AuthService
 from src.services.base_service import BaseService
 
 
 class UserService(BaseService[User, UserCreate, UserUpdate]):
-    def __init__(self, user_repository: UserRepository, auth_service: AuthService):
+    def __init__(
+        self,
+        user_repository: UserRepository,
+        auth_service: AuthService,
+        user_permission_repository: UserPermissionRepository,
+    ):
         super().__init__(user_repository)
         self._user_repository = user_repository
+        self._user_permission_repository = user_permission_repository
         self._auth_service = auth_service
 
     async def create_user(self, user_data: UserCreate) -> User:
@@ -73,3 +79,12 @@ class UserService(BaseService[User, UserCreate, UserUpdate]):
         if user:
             return UserFull.model_validate(user)
         return None
+
+    async def create_user_permission(self, user_permission: UserPermissionCreate) -> UserPermissionFull:
+        return await self._user_permission_repository.create(user_permission)
+
+    async def get_user_permissions(self, user_id: int) -> list[UserPermissionFull]:
+        return await self._user_permission_repository.get_user_permissions(user_id)
+
+    async def delete_user_permission(self, user_permission_id: int) -> bool:
+        return await self._user_permission_repository.delete(user_permission_id)

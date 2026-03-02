@@ -26,7 +26,13 @@ class SqlAlchemyUoW:
         if exc:
             await self.session.rollback()
         else:
-            await self.session.commit()
+            try:
+                await self.session.commit()
+            except Exception:
+                # TODO: for some reason this code does not work, I don't get errors on IntegrityError
+                await self.session.rollback()
+                raise
+
         await self.session.close()
 
     async def commit(self) -> None:

@@ -5,10 +5,55 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from src.core.container import get_user_service
 from src.core.dependencies import get_current_user, setup_audit
 from src.model.models import User
-from src.schema.user import UserCreate, UserFull, UserListResponse, UserUpdate
+from src.schema.user import UserCreate, UserFull, UserListResponse, UserPermissionCreate, UserPermissionFull, UserUpdate
 from src.services.user_service import UserService
 
 user_router = APIRouter(prefix="/users", tags=["users"])
+user_permission_router = APIRouter(prefix="/user_permissions", tags=["users"])
+
+
+@user_permission_router.delete("/{permission_id}")
+async def delete_permission(
+    permission_id: int,
+    user_service: UserService = Depends(get_user_service),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, str]:
+    try:
+        await user_service.delete_user_permission(permission_id)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to delete permission: {e!s}",
+        ) from e
+    else:
+        return {"message": "User permission deleted successfully"}
+
+
+@user_permission_router.post("/")
+async def create_permission(
+    user_permission_data: UserPermissionCreate,
+    user_service: UserService = Depends(get_user_service),
+    current_user: User = Depends(get_current_user),
+) -> UserPermissionFull:
+    try:
+        user_permission = await user_service.create_user_permission(user_permission_data)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to create user permission: {e!s}",
+        ) from e
+    else:
+        return user_permission
+
+
+@user_permission_router.get("/{user_id}")
+async def get_permissions(
+    user_id: int,
+    user_service: UserService = Depends(get_user_service),
+    current_user: User = Depends(get_current_user),
+) -> list[UserPermissionFull]:
+    result = await user_service.get_user_permissions(user_id=user_id)
+    return result
 
 
 @user_router.post("/", response_model=UserFull)
