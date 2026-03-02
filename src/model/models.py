@@ -49,6 +49,16 @@ class User(Base):
         return f"User(id={self.id!r}, first_name={self.first_name!r}, isu_number={self.isu_number!r})"
 
 
+class UserPermission(Base):
+    __tablename__ = "user_permission"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
+    permission: Mapped[str] = mapped_column(String(40), nullable=False)
+
+    def __repr__(self) -> str:
+        return f"User_id({self.user_id!r}, perm_id={self.permission!r}"
+
 class Role(Base):
     __tablename__ = "role"
 
@@ -58,50 +68,16 @@ class Role(Base):
     def __repr__(self) -> str:
         return f"Role(id={self.id!r}, role_name={self.name!r}"
 
-class Entity(Base):
-    # consider using alembic or !fixtures (see https://github.com/anton0afanasiev0v/backend/blob/main/src/service/fixture_service.py) instead of entity
-    __tablename__ = "entity"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    name: Mapped[str] = mapped_column(String(30), nullable=False)
-
-    def __repr__(self) -> str:
-        return f"Entity(id={self.id!r}, entity_name={self.name!r}"
-
-class Permission(Base):
-    __tablename__ = "permission"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    entity_id: Mapped[int] = mapped_column(ForeignKey("entity.id"), nullable=False)
-    can_create: Mapped[bool] = mapped_column(Boolean, nullable=False)
-    can_read: Mapped[bool] = mapped_column(Boolean, nullable=False)
-    can_update: Mapped[bool] = mapped_column(Boolean, nullable=False)
-    can_delete: Mapped[bool] = mapped_column(Boolean, nullable=False)
-
-    def __repr__(self) -> str:
-        return f"Permission(id={self.id!r}, entity_id={self.entity_id!r}, can_create={self.can_create!r}, can_read={self.can_read!r}, can_update={self.can_update!r}, can_delete={self.can_delete!r})"
-
 
 class RolePermission(Base):
     __tablename__ = "role_permission"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     role_id: Mapped[int] = mapped_column(ForeignKey("role.id"), nullable=False)
-    permission_id: Mapped[int] = mapped_column(ForeignKey("permission.id"), nullable=False)
+    permission: Mapped[str] = mapped_column(String(40), nullable=False)
 
     def __repr__(self) -> str:
-        return f"Role_id({self.role_id!r}, perm_id={self.permission_id!r}"
-
-
-class UserPermission(Base):
-    __tablename__ = "user_permission"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
-    permission_id: Mapped[int] = mapped_column(ForeignKey("permission.id"), nullable=False)
-
-    def __repr__(self) -> str:
-        return f"User_id({self.user_id!r}, perm_id={self.permission_id!r}"
+        return f"Role_id({self.role_id!r}, perm_id={self.permission!r}"
 
 
 class Resume(Base):
