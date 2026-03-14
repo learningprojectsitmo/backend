@@ -11,12 +11,14 @@ from src.repository.project_repository import ProjectRepository
 from src.repository.resume_repository import ResumeRepository
 from src.repository.session_repository import SessionRepository
 from src.repository.user_repository import UserRepository
+from src.repository.task_repository import TaskRepository, ColumnTemplateRepository
 from src.services.audit_service import AuditService
 from src.services.auth_service import AuthService
 from src.services.project_service import ProjectService
 from src.services.resume_service import ResumeService
 from src.services.session_service import SessionService
 from src.services.user_service import UserService
+from src.services.task_service import TaskService
 
 
 async def get_uow() -> AsyncGenerator[IUnitOfWork, None]:
@@ -47,6 +49,16 @@ async def get_audit_repository(uow: IUnitOfWork = Depends(get_uow)) -> AuditRepo
 
 async def get_password_reset_repository(uow: IUnitOfWork = Depends(get_uow)) -> PasswordResetRepository:
     return PasswordResetRepository(uow)
+
+
+async def get_task_repository(uow: IUnitOfWork = Depends(get_uow)) -> TaskRepository:
+    """Получить репозиторий задач"""
+    return TaskRepository(uow)
+
+
+async def get_column_template_repository(uow: IUnitOfWork = Depends(get_uow)) -> ColumnTemplateRepository:
+    """Получить репозиторий колонок"""
+    return ColumnTemplateRepository(uow)
 
 
 # Service
@@ -85,3 +97,18 @@ async def get_audit_service(
     audit_repository: AuditRepository = Depends(get_audit_repository),
 ) -> AuditService:
     return AuditService(audit_repository)
+
+
+async def get_task_service(
+    task_repository: TaskRepository = Depends(get_task_repository),
+    column_repository: ColumnTemplateRepository = Depends(get_column_template_repository),
+    user_repository: UserRepository = Depends(get_user_repository),
+    project_repository: ProjectRepository = Depends(get_project_repository),
+) -> TaskService:
+    """Получить сервис задач"""
+    return TaskService(
+        task_repository=task_repository,
+        column_repository=column_repository,
+        user_repository=user_repository,
+        project_repository=project_repository
+    )

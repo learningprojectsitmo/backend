@@ -41,7 +41,7 @@ class TestUserService:
             email="test@example.com",
             first_name="Test",
             middle_name="User",
-            password_string="plain_password",
+            password="plain_password",
             role_id=1,
         )
 

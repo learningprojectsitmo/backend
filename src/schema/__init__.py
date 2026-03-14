@@ -6,6 +6,7 @@ from .base import Blank, DeleteResponse, FindBase, FindDateRange, FindResult, Pa
 from .project import ProjectCreate, ProjectFull, ProjectListItem, ProjectListResponse, ProjectResponse, ProjectUpdate
 from .resume import ResumeCreate, ResumeFull, ResumeListResponse, ResumeResponse, ResumeUpdate
 from .user import UserBase, UserCreate, UserFull, UserListItem, UserListResponse, UserResponse, UserUpdate
+from .task import TaskBase, TaskCreate, TaskUpdate, TaskStatusUpdate, TaskResponse, TaskListResponse, TaskHistoryResponse, TaskFilter, TaskReorder, ColumnTemplateBase, ColumnTemplateCreate, ColumnTemplateUpdate, ColumnTemplateResponse, ColumnTemplateListResponse, ColumnWithTasksResponse
 
 __all__ = [
     "Blank",
@@ -33,4 +34,19 @@ __all__ = [
     "UserListResponse",
     "UserResponse",
     "UserUpdate",
+    "TaskBase",
+    "TaskCreate",
+    "TaskUpdate",
+    "TaskStatusUpdate",
+    "TaskResponse",
+    "TaskListResponse",
+    "TaskHistoryResponse",
+    "TaskFilter",
+    "TaskReorder",
+    "ColumnTemplateBase",
+    "ColumnTemplateCreate",
+    "ColumnTemplateUpdate",
+    "ColumnTemplateResponse",
+    "ColumnTemplateListResponse",
+    "ColumnWithTasksResponse",
 ]

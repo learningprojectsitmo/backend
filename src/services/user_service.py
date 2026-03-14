@@ -15,7 +15,7 @@ class UserService(BaseService[User, UserCreate, UserUpdate]):
 
     async def create_user(self, user_data: UserCreate) -> User:
         """Создать нового пользователя с хешированием пароля"""
-        hashed_password = self._auth_service.get_password_hash(user_data.password_string)
+        hashed_password = self._auth_service.get_password_hash(user_data.password)
 
         # Создаем словарь с правильными ключами для модели User
         # TODO сделать распаковку как было раньше? model dump
