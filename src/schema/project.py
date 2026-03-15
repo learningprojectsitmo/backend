@@ -1,4 +1,5 @@
 from __future__ import annotations
+from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
 
@@ -17,7 +18,10 @@ class ProjectUpdate(BaseModel):
     author_id: int | None = None
     description: str | None = None
     max_participants: int | None = None
-
+    status: str | None = None
+    deadline: datetime | None = None
+    progress: int | None = None
+    tags: list[str] | None = None 
 
 class ProjectFull(ProjectCreate):
     """Полная схема проекта"""
@@ -40,15 +44,16 @@ class ProjectResponse(BaseModel):
 
 class ProjectListItem(BaseModel):
     """Схема элемента списка проектов"""
-
+    
     id: int
     name: str
-    description: str | None = None
-    max_participants: int | None = None
-    author_id: int
+    status: str
+    deadline: datetime | None = None
+    participants_count: int
+    progress: int
+    tags: list[str] = []
 
     model_config = ConfigDict(from_attributes=True)
-
 
 class ProjectListResponse(BaseModel):
     """Схема ответа со списком проектов"""
