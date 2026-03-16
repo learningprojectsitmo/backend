@@ -111,7 +111,7 @@ class Resume(Base):
     def __repr__(self) -> str:
         return f"Resume(id={self.id!r}, author_id={self.author_id!r}, header={self.header!r})"
 
-class User_Resume_Interest(Base):
+class UserResumeInterest(Base):
     __tablename__ = "user_resume_interest"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -123,7 +123,7 @@ class User_Resume_Interest(Base):
         return f"User_Resume_Interest(id={self.id!r}, interest_id={self.interest_id!r}, resume_id={self.resume_id!r})"
 
 
-class User_Wished_Role(Base):
+class UserWishedRole(Base):
     __tablename__ = "user_wished_role"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -134,7 +134,7 @@ class User_Wished_Role(Base):
         return f"User_Wished_Role(id={self.id!r}, user_project_role_id={self.user_project_role_id!r}), resume_id={self.resume_id!r}"
 
 
-class User_Resume_Skill(Base):
+class UserResumeSkill(Base):
     __tablename__ = "user_resume_skill"
 
     id: Mapped[int] = mapped_column(Integer, primarily_key=True, autoincrement=True)
@@ -143,6 +143,7 @@ class User_Resume_Skill(Base):
 
     def __repr__(self) -> str:
         return f"User_Resume_Skill(id={self.id!r}, skill_id={self.skill_id!r}), resume_id={self.resume_id!r}"
+
 
 
 class Invite(Base):
