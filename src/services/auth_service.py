@@ -8,7 +8,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from pwdlib import PasswordHash
 
-from core.config import settings
+from src.core.config import settings
 from src.core.logging_config import get_logger, security_logger
 from src.model.models import User
 from src.repository.password_reset_repository import PasswordResetRepository

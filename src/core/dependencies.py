@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from fastapi import Depends, HTTPException, Request
 
-from core.container import get_auth_service
+from src.core.container import get_auth_service
 from src.core.audit_context import set_audit_context
 from src.core.logging_config import get_logger
 from src.core.security import oauth2_scheme
