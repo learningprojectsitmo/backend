@@ -6,27 +6,44 @@ from .base import Blank, DeleteResponse, FindBase, FindDateRange, FindResult, Pa
 from .project import ProjectCreate, ProjectFull, ProjectListItem, ProjectListResponse, ProjectResponse, ProjectUpdate
 from .resume import ResumeCreate, ResumeFull, ResumeListResponse, ResumeResponse, ResumeUpdate
 from .user import UserBase, UserCreate, UserFull, UserListItem, UserListResponse, UserResponse, UserUpdate
-from .task import TaskBase, TaskCreate, TaskUpdate, TaskStatusUpdate, TaskResponse, TaskListResponse, TaskHistoryResponse, TaskFilter, TaskReorder, ColumnTemplateBase, ColumnTemplateCreate, ColumnTemplateUpdate, ColumnTemplateResponse, ColumnTemplateListResponse, ColumnWithTasksResponse
+from .kanban import (
+    # Базовые типы
+    TaskPriority,
+    # Задачи
+    TaskBase, TaskCreate, TaskUpdate, TaskMove, TaskReorder,
+    TaskResponse, TaskListResponse, TaskHistoryResponse,
+    TaskFilter,
+    # Колонки
+    ColumnBase, ColumnCreate, ColumnUpdate,
+    ColumnResponse, ColumnListResponse, ColumnWithTasksResponse,
+    # Проекты
+    ProjectBoardResponse,
+)
 
 __all__ = [
+    # Базовые схемы
     "Blank",
     "DeleteResponse",
     "FindBase",
     "FindDateRange",
     "FindResult",
     "PaginatedResponse",
+    # Проекты
     "ProjectCreate",
     "ProjectFull",
     "ProjectListItem",
     "ProjectListResponse",
     "ProjectResponse",
     "ProjectUpdate",
+    # Резюме
     "ResumeCreate",
     "ResumeFull",
     "ResumeListResponse",
     "ResumeResponse",
     "ResumeUpdate",
+    # Авторизация
     "Token",
+    # Пользователи
     "UserBase",
     "UserCreate",
     "UserFull",
@@ -34,19 +51,25 @@ __all__ = [
     "UserListResponse",
     "UserResponse",
     "UserUpdate",
+    # Канбан - базовые типы
+    "TaskPriority",
+    # Канбан - задачи
     "TaskBase",
     "TaskCreate",
     "TaskUpdate",
-    "TaskStatusUpdate",
+    "TaskMove",
+    "TaskReorder",
     "TaskResponse",
     "TaskListResponse",
     "TaskHistoryResponse",
     "TaskFilter",
-    "TaskReorder",
-    "ColumnTemplateBase",
-    "ColumnTemplateCreate",
-    "ColumnTemplateUpdate",
-    "ColumnTemplateResponse",
-    "ColumnTemplateListResponse",
+    # Канбан - колонки
+    "ColumnBase",
+    "ColumnCreate",
+    "ColumnUpdate",
+    "ColumnResponse",
+    "ColumnListResponse",
     "ColumnWithTasksResponse",
+    # Канбан - проекты
+    "ProjectBoardResponse",
 ]

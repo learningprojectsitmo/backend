@@ -8,7 +8,7 @@ from src.api.v1.endpoints.project import project_router
 from src.api.v1.endpoints.resume import resume_router
 from src.api.v1.endpoints.sessions import sessions_router
 from src.api.v1.endpoints.user import user_router
-from src.api.v1.endpoints.tasks import task_router
+from src.api.v1.endpoints.kanban import kanban_router
 
 routers = APIRouter(prefix="/v1")
 router_list = [
@@ -18,7 +18,7 @@ router_list = [
     project_router, 
     sessions_router, 
     audit_router,
-    task_router
+    kanban_router
 ]
 
 for router in router_list:

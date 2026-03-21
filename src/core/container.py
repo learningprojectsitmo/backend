@@ -11,14 +11,14 @@ from src.repository.project_repository import ProjectRepository
 from src.repository.resume_repository import ResumeRepository
 from src.repository.session_repository import SessionRepository
 from src.repository.user_repository import UserRepository
-from src.repository.task_repository import TaskRepository, ColumnTemplateRepository
+from src.repository.kanban_repository import KanbanTaskRepository, KanbanColumnRepository
 from src.services.audit_service import AuditService
 from src.services.auth_service import AuthService
 from src.services.project_service import ProjectService
 from src.services.resume_service import ResumeService
 from src.services.session_service import SessionService
 from src.services.user_service import UserService
-from src.services.task_service import TaskService
+from src.services.kanban_service import KanbanService
 
 
 async def get_uow() -> AsyncGenerator[IUnitOfWork, None]:
@@ -26,7 +26,8 @@ async def get_uow() -> AsyncGenerator[IUnitOfWork, None]:
         yield uow
 
 
-# Repository
+# ========== Репозитории ==========
+
 async def get_project_repository(uow: IUnitOfWork = Depends(get_uow)) -> ProjectRepository:
     return ProjectRepository(uow)
 
@@ -51,24 +52,25 @@ async def get_password_reset_repository(uow: IUnitOfWork = Depends(get_uow)) -> 
     return PasswordResetRepository(uow)
 
 
-async def get_task_repository(uow: IUnitOfWork = Depends(get_uow)) -> TaskRepository:
-    """Получить репозиторий задач"""
-    return TaskRepository(uow)
+async def get_kanban_task_repository(uow: IUnitOfWork = Depends(get_uow)) -> KanbanTaskRepository:
+    return KanbanTaskRepository(uow)
 
 
-async def get_column_template_repository(uow: IUnitOfWork = Depends(get_uow)) -> ColumnTemplateRepository:
-    """Получить репозиторий колонок"""
-    return ColumnTemplateRepository(uow)
+async def get_kanban_column_repository(uow: IUnitOfWork = Depends(get_uow)) -> KanbanColumnRepository:
+    return KanbanColumnRepository(uow)
 
 
-# Service
+# ========== Сервисы ==========
+
 async def get_session_service(
     session_repository: SessionRepository = Depends(get_session_repository),
 ) -> SessionService:
     return SessionService(session_repository)
 
 
-async def get_resume_service(resume_repository: ResumeRepository = Depends(get_resume_repository)) -> ResumeService:
+async def get_resume_service(
+    resume_repository: ResumeRepository = Depends(get_resume_repository)
+) -> ResumeService:
     return ResumeService(resume_repository)
 
 
@@ -99,16 +101,10 @@ async def get_audit_service(
     return AuditService(audit_repository)
 
 
-async def get_task_service(
-    task_repository: TaskRepository = Depends(get_task_repository),
-    column_repository: ColumnTemplateRepository = Depends(get_column_template_repository),
+async def get_kanban_service(
+    kanban_task_repository: KanbanTaskRepository = Depends(get_kanban_task_repository),
+    kanban_column_repository: KanbanColumnRepository = Depends(get_kanban_column_repository),
     user_repository: UserRepository = Depends(get_user_repository),
     project_repository: ProjectRepository = Depends(get_project_repository),
-) -> TaskService:
-    """Получить сервис задач"""
-    return TaskService(
-        task_repository=task_repository,
-        column_repository=column_repository,
-        user_repository=user_repository,
-        project_repository=project_repository
-    )
+) -> KanbanService:
+    return KanbanService(kanban_task_repository, kanban_column_repository, user_repository, project_repository)

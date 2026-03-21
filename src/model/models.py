@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 from datetime import datetime
-import enum
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, func, Enum, Text
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, func, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.core.database import Base
@@ -40,6 +39,10 @@ class User(Base):
     projects_in: Mapped[list[ProjectParticipation]] = relationship(
         back_populates="participant",
         cascade="all, delete-orphan",
+    )
+    tasks: Mapped[list["Task"]] = relationship(
+        secondary="task_assignee",
+        back_populates="assignees"
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
@@ -138,10 +141,10 @@ class Project(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
-    tasks: Mapped[list["Task"]] = relationship(
+    columns: Mapped[list["Column"]] = relationship(
         back_populates="project",
         cascade="all, delete-orphan",
-        order_by="Task.status, Task.order"
+        order_by="Column.position"
     )
 
     participants: Mapped[list[ProjectParticipation]] = relationship(back_populates="project")
@@ -260,55 +263,64 @@ class PasswordReset(Base):
     user: Mapped[User] = relationship()
 
 
-#Мб добавить больше колонок/статусов
-class TaskStatus(str, enum.Enum):
-    """Статусы задач для канбан-доски"""
-    NOT_STARTED = "not_started"  # Не начато
-    IN_PROGRESS = "in_progress"  # В процессе
-    REVIEW = "review"            # Ревью
-    DONE = "done"                 # Готово
+# === Канбан-доска ===
 
-#Возможно не понадобится
-class TaskPriority(str, enum.Enum):
-    """Приоритеты задач"""
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-    URGENT = "urgent"
-
-
-# Таблица для связи многие-ко-многим (задача - ответственные)
-class TaskAssignee(Base):
-    __tablename__ = "task_assignee"
+class Column(Base):
+    """Колонка канбан-доски"""
+    __tablename__ = "column"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    task_id: Mapped[int] = mapped_column(ForeignKey("task.id"), nullable=False)
-    user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    project_id: Mapped[int] = mapped_column(ForeignKey("project.id"), nullable=False)
     
-    task: Mapped["Task"] = relationship(back_populates="assignees")
-    user: Mapped["User"] = relationship()
+    # Настройки колонки
+    name: Mapped[str] = mapped_column(String(50), nullable=False)  # Название колонки
+    color: Mapped[str] = mapped_column(String(20), nullable=False, default="gray")  # Цвет (hex или имя)
+    position: Mapped[int] = mapped_column(Integer, default=0, nullable=False)  # Порядок колонки
+    wip_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Лимит задач (опционально)
+    
+    # Временные метки
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+    
+    # Отношения
+    project: Mapped["Project"] = relationship(back_populates="columns")
+    tasks: Mapped[list["Task"]] = relationship(
+        back_populates="column",
+        cascade="all, delete-orphan",
+        order_by="Task.position"
+    )
+    
+    def __repr__(self) -> str:
+        return f"Column(id={self.id!r}, name={self.name!r}, project_id={self.project_id!r}, position={self.position!r})"
 
 
 class Task(Base):
+    """Задача внутри колонки канбан-доски"""
     __tablename__ = "task"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     
+    # Привязка к колонке (обязательно!)
+    column_id: Mapped[int] = mapped_column(ForeignKey("column.id"), nullable=False)
+    project_id: Mapped[int] = mapped_column(ForeignKey("project.id"), nullable=False)  # Денормализация для быстрых запросов
+    
     # Основные поля
     title: Mapped[str] = mapped_column(String(200), nullable=False)
-    description: Mapped[str | None] = mapped_column(String, nullable=True)
-    
-    # Статус и приоритет
-    status: Mapped[TaskStatus] = mapped_column(Enum(TaskStatus), default=TaskStatus.NOT_STARTED, nullable=False)
-    priority: Mapped[TaskPriority] = mapped_column(Enum(TaskPriority), default=TaskPriority.MEDIUM, nullable=False)
-    
-    # Порядок сортировки в колонке (для drag-and-drop)
-    order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    
-    # Связи
-    project_id: Mapped[int] = mapped_column(ForeignKey("project.id"), nullable=False)
-    created_by_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
+    created_by_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False) # id того, кто создал задачу
+
+    # Дополнительные поля
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    priority: Mapped[str | None] = mapped_column(String(20), nullable=True)  # "low", "medium", "high", "urgent"
+    position: Mapped[int] = mapped_column(Integer, default=0, nullable=False) # Порядок сортировки внутри колонки
+    tags: Mapped[str | None] = mapped_column(String(500), nullable=True)  # "backend,frontend,bug"
+
+    # Множество ответственных
+    assignees: Mapped[list["User"]] = relationship(
+        secondary="task_assignee",
+        back_populates="tasks"
+    )
     
     # Временные метки
     due_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -317,25 +329,30 @@ class Task(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
     
-    # Теги (храним как JSON строку или список)
-    tags: Mapped[str | None] = mapped_column(String(500), nullable=True)  # "backend,frontend,bug"
-    
     # Отношения
-    project: Mapped["Project"] = relationship(back_populates="tasks")
+    column: Mapped["Column"] = relationship(back_populates="tasks")
+    project: Mapped["Project"] = relationship()
     created_by: Mapped["User"] = relationship(foreign_keys=[created_by_id])
     
-    # Множество ответственных (бакалавры)
-    assignees: Mapped[list["TaskAssignee"]] = relationship(
-        back_populates="task",
-        cascade="all, delete-orphan"
-    )
+    def __repr__(self) -> str:
+        return f"Task(id={self.id!r}, title={self.title!r}, column_id={self.column_id!r})"
+
+
+class TaskAssignee(Base):
+    """Связь задачи с ответственными"""
+    __tablename__ = "task_assignee"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("task.id"), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     
     def __repr__(self) -> str:
-        return f"Task(id={self.id!r}, title={self.title!r}, status={self.status!r}, project_id={self.project_id!r})"
+        return f"TaskAssignee(task_id={self.task_id!r}, user_id={self.user_id!r})"
 
 
 class TaskHistory(Base):
-    """История изменений задачи (для уведомлений)"""
+    """История изменений задачи"""
     __tablename__ = "task_history"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -343,11 +360,12 @@ class TaskHistory(Base):
     
     # Что изменилось
     changed_by_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
-    old_status: Mapped[TaskStatus | None] = mapped_column(Enum(TaskStatus), nullable=True)
-    new_status: Mapped[TaskStatus | None] = mapped_column(Enum(TaskStatus), nullable=True)
+    old_column_id: Mapped[int | None] = mapped_column(ForeignKey("column.id"), nullable=True)
+    new_column_id: Mapped[int | None] = mapped_column(ForeignKey("column.id"), nullable=True)
     
-    # Доп. информация об изменении
-    change_type: Mapped[str] = mapped_column(String(20), nullable=False)  # status, title, description, assignees
+    # Дополнительная информация
+    change_type: Mapped[str] = mapped_column(String(20), nullable=False)  # "move", "title", "description", "assignees"
+    change_data: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # Дополнительные данные
     
     # Временная метка
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -355,37 +373,8 @@ class TaskHistory(Base):
     # Отношения
     task: Mapped["Task"] = relationship()
     changed_by: Mapped["User"] = relationship(foreign_keys=[changed_by_id])
+    old_column: Mapped["Column"] = relationship(foreign_keys=[old_column_id])
+    new_column: Mapped["Column"] = relationship(foreign_keys=[new_column_id])
     
     def __repr__(self) -> str:
-        return f"TaskHistory(id={self.id!r}, task_id={self.task_id!r}, changed_by={self.changed_by_id!r}, {self.old_status}->{self.new_status})"
-
-
-class ColumnTemplate(Base):
-    """Шаблоны колонок (для магистрантов/преподавателей)"""
-    __tablename__ = "column_template"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    project_id: Mapped[int] = mapped_column(ForeignKey("project.id"), nullable=False)
-    
-    # Настройки колонки
-    name: Mapped[str] = mapped_column(String(50), nullable=False)  # Название колонки
-    color: Mapped[str] = mapped_column(String(20), nullable=False, default="gray")  # Цвет (hex или имя)
-    order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)  # Порядок сортировки
-    
-    # С каким статусом задачи связана колонка
-    task_status: Mapped[TaskStatus] = mapped_column(Enum(TaskStatus), nullable=False)
-    
-    # Кто может изменять статус в этой колонке
-    allowed_roles: Mapped[str] = mapped_column(String(100), nullable=False, default="bachelor")  # "bachelor,master,teacher"
-    
-    # Временные метки
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
-    )
-    
-    # Отношения
-    project: Mapped["Project"] = relationship()
-    
-    def __repr__(self) -> str:
-        return f"ColumnTemplate(id={self.id!r}, name={self.name!r}, status={self.task_status!r})"
+        return f"TaskHistory(id={self.id!r}, task_id={self.task_id!r}, change_type={self.change_type!r})"
