@@ -7,14 +7,18 @@ from src.core.container import get_kanban_service
 from src.core.dependencies import get_current_user, setup_audit
 from src.model.models import User
 from src.schema.kanban import (
-    # Задачи
-    TaskResponse, TaskCreate, TaskUpdate, TaskMove,
-    TaskListResponse, TaskHistoryResponse, TaskFilter,
+    # Доска
+    ProjectBoardResponse, 
     # Колонки
     ColumnResponse, ColumnCreate, ColumnUpdate,
     ColumnListResponse,
+    # Задачи
+    TaskResponse, TaskCreate, TaskUpdate, TaskMove,
+    TaskListResponse, TaskHistoryResponse, TaskFilter,
+    # Подзадачи
+    SubtaskResponse, SubtaskCreate, SubtaskUpdate, SubtaskReorder, SubtaskListResponse,
     # Прочее
-    ProjectBoardResponse, TaskReorder
+    TaskReorder
 )
 from src.services.kanban_service import KanbanService
 
@@ -34,7 +38,86 @@ async def get_board(
         return await kanban_service.get_board(project_id)
     except Exception as e:
         raise HTTPException(status_code=404, detail=str(e))
-    
+
+
+# ========== ЭНДПОЙНТЫ ДЛЯ КОЛОНОК ==========
+
+@kanban_router.get("/columns/project/{project_id}", response_model=ColumnListResponse)
+async def get_project_columns(
+    project_id: int = Path(..., ge=1, description="ID проекта"),
+    kanban_service: KanbanService = Depends(get_kanban_service),
+    current_user: User = Depends(get_current_user),
+) -> ColumnListResponse:
+    """Получить все колонки проекта (без задач)"""
+    columns = await kanban_service.get_project_columns(project_id)
+    return ColumnListResponse(items=columns, total=len(columns))
+
+
+@kanban_router.post("/columns", response_model=ColumnResponse, status_code=status.HTTP_201_CREATED)
+async def create_column(
+    column_data: ColumnCreate,
+    kanban_service: KanbanService = Depends(get_kanban_service),
+    current_user: User = Depends(get_current_user),
+    _audit=Depends(setup_audit),
+) -> ColumnResponse:
+    """Создать новую колонку"""
+    try:
+        return await kanban_service.create_column(column_data, current_user.id)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to create column: {e!s}")
+
+
+@kanban_router.put("/columns/{column_id}", response_model=ColumnResponse)
+async def update_column(
+    column_id: int = Path(..., ge=1, description="ID колонки"),
+    column_data: ColumnUpdate = ...,
+    kanban_service: KanbanService = Depends(get_kanban_service),
+    current_user: User = Depends(get_current_user),
+    _audit=Depends(setup_audit),
+) -> ColumnResponse:
+    """Обновить колонку"""
+    try:
+        return await kanban_service.update_column(column_id, column_data, current_user.id)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to update column: {e!s}")
+
+
+@kanban_router.delete("/columns/{column_id}")
+async def delete_column(
+    column_id: int = Path(..., ge=1, description="ID колонки"),
+    kanban_service: KanbanService = Depends(get_kanban_service),
+    current_user: User = Depends(get_current_user),
+    _audit=Depends(setup_audit),
+) -> dict:
+    """Удалить колонку"""
+    try:
+        success = await kanban_service.delete_column(column_id, current_user.id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Column not found")
+        return {"message": "Column deleted successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to delete column: {e!s}")
+
+
+@kanban_router.post("/columns/project/{project_id}/reorder", response_model=dict)
+async def reorder_columns(
+    project_id: int = Path(..., ge=1, description="ID проекта"),
+    column_orders: TaskReorder = ...,
+    kanban_service: KanbanService = Depends(get_kanban_service),
+    current_user: User = Depends(get_current_user),
+    _audit=Depends(setup_audit),
+) -> dict:
+    """Изменить порядок колонок"""
+    try:
+        success = await kanban_service.reorder_columns(
+            project_id=project_id,
+            column_orders=column_orders.tasks,
+            current_user_id=current_user.id
+        )
+        return {"message": "Columns reordered successfully", "success": success}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to reorder columns: {e!s}")
+
 
 # ========== ЭНДПОЙНТЫ ДЛЯ ЗАДАЧ ==========
 
@@ -177,84 +260,114 @@ async def get_task_history(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to get task history: {e!s}")
 
+    
+# ========== ЭНДПОЙНТЫ ДЛЯ ПОДЗАДАЧ ==========
 
-# ========== ЭНДПОЙНТЫ ДЛЯ КОЛОНОК ==========
-
-@kanban_router.get("/columns/project/{project_id}", response_model=ColumnListResponse)
-async def get_project_columns(
-    project_id: int = Path(..., ge=1, description="ID проекта"),
+@kanban_router.get("/tasks/{task_id}/subtasks", response_model=SubtaskListResponse)
+async def get_task_subtasks(
+    task_id: int = Path(..., ge=1, description="ID задачи"),
     kanban_service: KanbanService = Depends(get_kanban_service),
     current_user: User = Depends(get_current_user),
-) -> ColumnListResponse:
-    """Получить все колонки проекта (без задач)"""
-    columns = await kanban_service.get_project_columns(project_id)
-    return ColumnListResponse(items=columns, total=len(columns))
+) -> SubtaskListResponse:
+    """Получить все подзадачи задачи"""
+    try:
+        return await kanban_service.get_subtasks_by_task(task_id)
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
-@kanban_router.post("/columns", response_model=ColumnResponse, status_code=status.HTTP_201_CREATED)
-async def create_column(
-    column_data: ColumnCreate,
+@kanban_router.get("/subtasks/{subtask_id}", response_model=SubtaskResponse)
+async def get_subtask(
+    subtask_id: int = Path(..., ge=1, description="ID подзадачи"),
+    kanban_service: KanbanService = Depends(get_kanban_service),
+    current_user: User = Depends(get_current_user),
+) -> SubtaskResponse:
+    """Получить подзадачу по ID"""
+    try:
+        return await kanban_service.get_subtask_by_id(subtask_id)
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@kanban_router.post("/subtasks", response_model=SubtaskResponse, status_code=status.HTTP_201_CREATED)
+async def create_subtask(
+    subtask_data: SubtaskCreate = ...,
     kanban_service: KanbanService = Depends(get_kanban_service),
     current_user: User = Depends(get_current_user),
     _audit=Depends(setup_audit),
-) -> ColumnResponse:
-    """Создать новую колонку"""
+) -> SubtaskResponse:
+    """Создать новую подзадачу"""
     try:
-        return await kanban_service.create_column(column_data, current_user.id)
+        return await kanban_service.create_subtask(subtask_data, current_user.id)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Failed to create column: {e!s}")
+        raise HTTPException(status_code=400, detail=f"Failed to create subtask: {e!s}")
 
 
-@kanban_router.put("/columns/{column_id}", response_model=ColumnResponse)
-async def update_column(
-    column_id: int = Path(..., ge=1, description="ID колонки"),
-    column_data: ColumnUpdate = ...,
+@kanban_router.put("/subtasks/{subtask_id}", response_model=SubtaskResponse)
+async def update_subtask(
+    subtask_id: int = Path(..., ge=1, description="ID подзадачи"),
+    subtask_data: SubtaskUpdate = ...,
     kanban_service: KanbanService = Depends(get_kanban_service),
     current_user: User = Depends(get_current_user),
     _audit=Depends(setup_audit),
-) -> ColumnResponse:
-    """Обновить колонку"""
+) -> SubtaskResponse:
+    """Обновить подзадачу"""
     try:
-        return await kanban_service.update_column(column_id, column_data, current_user.id)
+        return await kanban_service.update_subtask(subtask_id, subtask_data, current_user.id)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Failed to update column: {e!s}")
+        raise HTTPException(status_code=400, detail=f"Failed to update subtask: {e!s}")
 
 
-@kanban_router.delete("/columns/{column_id}")
-async def delete_column(
-    column_id: int = Path(..., ge=1, description="ID колонки"),
+@kanban_router.patch("/subtasks/{subtask_id}/toggle", response_model=SubtaskResponse)
+async def toggle_subtask_completion(
+    subtask_id: int = Path(..., ge=1, description="ID подзадачи"),
+    kanban_service: KanbanService = Depends(get_kanban_service),
+    current_user: User = Depends(get_current_user),
+    _audit=Depends(setup_audit),
+) -> SubtaskResponse:
+    """Переключить статус выполнения подзадачи"""
+    try:
+        return await kanban_service.toggle_subtask_completion(subtask_id, current_user.id)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to toggle subtask: {e!s}")
+
+
+@kanban_router.delete("/subtasks/{subtask_id}")
+async def delete_subtask(
+    subtask_id: int = Path(..., ge=1, description="ID подзадачи"),
     kanban_service: KanbanService = Depends(get_kanban_service),
     current_user: User = Depends(get_current_user),
     _audit=Depends(setup_audit),
 ) -> dict:
-    """Удалить колонку"""
+    """Удалить подзадачу"""
     try:
-        success = await kanban_service.delete_column(column_id, current_user.id)
+        success = await kanban_service.delete_subtask(subtask_id, current_user.id)
         if not success:
-            raise HTTPException(status_code=404, detail="Column not found")
-        return {"message": "Column deleted successfully"}
+            raise HTTPException(status_code=404, detail="Subtask not found")
+        return {"message": "Subtask deleted successfully"}
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Failed to delete column: {e!s}")
+        raise HTTPException(status_code=400, detail=f"Failed to delete subtask: {e!s}")
 
 
-@kanban_router.post("/columns/project/{project_id}/reorder", response_model=dict)
-async def reorder_columns(
-    project_id: int = Path(..., ge=1, description="ID проекта"),
-    column_orders: TaskReorder = ...,
+@kanban_router.post("/tasks/{task_id}/subtasks/reorder", response_model=dict)
+async def reorder_subtasks(
+    task_id: int = Path(..., ge=1, description="ID задачи"),
+    subtask_orders: SubtaskReorder = ...,
     kanban_service: KanbanService = Depends(get_kanban_service),
     current_user: User = Depends(get_current_user),
     _audit=Depends(setup_audit),
 ) -> dict:
-    """Изменить порядок колонок"""
+    """Изменить порядок подзадач"""
     try:
-        success = await kanban_service.reorder_columns(
-            project_id=project_id,
-            column_orders=column_orders.tasks,
+        success = await kanban_service.reorder_subtasks(
+            task_id=task_id,
+            subtask_orders=subtask_orders.subtasks,
             current_user_id=current_user.id
         )
-        return {"message": "Columns reordered successfully", "success": success}
+        return {"message": "Subtasks reordered successfully", "success": success}
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Failed to reorder columns: {e!s}")
+        raise HTTPException(status_code=400, detail=f"Failed to reorder subtasks: {e!s}")
+
 
 # ========== ЭНДПОЙНТЫ ДЛЯ СТАТИСТИКИ ==========
 

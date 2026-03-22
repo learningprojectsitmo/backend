@@ -9,9 +9,100 @@ from sqlalchemy.sql import Select
 from src.core.logging_config import get_logger
 from src.core.uow import IUnitOfWork
 from src.repository.base_repository import BaseRepository
-from src.model.models import Task, TaskAssignee, TaskHistory, Column, User
-from src.schema.kanban import TaskCreate, TaskUpdate, TaskMove, TaskFilter, ColumnCreate, ColumnUpdate
+from src.model.models import User, Column, Task, TaskAssignee, TaskHistory, Subtask
+from src.schema.kanban import ColumnCreate, ColumnUpdate, TaskCreate, TaskUpdate, TaskMove, TaskFilter, SubtaskCreate, SubtaskUpdate
 
+
+class KanbanColumnRepository(BaseRepository[Column, ColumnCreate, ColumnUpdate]):
+    """Репозиторий для работы с колонками канбан-доски."""
+
+    def __init__(self, uow: IUnitOfWork) -> None:
+        super().__init__(uow)
+        self._model = Column
+        self._logger = get_logger(__name__)
+
+    async def get_columns_by_project(self, project_id: int) -> List[Column]:
+        """Получить все колонки проекта с задачами и связанными данными."""
+        start_time = time.time()
+        self._logger.debug(f"Getting columns for project {project_id}")
+
+        try:
+            query = (
+                select(self._model)
+                .where(self._model.project_id == project_id)
+                .options(
+                    selectinload(self._model.tasks).selectinload(Task.assignees),
+                    selectinload(self._model.tasks).selectinload(Task.created_by),
+                    selectinload(self._model.tasks).selectinload(Task.column),
+                    selectinload(self._model.tasks).selectinload(Task.subtasks)
+                )
+                .order_by(self._model.position)
+            )
+
+            result = await self.uow.session.execute(query)
+            columns = list(result.scalars().all())
+
+            duration = time.time() - start_time
+            self._logger.info(f"Retrieved {len(columns)} columns for project {project_id} in {duration:.3f}s")
+
+            return columns
+        except Exception:
+            duration = time.time() - start_time
+            self._logger.exception(f"Error getting columns for project {project_id}")
+            raise
+
+    async def create(self, obj_data: ColumnCreate) -> Column:
+        """Создать новую колонку."""
+        start_time = time.time()
+        self._logger.info(f"Creating new Column in project {obj_data.project_id}")
+
+        try:
+            # Определяем следующую позицию
+            query = select(func.max(self._model.position)).where(self._model.project_id == obj_data.project_id)
+            result = await self.uow.session.execute(query)
+            max_pos = result.scalar_one()
+            next_position = (max_pos + 1) if max_pos is not None else 0
+
+            data = obj_data.model_dump(exclude_unset=True)
+            db_obj = self._model(**data, position=next_position)
+            self.uow.session.add(db_obj)
+            await self.uow.session.flush()
+
+            duration = time.time() - start_time
+            self._logger.info(f"Created Column with ID {db_obj.id}")
+
+            return db_obj
+        except Exception:
+            duration = time.time() - start_time
+            self._logger.exception(f"Error creating Column")
+            raise
+
+    async def reorder_columns(self, project_id: int, column_orders: List[Dict[str, Any]]) -> bool:
+        """Изменить порядок колонок."""
+        start_time = time.time()
+        self._logger.info(f"Reordering columns in project {project_id}")
+
+        try:
+            for item in column_orders:
+                stmt = (
+                    update(self._model)
+                    .where(
+                        and_(
+                            self._model.id == item['id'],
+                            self._model.project_id == project_id
+                        )
+                    )
+                    .values(position=item['position'])
+                )
+                await self.uow.session.execute(stmt)
+
+            duration = time.time() - start_time
+            self._logger.info(f"Reordered {len(column_orders)} columns")
+            return True
+        except Exception:
+            duration = time.time() - start_time
+            self._logger.exception(f"Error reordering columns")
+            raise
 
 class KanbanTaskRepository(BaseRepository[Task, TaskCreate, TaskUpdate]):
     """Репозиторий для работы с задачами канбан-доски."""
@@ -21,7 +112,7 @@ class KanbanTaskRepository(BaseRepository[Task, TaskCreate, TaskUpdate]):
         self._model = Task
         self._logger = get_logger(__name__)
 
-    # ========== Базовые методы ==========
+#   ========== Базовые методы ==========
 
     async def get_by_id(self, id: int) -> Task | None:
         """Получить задачу по ID с загрузкой связанных данных."""
@@ -91,7 +182,7 @@ class KanbanTaskRepository(BaseRepository[Task, TaskCreate, TaskUpdate]):
             raise
 
     async def update(self, id: int, obj_data: TaskUpdate) -> Task | None:
-        """Обновить задачу."""
+        """Изменить задачу"""
         start_time = time.time()
         self._logger.info(f"Updating Task with ID {id}")
 
@@ -154,7 +245,7 @@ class KanbanTaskRepository(BaseRepository[Task, TaskCreate, TaskUpdate]):
             self._logger.exception(f"Error deleting Task with ID {id}")
             raise
 
-    # ========== Специфические методы для канбан-доски ==========
+#   ========== Специфические методы для канбан-доски ==========
 
     async def move_task(self, id: int, move_data: TaskMove, changed_by_id: int) -> Task | None:
         """Переместить задачу в другую колонку или изменить позицию."""
@@ -309,7 +400,7 @@ class KanbanTaskRepository(BaseRepository[Task, TaskCreate, TaskUpdate]):
             self._logger.exception(f"Error getting history for Task {task_id} in {duration:.3f}s")
             raise
 
-    # ========== Методы для фильтрации и поиска ==========
+#   ========== Методы для фильтрации и поиска ==========
 
     async def filter_tasks(self, project_id: int, filters: TaskFilter, page: int, page_size: int) -> tuple[List[Task], int]:
         """Отфильтровать задачи проекта по критериям."""
@@ -382,7 +473,7 @@ class KanbanTaskRepository(BaseRepository[Task, TaskCreate, TaskUpdate]):
             self._logger.exception(f"Error filtering tasks for project {project_id} in {duration:.3f}s")
             raise
 
-    # ========== Вспомогательные методы ==========
+#   ========== Вспомогательные методы ==========
 
     async def _get_users_by_ids(self, user_ids: List[int]) -> List[User]:
         """Получить пользователей по списку ID."""
@@ -421,83 +512,158 @@ class KanbanTaskRepository(BaseRepository[Task, TaskCreate, TaskUpdate]):
         )
         await self.uow.session.execute(stmt)
 
-
-class KanbanColumnRepository(BaseRepository[Column, ColumnCreate, ColumnUpdate]):
-    """Репозиторий для работы с колонками канбан-доски."""
+class KanbanSubtaskRepository(BaseRepository[Subtask, SubtaskCreate, SubtaskUpdate]):
+    """Репозиторий для работы с подзадачами канбан-доски"""
 
     def __init__(self, uow: IUnitOfWork) -> None:
         super().__init__(uow)
-        self._model = Column
+        self._model = Subtask
         self._logger = get_logger(__name__)
 
-    async def get_columns_by_project(self, project_id: int) -> List[Column]:
-        """Получить все колонки проекта с задачами и связанными данными."""
+    async def get_by_id(self, id: int) -> Subtask | None:
+        """Получить подзадачу по ID с загрузкой связанных данных"""
         start_time = time.time()
-        self._logger.debug(f"Getting columns for project {project_id}")
+        self._logger.debug(f"Getting Subtask by ID: {id}")
 
         try:
             query = (
                 select(self._model)
-                .where(self._model.project_id == project_id)
+                .where(self._model.id == id)
                 .options(
-                    selectinload(self._model.tasks).selectinload(Task.assignees),
-                    selectinload(self._model.tasks).selectinload(Task.created_by),
-                    selectinload(self._model.tasks).selectinload(Task.column)
+                    selectinload(self._model.created_by),
+                    selectinload(self._model.task)
                 )
-                .order_by(self._model.position)
             )
-
             result = await self.uow.session.execute(query)
-            columns = list(result.scalars().all())
+            subtask = result.scalar_one_or_none()
 
             duration = time.time() - start_time
-            self._logger.info(f"Retrieved {len(columns)} columns for project {project_id} in {duration:.3f}s")
+            if subtask:
+                self._logger.info(f"Retrieved Subtask with ID {id} in {duration:.3f}s")
+            else:
+                self._logger.warning(f"Subtask with ID {id} not found in {duration:.3f}s")
 
-            return columns
+            return subtask
         except Exception:
             duration = time.time() - start_time
-            self._logger.exception(f"Error getting columns for project {project_id}")
+            self._logger.exception(f"Error getting Subtask with ID {id} in {duration:.3f}s")
             raise
 
-    async def create(self, obj_data: ColumnCreate) -> Column:
-        """Создать новую колонку."""
+    async def get_subtasks_by_task(self, task_id: int) -> List[Subtask]:
+        """Получить все подзадачи задачи"""
         start_time = time.time()
-        self._logger.info(f"Creating new Column in project {obj_data.project_id}")
+        self._logger.debug(f"Getting subtasks for task {task_id}")
+
+        try:
+            query = (
+                select(self._model)
+                .where(self._model.task_id == task_id)
+                .order_by(self._model.position)
+                .options(selectinload(self._model.created_by))
+            )
+            result = await self.uow.session.execute(query)
+            subtasks = list(result.scalars().all())
+
+            duration = time.time() - start_time
+            self._logger.info(f"Retrieved {len(subtasks)} subtasks for task {task_id} in {duration:.3f}s")
+
+            return subtasks
+        except Exception:
+            duration = time.time() - start_time
+            self._logger.exception(f"Error getting subtasks for task {task_id} in {duration:.3f}s")
+            raise
+
+    async def create(self, obj_data: SubtaskCreate, created_by_id: int) -> Subtask:
+        """Создать новую подзадачу"""
+        start_time = time.time()
+        self._logger.info(f"Creating new Subtask for task {obj_data.task_id}")
 
         try:
             # Определяем следующую позицию
-            query = select(func.max(self._model.position)).where(self._model.project_id == obj_data.project_id)
-            result = await self.uow.session.execute(query)
-            max_pos = result.scalar_one()
-            next_position = (max_pos + 1) if max_pos is not None else 0
-
+            next_position = await self._get_next_position(obj_data.task_id)
+            
             data = obj_data.model_dump(exclude_unset=True)
-            db_obj = self._model(**data, position=next_position)
+            
+            db_obj = self._model(
+                **data,
+                position=next_position,
+                created_by_id=created_by_id
+            )
             self.uow.session.add(db_obj)
             await self.uow.session.flush()
 
             duration = time.time() - start_time
-            self._logger.info(f"Created Column with ID {db_obj.id}")
+            self._logger.info(f"Created Subtask with ID {db_obj.id} in {duration:.3f}s")
 
-            return db_obj
+            return await self.get_by_id(db_obj.id)
         except Exception:
             duration = time.time() - start_time
-            self._logger.exception(f"Error creating Column")
+            self._logger.exception(f"Error creating Subtask in {duration:.3f}s")
             raise
 
-    async def reorder_columns(self, project_id: int, column_orders: List[Dict[str, Any]]) -> bool:
-        """Изменить порядок колонок."""
+    async def update(self, id: int, obj_data: SubtaskUpdate) -> Subtask | None:
+        """Изменить подзадачу"""
         start_time = time.time()
-        self._logger.info(f"Reordering columns in project {project_id}")
+        self._logger.info(f"Updating Subtask with ID {id}")
 
         try:
-            for item in column_orders:
+            db_obj = await self.get_by_id(id)
+            if not db_obj:
+                duration = time.time() - start_time
+                self._logger.warning(f"Subtask with ID {id} not found for update")
+                return None
+
+            data = obj_data.model_dump(exclude_unset=True)
+            updated_fields = list(data.keys())
+            
+            for field, value in data.items():
+                setattr(db_obj, field, value)
+
+            await self.uow.session.flush()
+
+            duration = time.time() - start_time
+            self._logger.info(f"Updated Subtask with ID {id} - fields: {updated_fields}")
+
+            return await self.get_by_id(id)
+        except Exception:
+            duration = time.time() - start_time
+            self._logger.exception(f"Error updating Subtask with ID {id}")
+            raise
+
+    async def delete(self, id: int) -> bool:
+        """Удалить подзадачу"""
+        start_time = time.time()
+        self._logger.info(f"Deleting Subtask with ID {id}")
+
+        try:
+            stmt = delete(self._model).where(self._model.id == id)
+            result = await self.uow.session.execute(stmt)
+
+            duration = time.time() - start_time
+            if result.rowcount > 0:
+                self._logger.info(f"Deleted Subtask with ID {id}")
+                return True
+            else:
+                self._logger.warning(f"Subtask with ID {id} not found for deletion")
+                return False
+        except Exception:
+            duration = time.time() - start_time
+            self._logger.exception(f"Error deleting Subtask with ID {id}")
+            raise
+
+    async def reorder_subtasks(self, task_id: int, subtask_orders: List[Dict[str, Any]]) -> bool:
+        """Изменить порядок подзадачи"""
+        start_time = time.time()
+        self._logger.info(f"Reordering subtasks in task {task_id}")
+
+        try:
+            for item in subtask_orders:
                 stmt = (
                     update(self._model)
                     .where(
                         and_(
                             self._model.id == item['id'],
-                            self._model.project_id == project_id
+                            self._model.task_id == task_id
                         )
                     )
                     .values(position=item['position'])
@@ -505,9 +671,20 @@ class KanbanColumnRepository(BaseRepository[Column, ColumnCreate, ColumnUpdate])
                 await self.uow.session.execute(stmt)
 
             duration = time.time() - start_time
-            self._logger.info(f"Reordered {len(column_orders)} columns")
+            self._logger.info(f"Reordered {len(subtask_orders)} subtasks in {duration:.3f}s")
+
             return True
         except Exception:
             duration = time.time() - start_time
-            self._logger.exception(f"Error reordering columns")
+            self._logger.exception(f"Error reordering subtasks")
             raise
+
+    async def _get_next_position(self, task_id: int) -> int:
+        """Получить следующую позицию для подзадачи"""
+        query = (
+            select(func.max(self._model.position))
+            .where(self._model.task_id == task_id)
+        )
+        result = await self.uow.session.execute(query)
+        max_pos = result.scalar_one()
+        return (max_pos + 1) if max_pos is not None else 0

@@ -11,7 +11,7 @@ from src.repository.project_repository import ProjectRepository
 from src.repository.resume_repository import ResumeRepository
 from src.repository.session_repository import SessionRepository
 from src.repository.user_repository import UserRepository
-from src.repository.kanban_repository import KanbanTaskRepository, KanbanColumnRepository
+from src.repository.kanban_repository import KanbanColumnRepository, KanbanTaskRepository, KanbanSubtaskRepository
 from src.services.audit_service import AuditService
 from src.services.auth_service import AuthService
 from src.services.project_service import ProjectService
@@ -52,12 +52,16 @@ async def get_password_reset_repository(uow: IUnitOfWork = Depends(get_uow)) -> 
     return PasswordResetRepository(uow)
 
 
+async def get_kanban_column_repository(uow: IUnitOfWork = Depends(get_uow)) -> KanbanColumnRepository:
+    return KanbanColumnRepository(uow)
+
+
 async def get_kanban_task_repository(uow: IUnitOfWork = Depends(get_uow)) -> KanbanTaskRepository:
     return KanbanTaskRepository(uow)
 
 
-async def get_kanban_column_repository(uow: IUnitOfWork = Depends(get_uow)) -> KanbanColumnRepository:
-    return KanbanColumnRepository(uow)
+async def get_kanban_subtask_repository(uow: IUnitOfWork = Depends(get_uow)) -> KanbanSubtaskRepository:
+    return KanbanSubtaskRepository(uow)
 
 
 # ========== Сервисы ==========
@@ -102,9 +106,10 @@ async def get_audit_service(
 
 
 async def get_kanban_service(
-    kanban_task_repository: KanbanTaskRepository = Depends(get_kanban_task_repository),
     kanban_column_repository: KanbanColumnRepository = Depends(get_kanban_column_repository),
+    kanban_task_repository: KanbanTaskRepository = Depends(get_kanban_task_repository),
+    kanban_subtask_repository: KanbanSubtaskRepository = Depends(get_kanban_subtask_repository),
     user_repository: UserRepository = Depends(get_user_repository),
     project_repository: ProjectRepository = Depends(get_project_repository),
 ) -> KanbanService:
-    return KanbanService(kanban_task_repository, kanban_column_repository, user_repository, project_repository)
+    return KanbanService(kanban_column_repository, kanban_task_repository, kanban_subtask_repository, user_repository, project_repository)

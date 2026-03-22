@@ -5,15 +5,16 @@ from typing import TYPE_CHECKING, List, Dict, Any, Optional
 from src.core.logging_config import get_logger
 from src.core.exceptions import NotFoundError, ValidationError
 from src.services.base_service import BaseService
-from src.model.models import Task
+from src.model.models import Task, Subtask
 from src.schema.kanban import (
+    ProjectBoardResponse,
+    ColumnCreate, ColumnUpdate, ColumnResponse, ColumnWithTasksAndSubtasksResponse,
     TaskCreate, TaskUpdate, TaskMove, TaskResponse, TaskListResponse, TaskHistoryResponse, TaskFilter,
-    ColumnCreate, ColumnUpdate, ColumnResponse, ColumnWithTasksResponse,
-    ProjectBoardResponse
+    SubtaskCreate, SubtaskUpdate, SubtaskResponse, SubtaskListResponse
 )
 
 if TYPE_CHECKING:
-    from src.repository.kanban_repository import KanbanTaskRepository, KanbanColumnRepository
+    from src.repository.kanban_repository import KanbanColumnRepository, KanbanTaskRepository, KanbanSubtaskRepository
     from src.repository.user_repository import UserRepository
     from src.repository.project_repository import ProjectRepository
 
@@ -21,19 +22,88 @@ if TYPE_CHECKING:
 class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
     def __init__(
         self, 
-        kanban_task_repository: KanbanTaskRepository,
         kanban_column_repository: KanbanColumnRepository,
+        kanban_task_repository: KanbanTaskRepository,
+        kanban_subtask_repository: KanbanSubtaskRepository,
         user_repository: UserRepository,
         project_repository: ProjectRepository
     ):
         super().__init__(kanban_task_repository)
-        self._kanban_task_repository = kanban_task_repository
         self._kanban_column_repository = kanban_column_repository
+        self._kanban_task_repository = kanban_task_repository
+        self._kanban_subtask_repository = kanban_subtask_repository
         self._user_repository = user_repository
         self._project_repository = project_repository
         self._logger = get_logger(__name__)
     
-    # === Методы для задач ===
+#   === Метод для проектов ===
+
+    async def get_board(self, project_id: int) -> ProjectBoardResponse:
+        """Получить полную канбан-доску проекта"""
+        project = await self._project_repository.get_by_id(project_id)
+        if not project:
+            raise NotFoundError(f"Project with id {project_id} not found")
+
+        columns = await self._kanban_column_repository.get_columns_by_project(project_id)
+        
+        return ProjectBoardResponse(
+            project_id=project.id,
+            project_name=project.name,
+            columns=[
+                ColumnWithTasksAndSubtasksResponse.model_validate(col) for col in columns
+            ]
+        )
+    
+#   === Методы для колонок ===
+
+    async def create_column(self, column_data: ColumnCreate, current_user_id: int) -> ColumnResponse:
+        """Создать новую колонку."""
+        project = await self._project_repository.get_by_id(column_data.project_id)
+        if not project:
+            raise NotFoundError(f"Project with id {column_data.project_id} not found")
+        
+        column = await self._kanban_column_repository.create(column_data)
+        return ColumnResponse.model_validate(column)
+
+    async def update_column(self, column_id: int, column_data: ColumnUpdate, current_user_id: int) -> ColumnResponse:
+        """Обновить колонку."""        
+        column = await self._kanban_column_repository.get_by_id(column_id)
+        if not column:
+            raise NotFoundError(f"Column with id {column_id} not found")
+        
+        updated_column = await self._kanban_column_repository.update(column_id, column_data)
+        if not updated_column:
+            raise NotFoundError(f"Column with id {column_id} not found")
+        
+        return ColumnResponse.model_validate(updated_column)
+
+    async def delete_column(self, column_id: int, current_user_id: int) -> bool:
+        """Удалить колонку."""
+        column = await self._kanban_column_repository.get_by_id(column_id)
+        if not column:
+            raise NotFoundError(f"Column with id {column_id} not found")
+        
+        # TODO: Решить, что делать с задачами в удаляемой колонке
+        # Варианты: удалить все задачи, переместить в первую колонку, запретить удаление если есть задачи
+        
+        return await self._kanban_column_repository.delete(column_id)
+
+    async def reorder_columns(self, project_id: int, column_orders: List[Dict[str, Any]], current_user_id: int) -> bool:
+        """Изменить порядок колонок."""        
+        columns = await self._kanban_column_repository.get_columns_by_project(project_id)
+        column_ids = {col.id for col in columns}
+        
+        for item in column_orders:
+            if item['id'] not in column_ids:
+                raise NotFoundError(f"Column with id {item['id']} not found in project {project_id}")
+        
+        return await self._kanban_column_repository.reorder_columns(project_id, column_orders)
+    
+    async def get_project_columns(self, project_id: int) -> List[ColumnResponse]:
+        columns = await self._kanban_column_repository.get_columns_by_project(project_id)
+        return [ColumnResponse.model_validate(col) for col in columns]
+    
+#   === Методы для задач ===
 
     async def get_task_by_id(self, task_id: int) -> TaskResponse:
         """Получить задачу по ID."""
@@ -139,73 +209,106 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
         history = await self._kanban_task_repository.get_task_history(task_id, limit)
         
         return [TaskHistoryResponse.model_validate(h) for h in history]
-
-    # === Методы для колонок ===
-
-    async def create_column(self, column_data: ColumnCreate, current_user_id: int) -> ColumnResponse:
-        """Создать новую колонку."""
-        project = await self._project_repository.get_by_id(column_data.project_id)
-        if not project:
-            raise NotFoundError(f"Project with id {column_data.project_id} not found")
-        
-        column = await self._kanban_column_repository.create(column_data)
-        return ColumnResponse.model_validate(column)
-
-    async def update_column(self, column_id: int, column_data: ColumnUpdate, current_user_id: int) -> ColumnResponse:
-        """Обновить колонку."""        
-        column = await self._kanban_column_repository.get_by_id(column_id)
-        if not column:
-            raise NotFoundError(f"Column with id {column_id} not found")
-        
-        updated_column = await self._kanban_column_repository.update(column_id, column_data)
-        if not updated_column:
-            raise NotFoundError(f"Column with id {column_id} not found")
-        
-        return ColumnResponse.model_validate(updated_column)
-
-    async def delete_column(self, column_id: int, current_user_id: int) -> bool:
-        """Удалить колонку."""
-        column = await self._kanban_column_repository.get_by_id(column_id)
-        if not column:
-            raise NotFoundError(f"Column with id {column_id} not found")
-        
-        # TODO: Решить, что делать с задачами в удаляемой колонке
-        # Варианты: удалить все задачи, переместить в первую колонку, запретить удаление если есть задачи
-        
-        return await self._kanban_column_repository.delete(column_id)
-
-    async def reorder_columns(self, project_id: int, column_orders: List[Dict[str, Any]], current_user_id: int) -> bool:
-        """Изменить порядок колонок."""        
-        columns = await self._kanban_column_repository.get_columns_by_project(project_id)
-        column_ids = {col.id for col in columns}
-        
-        for item in column_orders:
-            if item['id'] not in column_ids:
-                raise NotFoundError(f"Column with id {item['id']} not found in project {project_id}")
-        
-        return await self._kanban_column_repository.reorder_columns(project_id, column_orders)
     
-    async def get_project_columns(self, project_id: int) -> List[ColumnResponse]:
-        columns = await self._kanban_column_repository.get_columns_by_project(project_id)
-        return [ColumnResponse.model_validate(col) for col in columns]
-    
-    # === Метод для проектов ===
+#   === Методы для подзадач ===
 
-    async def get_board(self, project_id: int) -> ProjectBoardResponse:
-        """Получить полную канбан-доску проекта"""
-        project = await self._project_repository.get_by_id(project_id)
-        if not project:
-            raise NotFoundError(f"Project with id {project_id} not found")
+    async def get_subtask_by_id(self, subtask_id: int) -> SubtaskResponse:
+        """Получить подзадачу по ID."""
+        subtask = await self._kanban_subtask_repository.get_by_id(subtask_id)
+        if not subtask:
+            raise NotFoundError(f"Subtask with id {subtask_id} not found")
+        return SubtaskResponse.model_validate(subtask)
 
-        columns = await self._kanban_column_repository.get_columns_by_project(project_id)
+    async def get_subtasks_by_task(self, task_id: int) -> SubtaskListResponse:
+        """Получить все подзадачи задачи."""
+        task = await self._kanban_task_repository.get_by_id(task_id)
+        if not task:
+            raise NotFoundError(f"Task with id {task_id} not found")
+
+        subtasks = await self._kanban_subtask_repository.get_subtasks_by_task(task_id)
         
-        return ProjectBoardResponse(
-            project_id=project.id,
-            project_name=project.name,
-            columns=[
-                ColumnWithTasksResponse.model_validate(col) for col in columns
-            ]
+        return SubtaskListResponse(
+            items=[SubtaskResponse.model_validate(s) for s in subtasks],
+            total=len(subtasks)
         )
+
+    async def create_subtask(self, subtask_data: SubtaskCreate, created_by_id: int) -> SubtaskResponse:
+        """Создать новую подзадачу."""
+        task = await self._kanban_task_repository.get_by_id(subtask_data.task_id)
+        if not task:
+            raise NotFoundError(f"Task with id {subtask_data.task_id} not found")
+
+        subtask = await self._kanban_subtask_repository.create(subtask_data, created_by_id)
+        
+        # TODO: Отправить уведомление о создании подзадачи
+        await self._notify_subtask_created(subtask, created_by_id)
+        
+        return SubtaskResponse.model_validate(subtask)
+
+    async def update_subtask(self, subtask_id: int, subtask_data: SubtaskUpdate, current_user_id: int) -> SubtaskResponse:
+        """Обновить подзадачу."""
+        subtask = await self._kanban_subtask_repository.get_by_id(subtask_id)
+        if not subtask:
+            raise NotFoundError(f"Subtask with id {subtask_id} not found")
+
+        updated_subtask = await self._kanban_subtask_repository.update(subtask_id, subtask_data)
+        if not updated_subtask:
+            raise NotFoundError(f"Subtask with id {subtask_id} not found")
+        
+        # TODO: Отправить уведомление об обновлении
+        await self._notify_subtask_updated(subtask, updated_subtask, current_user_id)
+        
+        return SubtaskResponse.model_validate(updated_subtask)
+
+    async def toggle_subtask_completion(self, subtask_id: int, current_user_id: int) -> SubtaskResponse:
+        """Переключить статус выполнения подзадачи."""
+        subtask = await self._kanban_subtask_repository.get_by_id(subtask_id)
+        if not subtask:
+            raise NotFoundError(f"Subtask with id {subtask_id} not found")
+
+        updated_subtask = await self._kanban_subtask_repository.update(
+            subtask_id,
+            SubtaskUpdate(is_completed=not subtask.is_completed)
+        )
+        
+        if not updated_subtask:
+            raise NotFoundError(f"Subtask with id {subtask_id} not found")
+        
+        # TODO: Отправить уведомление об изменении статуса
+        await self._notify_subtask_toggled(updated_subtask, current_user_id)
+        
+        return SubtaskResponse.model_validate(updated_subtask)
+
+    async def delete_subtask(self, subtask_id: int, current_user_id: int) -> bool:
+        """Удалить подзадачу."""
+        subtask = await self._kanban_subtask_repository.get_by_id(subtask_id)
+        if not subtask:
+            raise NotFoundError(f"Subtask with id {subtask_id} not found")
+
+        result = await self._kanban_subtask_repository.delete(subtask_id)
+        
+        # TODO: Отправить уведомление об удалении
+        if result:
+            await self._notify_subtask_deleted(subtask, current_user_id)
+        
+        return result
+
+    async def reorder_subtasks(self, task_id: int, subtask_orders: List[Dict[str, Any]], current_user_id: int) -> bool:
+        """Изменить порядок подзадач."""
+        task = await self._kanban_task_repository.get_by_id(task_id)
+        if not task:
+            raise NotFoundError(f"Task with id {task_id} not found")
+
+        existing_subtasks = await self._kanban_subtask_repository.get_subtasks_by_task(task_id)
+        existing_ids = {s.id for s in existing_subtasks}
+        
+        for item in subtask_orders:
+            if item['id'] not in existing_ids:
+                raise NotFoundError(f"Subtask with id {item['id']} not found in task {task_id}")
+
+        return await self._kanban_subtask_repository.reorder_subtasks(task_id, subtask_orders)
+    
+#   === Метод для статистики ===
     
     async def get_project_stats(self, project_id: int) -> dict:
         """Получить статистику по задачам проекта."""
@@ -255,7 +358,7 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
         
         return stats
 
-    # === Методы для фильтрации и поиска ===
+#   === Методы для фильтрации и поиска ===
 
     async def filter_tasks(self, project_id: int, filters: Optional[TaskFilter] = None, page: int = 1, page_size: int = 50) -> TaskListResponse:
         if filters is None:
@@ -277,7 +380,7 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
             total_pages=(total + page_size - 1) // page_size
         )
 
-    # === Уведомления ===
+#   === Уведомления для задач ===
 
     async def _notify_task_created(self, task: Task, created_by_id: int) -> None:
         """Уведомление о создании задачи."""
@@ -322,5 +425,46 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
         deleter = await self._user_repository.get_by_id(deleted_by_id)
         self._logger.info(
             f"TASK DELETED: '{task.title}' (ID: {task.id}) "
+            f"by {deleter.first_name} {deleter.last_name}"
+        )
+
+#   === Уведомления для подзадач ===
+
+    async def _notify_subtask_created(self, subtask: Subtask, created_by_id: int) -> None:
+        """Уведомление о создании подзадачи."""
+        creator = await self._user_repository.get_by_id(created_by_id)
+        self._logger.info(
+            f"SUBTASK CREATED: '{subtask.title}' (ID: {subtask.id}) "
+            f"for task {subtask.task_id} by {creator.first_name} {creator.last_name}"
+        )
+
+    async def _notify_subtask_updated(self, old_subtask: Subtask, new_subtask: Subtask, updated_by_id: int) -> None:
+        """Уведомление об обновлении подзадачи."""
+        updater = await self._user_repository.get_by_id(updated_by_id)
+        changes = []
+        if old_subtask.title != new_subtask.title:
+            changes.append("title")
+        if old_subtask.is_completed != new_subtask.is_completed:
+            changes.append("is_completed")
+        
+        self._logger.info(
+            f"SUBTASK UPDATED: '{new_subtask.title}' (ID: {new_subtask.id}) "
+            f"changed fields: {changes} by {updater.first_name} {updater.last_name}"
+        )
+
+    async def _notify_subtask_toggled(self, subtask: Subtask, toggled_by_id: int) -> None:
+        """Уведомление о переключении статуса подзадачи."""
+        toggler = await self._user_repository.get_by_id(toggled_by_id)
+        status = "completed" if subtask.is_completed else "uncompleted"
+        self._logger.info(
+            f"SUBTASK {status.upper()}: '{subtask.title}' (ID: {subtask.id}) "
+            f"by {toggler.first_name} {toggler.last_name}"
+        )
+
+    async def _notify_subtask_deleted(self, subtask: Subtask, deleted_by_id: int) -> None:
+        """Уведомление об удалении подзадачи."""
+        deleter = await self._user_repository.get_by_id(deleted_by_id)
+        self._logger.info(
+            f"SUBTASK DELETED: '{subtask.title}' (ID: {subtask.id}) "
             f"by {deleter.first_name} {deleter.last_name}"
         )

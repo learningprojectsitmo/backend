@@ -16,6 +16,54 @@ class TaskPriority(str):
     HIGH = "high"
     URGENT = "urgent"
 
+# ========== Схемы для проектов ==========
+
+class ProjectBoardResponse(BaseModel):
+    """Схема канбан-доски проекта"""
+    project_id: int
+    project_name: str
+    columns: List[ColumnWithTasksAndSubtasksResponse]
+
+# ========== Схемы для колонок ==========
+
+class ColumnBase(BaseModel):
+    """Базовая схема колонки"""
+    name: str = Field(..., min_length=1, max_length=50)
+    color: str = Field("gray", description="Цвет колонки (hex или имя)")
+    wip_limit: Optional[int] = Field(None, ge=1, description="Лимит задач в колонке")
+
+class ColumnCreate(ColumnBase):
+    """Схема создания колонки"""
+    project_id: int
+
+class ColumnUpdate(BaseModel):
+    """Схема обновления колонки"""
+    name: Optional[str] = Field(None, min_length=1, max_length=50)
+    color: Optional[str] = None
+    position: Optional[int] = Field(None, ge=0)
+    wip_limit: Optional[int] = Field(None, ge=1)
+
+class ColumnResponse(ColumnBase):
+    """Схема ответа с колонкой"""
+    id: int
+    project_id: int
+    position: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class ColumnWithTasksAndSubtasksResponse(ColumnResponse):
+    """Схема колонки с задачами"""
+    tasks: List[TaskWithSubtasksResponse] = []
+    task_count: int = 0
+
+class ColumnListResponse(BaseModel):
+    """Схема списка колонок"""
+    items: List[ColumnResponse]
+    total: int
+
 # ========== Схемы для задач ==========
 
 class TaskBase(BaseModel):
@@ -51,8 +99,6 @@ class TaskReorder(BaseModel):
     """Схема для изменения порядка задач в колонке"""
     tasks: List[dict] = Field(..., description='[{"id": 1, "position": 0}, ...]')
 
-# ========== Схемы для ответов ==========
-
 class TaskResponse(BaseModel):
     """Схема ответа с задачей"""
     id: int
@@ -75,6 +121,11 @@ class TaskResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class TaskWithSubtasksResponse(TaskResponse):
+    """Схема задачи с подзадачами"""
+    subtasks: List[SubtaskResponse] = []
+    subtask_count: int = 0
+
 class TaskListResponse(BaseModel):
     """Схема списка задач"""
     items: List[TaskResponse]
@@ -94,53 +145,44 @@ class TaskHistoryResponse(BaseModel):
     class Config:
         from_attributes = True
 
-# ========== Схемы для колонок ==========
+# ========== Схемы для подзадач ==========
 
-class ColumnBase(BaseModel):
-    """Базовая схема колонки"""
-    name: str = Field(..., min_length=1, max_length=50)
-    color: str = Field("gray", description="Цвет колонки (hex или имя)")
-    wip_limit: Optional[int] = Field(None, ge=1, description="Лимит задач в колонке")
+class SubtaskBase(BaseModel):
+    """Базовая схема подзадачи"""
+    title: str = Field(..., min_length=1, max_length=200)
+    is_completed: bool = False
 
-class ColumnCreate(ColumnBase):
-    """Схема создания колонки"""
-    project_id: int
+class SubtaskCreate(SubtaskBase):
+    """Схема создания подзадачи"""
+    task_id: int = Field(..., description="ID родительской задачи")
 
-class ColumnUpdate(BaseModel):
-    """Схема обновления колонки"""
-    name: Optional[str] = Field(None, min_length=1, max_length=50)
-    color: Optional[str] = None
-    position: Optional[int] = Field(None, ge=0)
-    wip_limit: Optional[int] = Field(None, ge=1)
+class SubtaskUpdate(BaseModel):
+    """Схема обновления подзадачи"""
+    title: Optional[str] = Field(None, min_length=1, max_length=200)
+    is_completed: Optional[bool] = None
+    position: Optional[int] = Field(None, ge=0, description="Новая позиция в списке")
 
-class ColumnResponse(ColumnBase):
-    """Схема ответа с колонкой"""
+class SubtaskReorder(BaseModel):
+    """Схема для изменения порядка подзадач"""
+    subtasks: List[dict] = Field(..., description='[{"id": 1, "position": 0}, ...]')
+
+class SubtaskResponse(SubtaskBase):
+    """Схема ответа с подзадачей"""
     id: int
-    project_id: int
+    task_id: int
     position: int
+    created_by_id: int
+    created_by: Optional[UserResponse] = None
     created_at: datetime
     updated_at: datetime
 
     class Config:
         from_attributes = True
 
-class ColumnWithTasksResponse(ColumnResponse):
-    """Схема колонки с задачами"""
-    tasks: List[TaskResponse] = []
-    task_count: int = 0
-
-class ColumnListResponse(BaseModel):
-    """Схема списка колонок"""
-    items: List[ColumnResponse]
+class SubtaskListResponse(BaseModel):
+    """Схема списка подзадач"""
+    items: List[SubtaskResponse]
     total: int
-
-# ========== Схемы для проектов ==========
-
-class ProjectBoardResponse(BaseModel):
-    """Схема канбан-доски проекта"""
-    project_id: int
-    project_name: str
-    columns: List[ColumnWithTasksResponse]
 
 # ========== Схемы для фильтрации ==========
 

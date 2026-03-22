@@ -9,15 +9,18 @@ from .user import UserBase, UserCreate, UserFull, UserListItem, UserListResponse
 from .kanban import (
     # Базовые типы
     TaskPriority,
+    # Проекты
+    ProjectBoardResponse,
+    # Колонки
+    ColumnBase, ColumnCreate, ColumnUpdate,
+    ColumnResponse, ColumnListResponse, ColumnWithTasksAndSubtasksResponse,
     # Задачи
     TaskBase, TaskCreate, TaskUpdate, TaskMove, TaskReorder,
     TaskResponse, TaskListResponse, TaskHistoryResponse,
     TaskFilter,
-    # Колонки
-    ColumnBase, ColumnCreate, ColumnUpdate,
-    ColumnResponse, ColumnListResponse, ColumnWithTasksResponse,
-    # Проекты
-    ProjectBoardResponse,
+    # Подзадачи
+    SubtaskBase, SubtaskCreate, SubtaskUpdate,
+    SubtaskReorder, SubtaskResponse, SubtaskListResponse,
 )
 
 __all__ = [
@@ -53,6 +56,15 @@ __all__ = [
     "UserUpdate",
     # Канбан - базовые типы
     "TaskPriority",
+    # Канбан - проекты
+    "ProjectBoardResponse",
+    # Канбан - колонки
+    "ColumnBase",
+    "ColumnCreate",
+    "ColumnUpdate",
+    "ColumnResponse",
+    "ColumnListResponse",
+    "ColumnWithTasksAndSubtasksResponse",
     # Канбан - задачи
     "TaskBase",
     "TaskCreate",
@@ -63,13 +75,11 @@ __all__ = [
     "TaskListResponse",
     "TaskHistoryResponse",
     "TaskFilter",
-    # Канбан - колонки
-    "ColumnBase",
-    "ColumnCreate",
-    "ColumnUpdate",
-    "ColumnResponse",
-    "ColumnListResponse",
-    "ColumnWithTasksResponse",
-    # Канбан - проекты
-    "ProjectBoardResponse",
+    # Канбан - подзадачи
+    "SubtaskBase",
+    "SubtaskCreate",
+    "SubtaskUpdate",
+    "SubtaskReorder",
+    "SubtaskResponse",
+    "SubtaskListResponse",
 ]

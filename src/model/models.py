@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, func, Text
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, func, Text, Boolean
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.core.database import Base
@@ -321,6 +321,13 @@ class Task(Base):
         secondary="task_assignee",
         back_populates="tasks"
     )
+
+    # Множество подзадач
+    subtasks: Mapped[list["Subtask"]] = relationship(
+        back_populates="task",
+        cascade="all, delete-orphan",
+        order_by="Subtask.position"
+    )
     
     # Временные метки
     due_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -378,3 +385,32 @@ class TaskHistory(Base):
     
     def __repr__(self) -> str:
         return f"TaskHistory(id={self.id!r}, task_id={self.task_id!r}, change_type={self.change_type!r})"
+    
+class Subtask(Base):
+    """Подзадача внутри задачи канбан-доски"""
+    __tablename__ = "subtask"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("task.id", ondelete="CASCADE"), nullable=False)
+    
+    # Основные поля
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    created_by_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
+    is_completed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    
+    # Дополнительные поля
+    # description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    position: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    
+    # Временные метки
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+    
+    # Отношения
+    task: Mapped["Task"] = relationship(back_populates="subtasks")
+    created_by: Mapped["User"] = relationship(foreign_keys=[created_by_id])
+    
+    def __repr__(self) -> str:
+        return f"Subtask(id={self.id!r}, title={self.title!r}, task_id={self.task_id!r})"
