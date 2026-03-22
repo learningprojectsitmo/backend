@@ -11,12 +11,14 @@ from src.repository.project_repository import ProjectRepository
 from src.repository.resume_repository import ResumeRepository
 from src.repository.session_repository import SessionRepository
 from src.repository.user_repository import UserRepository
+from src.repository.workspace_repository import WorkSpaceRepository
 from src.services.audit_service import AuditService
 from src.services.auth_service import AuthService
 from src.services.project_service import ProjectService
 from src.services.resume_service import ResumeService
 from src.services.session_service import SessionService
 from src.services.user_service import UserService
+from src.services.workspace_service import WorkSpaceService
 
 
 async def get_uow() -> AsyncGenerator[IUnitOfWork, None]:
@@ -47,6 +49,10 @@ async def get_audit_repository(uow: IUnitOfWork = Depends(get_uow)) -> AuditRepo
 
 async def get_password_reset_repository(uow: IUnitOfWork = Depends(get_uow)) -> PasswordResetRepository:
     return PasswordResetRepository(uow)
+
+
+async def get_workspace_repository(uow: IUnitOfWork = Depends(get_uow)) -> WorkSpaceRepository:
+    return WorkSpaceRepository(uow)
 
 
 # Service
@@ -85,3 +91,9 @@ async def get_audit_service(
     audit_repository: AuditRepository = Depends(get_audit_repository),
 ) -> AuditService:
     return AuditService(audit_repository)
+
+
+async def get_workspace_service(
+    workspace_repository: WorkSpaceRepository = Depends(get_workspace_repository),
+) -> WorkSpaceService:
+    return WorkSpaceService(workspace_repository)
