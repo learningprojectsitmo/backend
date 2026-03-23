@@ -7,6 +7,7 @@ from fastapi import Depends
 from src.core.uow import IUnitOfWork, SqlAlchemyUoW
 from src.repository.audit_repository import AuditRepository
 from src.repository.password_reset_repository import PasswordResetRepository
+from src.repository.permission_repository import PermissionRepository
 from src.repository.project_repository import ProjectRepository
 from src.repository.resume_repository import ResumeRepository
 from src.repository.role_repository import RolePermissionRepository, RoleRepository
@@ -14,6 +15,8 @@ from src.repository.session_repository import SessionRepository
 from src.repository.user_repository import UserPermissionRepository, UserRepository
 from src.services.audit_service import AuditService
 from src.services.auth_service import AuthService
+from src.services.fixtures_service import FixtureService
+from src.services.permission_service import PermissionService
 from src.services.project_service import ProjectService
 from src.services.resume_service import ResumeService
 from src.services.role_service import RoleService
@@ -33,6 +36,10 @@ async def get_project_repository(uow: IUnitOfWork = Depends(get_uow)) -> Project
 
 async def get_role_repository(uow: IUnitOfWork = Depends(get_uow)) -> RoleRepository:
     return RoleRepository(uow)
+
+
+async def get_permission_repository(uow: IUnitOfWork = Depends(get_uow)) -> PermissionRepository:
+    return PermissionRepository(uow)
 
 
 async def get_role_permission_repository(uow: IUnitOfWork = Depends(get_uow)) -> RolePermissionRepository:
@@ -99,8 +106,21 @@ async def get_user_service(
 async def get_role_service(
     role_repository: RoleRepository = Depends(get_role_repository),
     role_permission_repository: RolePermissionRepository = Depends(get_role_permission_repository),
+    permission_repository: PermissionRepository = Depends(get_permission_repository),
 ) -> RoleService:
-    return RoleService(role_repository, role_permission_repository)
+    return RoleService(role_repository, role_permission_repository, permission_repository)
+
+
+async def get_permission_service(
+    permission_repository: PermissionRepository = Depends(get_permission_repository),
+) -> PermissionService:
+    return PermissionService(permission_repository)
+
+
+async def get_fixtures_service(
+    permission_service: PermissionService = Depends(get_permission_service),
+) -> FixtureService:
+    return FixtureService(permission_service)
 
 
 async def get_audit_service(

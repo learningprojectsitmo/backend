@@ -3,11 +3,13 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 
 import uvicorn
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
+from services.fixtures_service import FixtureService
 from src.api.v1.routes import routers as v1_router
 from src.core.config import settings
+from src.core.container import get_fixtures_service
 from src.core.database import Base, engine
 from src.core.logging_config import get_logger, setup_logging
 from src.core.middleware.logging_middleware import setup_logging_middleware
@@ -55,8 +57,13 @@ app.add_middleware(
 
 
 @app.get("/")
-async def root(request: Request):
+async def root(
+    request: Request,
+    fixtures_service: FixtureService = Depends(get_fixtures_service),
+    ):
     """Корневой endpoint API"""
+    await fixtures_service.create_fixtures()
+
     logger = get_logger(__name__)
 
     client_ip = request.client.host if request.client else "unknown"

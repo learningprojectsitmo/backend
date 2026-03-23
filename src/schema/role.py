@@ -27,7 +27,17 @@ class RoleListResponse(BaseModel):
 
 class RolePermissionCreate(BaseModel):
     role_id: int
-    permission: str
+    permission_id: int
+
+
+class RolePermissionCreateAPI(BaseModel):
+    role_id: int
+    permission_str: str
+
+
+class RolePermissionRepr(BaseModel):
+    entity_name: str
+    allowed_permissions: list[str]
 
 
 class RolePermissionFull(RolePermissionCreate):

@@ -7,23 +7,28 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from src.core.container import get_role_service
 from src.core.dependencies import get_current_user
 from src.model.models import User
-from src.schema.role import RoleCreate, RoleFull, RoleListResponse, RolePermissionCreate, RolePermissionFull
+from src.schema.role import (
+    RoleCreate,
+    RoleFull,
+    RoleListResponse,
+    RolePermissionCreateAPI,
+    RolePermissionFull,
+    RolePermissionRepr,
+)
 from src.services.role_service import RoleService
 
 role_router = APIRouter(prefix="/roles", tags=["roles"])
 role_permission_router = APIRouter(prefix="/role_permissions", tags=["roles"])
 
-# TODO: permissions should be hardcoded, no create and delete
 
-
-@role_permission_router.delete("/{permission_id}")
-async def delete_permission(
-    permission_id: int,
+@role_permission_router.delete("/")
+async def delete_role_permission(
+    role_permission_data: RolePermissionCreateAPI,
     role_service: RoleService = Depends(get_role_service),
     current_user: User = Depends(get_current_user),
 ) -> dict[str, str]:
     try:
-        await role_service.delete_role_permission(permission_id)
+        await role_service.delete_role_permission(role_permission_data)
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -34,8 +39,8 @@ async def delete_permission(
 
 
 @role_permission_router.post("/")
-async def create_permission(
-    role_permission_data: RolePermissionCreate,
+async def create_role_permission(
+    role_permission_data: RolePermissionCreateAPI,
     role_service: RoleService = Depends(get_role_service),
     current_user: User = Depends(get_current_user),
 ) -> RolePermissionFull:
@@ -55,7 +60,7 @@ async def get_permissions(
     role_id: int,
     role_service: RoleService = Depends(get_role_service),
     current_user: User = Depends(get_current_user),
-) -> list[RolePermissionFull]:
+) -> list[RolePermissionRepr]:
     result = await role_service.get_role_permissions(role_id=role_id)
     return result
 

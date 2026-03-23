@@ -49,15 +49,25 @@ class User(Base):
         return f"User(id={self.id!r}, first_name={self.first_name!r}, isu_number={self.isu_number!r})"
 
 
+class Permission(Base):
+    __tablename__ = "permission"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(30), nullable=False, unique=True)
+
+    def __repr__(self) -> str:
+        return f"Permission(id={self.id!r}, permission_name={self.name!r}"
+
+
 class UserPermission(Base):
     __tablename__ = "user_permission"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
-    permission: Mapped[str] = mapped_column(String(40), nullable=False)
+    permission_id: Mapped[int] = mapped_column(ForeignKey("permission.id"), nullable=False)
 
     def __repr__(self) -> str:
-        return f"User_id({self.user_id!r}, perm_id={self.permission!r}"
+        return f"User_id({self.user_id!r}, perm_id={self.permission_id!r}"
 
 
 class Role(Base):
@@ -75,7 +85,7 @@ class RolePermission(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     role_id: Mapped[int] = mapped_column(ForeignKey("role.id"), nullable=False)
-    permission: Mapped[str] = mapped_column(String(40), nullable=False)
+    permission_id: Mapped[int] = mapped_column(ForeignKey("permission.id"), nullable=False)
 
     def __repr__(self) -> str:
         return f"Role_id({self.role_id!r}, perm_id={self.permission!r}"

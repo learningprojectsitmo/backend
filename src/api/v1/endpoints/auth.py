@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 
-from src.core.container import get_auth_service
+from src.core.container import get_auth_service, get_user_service
 from src.core.dependencies import get_current_user
 from src.core.logging_config import api_logger
 from src.model.models import User
@@ -16,7 +16,9 @@ from src.schema.auth import (
     PasswordResetSuccessfulResponse,
     Token,
 )
+from src.schema.user import UserCreate, UserFull
 from src.services.auth_service import AuthService
+from src.services.user_service import UserService
 
 auth_router = APIRouter(prefix="/auth", tags=["authentication"])
 
@@ -48,6 +50,17 @@ async def login_for_access_token(
         raise
     else:
         return result
+
+
+@auth_router.post("/signup", response_model=UserFull)
+async def create_user(
+    user_data: UserCreate,
+    user_service: UserService = Depends(get_user_service),
+) -> UserFull:
+    """Создать нового пользователя"""
+
+    user = await user_service.create_user(user_data)
+    return UserFull.model_validate(user)
 
 
 @auth_router.post("/logout")

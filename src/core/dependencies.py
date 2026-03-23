@@ -2,16 +2,19 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from fastapi import Depends, HTTPException, Request
+from fastapi import Depends, HTTPException, Request, status
 
-from core.container import get_auth_service
+from core.container import get_auth_service, get_permission_repository, get_role_service, get_user_service
 from src.core.audit_context import set_audit_context
 from src.core.logging_config import get_logger
 from src.core.security import oauth2_scheme
 
 if TYPE_CHECKING:
     from src.model.models import User
+    from src.repository.permission_repository import PermissionRepository
     from src.services.auth_service import AuthService
+    from src.services.role_service import RoleService
+    from src.services.user_service import UserService
 
 
 async def get_current_user(
@@ -29,6 +32,38 @@ async def get_current_user(
     else:
         logger.debug(f"Successfully retrieved current user: {user.email} (ID: {user.id})")
         return user
+
+
+def permission_required(permission: str):
+    async def permission_dependency(
+        current_user: User = Depends(get_current_user),
+        user_service: UserService = Depends(get_user_service),
+        role_service: RoleService = Depends(get_role_service),
+        permission_repository: PermissionRepository = Depends(get_permission_repository),
+    ):
+        permission_obj = await permission_repository.get_by_name(permission)
+        if not permission_obj:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Permission '{permission}' not found",
+            )
+
+        permission_id = permission_obj.id
+
+        user_permissions = await user_service.get_user_permissions(current_user.id)
+        if any(hasattr(p, "permission_id") and p.permission_id == permission_id for p in user_permissions):
+            return current_user
+
+        role_permissions = await role_service.get_role_permissions(current_user.role_id)
+        if any(hasattr(p, "permission_id") and p.permission_id == permission_id for p in role_permissions):
+            return current_user
+
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Permission '{permission}' required",
+        )
+
+    return permission_dependency
 
 
 async def get_current_user_no_exception(

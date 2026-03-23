@@ -58,6 +58,7 @@ class AuthService:
         self._logger.info(f"Successful authentication for user: {email} (ID: {user.id})")
         return user
 
+    # TODO: why email is used in token validation?
     async def get_current_user(self, token: str) -> User:
         """Получить текущего пользователя из токена"""
         credentials_exception = HTTPException(

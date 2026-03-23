@@ -94,7 +94,7 @@ class UserListResponse(BaseModel):
 
 class UserPermissionCreate(BaseModel):
     user_id: int
-    permission: str
+    permission_id: int
 
 
 class UserPermissionFull(UserPermissionCreate):

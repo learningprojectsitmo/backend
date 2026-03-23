@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from src.core.container import get_user_service
-from src.core.dependencies import get_current_user, setup_audit
+from src.core.dependencies import get_current_user, permission_required, setup_audit
 from src.model.models import User
 from src.schema.user import UserCreate, UserFull, UserListResponse, UserPermissionCreate, UserPermissionFull, UserUpdate
 from src.services.user_service import UserService
@@ -60,6 +60,7 @@ async def get_permissions(
 async def create_user(
     user_data: UserCreate,
     user_service: UserService = Depends(get_user_service),
+    _current_user: User = Depends(permission_required("users:write")),
 ) -> UserFull:
     """Создать нового пользователя"""
 
@@ -71,7 +72,7 @@ async def create_user(
 async def get_user(
     user_id: int,
     user_service: UserService = Depends(get_user_service),
-    _current_user: User = Depends(get_current_user),
+    _current_user: User = Depends(permission_required("users:read")),
 ) -> UserFull:
     """Получить пользователя по ID"""
     user = await user_service.get_user_by_id(user_id)
@@ -86,7 +87,7 @@ async def update_user(
     user_id: int,
     user_data: UserUpdate,
     user_service: UserService = Depends(get_user_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("users:write")),
     _audit=Depends(setup_audit),
 ) -> UserFull:
     """Обновить пользователя (только сам пользователь или админ)"""
@@ -116,7 +117,7 @@ async def update_user(
 async def delete_user(
     user_id: int,
     user_service: UserService = Depends(get_user_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("users:delete")),
 ) -> dict[str, str]:
     """Удалить пользователя (только сам пользователь или админ)"""
     if current_user.id != user_id:
