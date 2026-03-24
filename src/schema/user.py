@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
+
 from src.util.validator import TelegramValidator
+
 
 class UserBase(BaseModel):
     """Базовая схема пользователя"""

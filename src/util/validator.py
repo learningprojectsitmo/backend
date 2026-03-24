@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import re
 from typing import Any, ClassVar
 
@@ -36,7 +38,7 @@ class TelegramValidator:
             return None
 
         if not isinstance(value, str):
-            raise ValueError('Telegram ник должен быть строкой')
+            raise TypeError('Telegram ник должен быть строкой')
 
         # Убираем лишние пробелы
         value = value.strip()

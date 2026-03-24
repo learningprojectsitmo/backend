@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import TYPE_CHECKING
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, func, Text, Boolean
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.core.database import Base
 
+if TYPE_CHECKING:
+    from src.model.models import Column, Task
 
 class User(Base):
     __tablename__ = "user"
@@ -40,7 +43,7 @@ class User(Base):
         back_populates="participant",
         cascade="all, delete-orphan",
     )
-    tasks: Mapped[list["Task"]] = relationship(
+    tasks: Mapped[list[Task]] = relationship(
         secondary="task_assignee",
         back_populates="assignees"
     )
@@ -141,7 +144,7 @@ class Project(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
-    columns: Mapped[list["Column"]] = relationship(
+    columns: Mapped[list[Column]] = relationship(
         back_populates="project",
         cascade="all, delete-orphan",
         order_by="Column.position"

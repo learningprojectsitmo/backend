@@ -1,17 +1,26 @@
 from __future__ import annotations
 
 import time
-from typing import Any, List, Dict
-from sqlalchemy import and_, or_, func, select, update, delete
+from typing import Any
+
+from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.orm import selectinload
-from sqlalchemy.sql import Select
 
 from src.core.logging_config import get_logger
 from src.core.uow import IUnitOfWork
-from src.repository.base_repository import BaseRepository
+from src.model.kanban_models import Column, Subtask, Task, TaskAssignee, TaskHistory
 from src.model.models import User
-from src.model.kanban_models import Column, Task, TaskAssignee, TaskHistory, Subtask
-from src.schema.kanban import ColumnCreate, ColumnUpdate, TaskCreate, TaskUpdate, TaskMove, TaskFilter, SubtaskCreate, SubtaskUpdate
+from src.repository.base_repository import BaseRepository
+from src.schema.kanban import (
+    ColumnCreate,
+    ColumnUpdate,
+    SubtaskCreate,
+    SubtaskUpdate,
+    TaskCreate,
+    TaskFilter,
+    TaskMove,
+    TaskUpdate,
+)
 
 
 class KanbanColumnRepository(BaseRepository[Column, ColumnCreate, ColumnUpdate]):
@@ -22,7 +31,7 @@ class KanbanColumnRepository(BaseRepository[Column, ColumnCreate, ColumnUpdate])
         self._model = Column
         self._logger = get_logger(__name__)
 
-    async def get_columns_by_project(self, project_id: int) -> List[Column]:
+    async def get_columns_by_project(self, project_id: int) -> list[Column]:
         """Получить все колонки проекта с задачами и связанными данными."""
         start_time = time.time()
         self._logger.debug(f"Getting columns for project {project_id}")
@@ -46,11 +55,12 @@ class KanbanColumnRepository(BaseRepository[Column, ColumnCreate, ColumnUpdate])
             duration = time.time() - start_time
             self._logger.info(f"Retrieved {len(columns)} columns for project {project_id} in {duration:.3f}s")
 
-            return columns
         except Exception:
             duration = time.time() - start_time
             self._logger.exception(f"Error getting columns for project {project_id}")
             raise
+        else:
+            return columns
 
     async def create(self, obj_data: ColumnCreate) -> Column:
         """Создать новую колонку."""
@@ -72,13 +82,14 @@ class KanbanColumnRepository(BaseRepository[Column, ColumnCreate, ColumnUpdate])
             duration = time.time() - start_time
             self._logger.info(f"Created Column with ID {db_obj.id}")
 
-            return db_obj
         except Exception:
             duration = time.time() - start_time
-            self._logger.exception(f"Error creating Column")
+            self._logger.exception(f"Error creating Column in {duration:.3f}s")
             raise
+        else:
+            return db_obj
 
-    async def reorder_columns(self, project_id: int, column_orders: List[Dict[str, Any]]) -> bool:
+    async def reorder_columns(self, project_id: int, column_orders: list[dict[str, Any]]) -> bool:
         """Изменить порядок колонок."""
         start_time = time.time()
         self._logger.info(f"Reordering columns in project {project_id}")
@@ -99,11 +110,13 @@ class KanbanColumnRepository(BaseRepository[Column, ColumnCreate, ColumnUpdate])
 
             duration = time.time() - start_time
             self._logger.info(f"Reordered {len(column_orders)} columns")
-            return True
+
         except Exception:
             duration = time.time() - start_time
-            self._logger.exception(f"Error reordering columns")
+            self._logger.exception(f"Error reordering columns in {duration:.3f}s")
             raise
+        else:
+            return True
 
 class KanbanTaskRepository(BaseRepository[Task, TaskCreate, TaskUpdate]):
     """Репозиторий для работы с задачами канбан-доски."""
@@ -140,11 +153,12 @@ class KanbanTaskRepository(BaseRepository[Task, TaskCreate, TaskUpdate]):
             else:
                 self._logger.warning(f"Task with ID {id} not found in {duration:.3f}s")
 
-            return task
         except Exception:
             duration = time.time() - start_time
             self._logger.exception(f"Error getting Task with ID {id} in {duration:.3f}s")
             raise
+        else:
+            return task
 
     async def create(self, obj_data: TaskCreate, created_by_id: int) -> Task:
         """Создать новую задачу в указанной колонке."""
@@ -155,10 +169,10 @@ class KanbanTaskRepository(BaseRepository[Task, TaskCreate, TaskUpdate]):
             next_position = await self._get_next_position(obj_data.column_id)
             project_id = await self._get_project_id(obj_data.column_id)
             data = obj_data.model_dump(exclude_unset=True, exclude={'assignee_ids'})
-            
+
             if 'tags' in data and isinstance(data['tags'], list):
                 data['tags'] = ','.join(data['tags'])
-            
+
             db_obj = self._model(
                 **data,
                 position=next_position,
@@ -195,12 +209,12 @@ class KanbanTaskRepository(BaseRepository[Task, TaskCreate, TaskUpdate]):
                 return None
 
             data = obj_data.model_dump(exclude_unset=True, exclude={'assignee_ids'})
-            
+
             if 'tags' in data and isinstance(data['tags'], list):
                 data['tags'] = ','.join(data['tags'])
-            
+
             updated_fields = list(data.keys())
-            
+
             for field, value in data.items():
                 setattr(db_obj, field, value)
 
@@ -217,7 +231,7 @@ class KanbanTaskRepository(BaseRepository[Task, TaskCreate, TaskUpdate]):
             return await self.get_by_id(id)
         except Exception:
             duration = time.time() - start_time
-            self._logger.exception(f"Error updating Task with ID {id}")
+            self._logger.exception(f"Error updating Task with ID {id} in {duration:.3f}s")
             raise
 
     async def delete(self, id: int) -> bool:
@@ -243,7 +257,7 @@ class KanbanTaskRepository(BaseRepository[Task, TaskCreate, TaskUpdate]):
                 return False
         except Exception:
             duration = time.time() - start_time
-            self._logger.exception(f"Error deleting Task with ID {id}")
+            self._logger.exception(f"Error deleting Task with ID {id} in {duration:.3f}s")
             raise
 
 #   ========== Специфические методы для канбан-доски ==========
@@ -293,7 +307,7 @@ class KanbanTaskRepository(BaseRepository[Task, TaskCreate, TaskUpdate]):
             self._logger.exception(f"Error moving Task {id}")
             raise
 
-    async def reorder_tasks(self, column_id: int, task_orders: List[Dict[str, Any]]) -> bool:
+    async def reorder_tasks(self, column_id: int, task_orders: list[dict[str, Any]]) -> bool:
         """Изменить порядок задач в колонке."""
         start_time = time.time()
         self._logger.info(f"Reordering tasks in column {column_id}")
@@ -315,13 +329,14 @@ class KanbanTaskRepository(BaseRepository[Task, TaskCreate, TaskUpdate]):
             duration = time.time() - start_time
             self._logger.info(f"Reordered {len(task_orders)} tasks in {duration:.3f}s")
 
-            return True
         except Exception:
             duration = time.time() - start_time
-            self._logger.exception(f"Error reordering tasks")
+            self._logger.exception("Error reordering tasks")
             raise
+        else:
+            return True
 
-    async def get_tasks_by_column(self, column_id: int) -> List[Task]:
+    async def get_tasks_by_column(self, column_id: int) -> list[Task]:
         """Получить все задачи в конкретной колонке, отсортированные по позиции."""
         start_time = time.time()
         self._logger.debug(f"Getting tasks for column {column_id}")
@@ -338,13 +353,14 @@ class KanbanTaskRepository(BaseRepository[Task, TaskCreate, TaskUpdate]):
             duration = time.time() - start_time
             self._logger.info(f"Retrieved {len(tasks)} tasks for column {column_id} in {duration:.3f}s")
 
-            return tasks
         except Exception:
             duration = time.time() - start_time
             self._logger.exception(f"Error getting tasks for column {column_id} in {duration:.3f}s")
             raise
-    
-    async def get_tasks_by_project(self, project_id: int) -> List[Task]:
+        else:
+            return tasks
+
+    async def get_tasks_by_project(self, project_id: int) -> list[Task]:
         """Получить все задачи проекта (без разбивки по колонкам)."""
         start_time = time.time()
         self._logger.debug(f"Getting tasks for project {project_id}")
@@ -366,13 +382,14 @@ class KanbanTaskRepository(BaseRepository[Task, TaskCreate, TaskUpdate]):
             duration = time.time() - start_time
             self._logger.info(f"Retrieved {len(tasks)} tasks for project {project_id} in {duration:.3f}s")
 
-            return tasks
         except Exception:
             duration = time.time() - start_time
             self._logger.exception(f"Error getting tasks for project {project_id} in {duration:.3f}s")
             raise
-    
-    async def get_task_history(self, task_id: int, limit: int = 50) -> List[TaskHistory]:
+        else:
+            return tasks
+
+    async def get_task_history(self, task_id: int, limit: int = 50) -> list[TaskHistory]:
         """Получить историю изменений задачи."""
         start_time = time.time()
         self._logger.debug(f"Getting history for Task {task_id}")
@@ -395,19 +412,20 @@ class KanbanTaskRepository(BaseRepository[Task, TaskCreate, TaskUpdate]):
             duration = time.time() - start_time
             self._logger.info(f"Retrieved {len(history)} history records for Task {task_id} in {duration:.3f}s")
 
-            return history
         except Exception:
             duration = time.time() - start_time
             self._logger.exception(f"Error getting history for Task {task_id} in {duration:.3f}s")
             raise
+        else:
+            return history
 
 #   ========== Методы для фильтрации и поиска ==========
 
-    async def filter_tasks(self, project_id: int, filters: TaskFilter, page: int, page_size: int) -> tuple[List[Task], int]:
+    async def filter_tasks(self, project_id: int, filters: TaskFilter, page: int, page_size: int) -> tuple[list[Task], int]:
         """Отфильтровать задачи проекта по критериям."""
         start_time = time.time()
         self._logger.debug(f"Filtering tasks for project {project_id} with filters: {filters}")
-        
+
         try:
             query = (
                 select(self._model)
@@ -418,23 +436,23 @@ class KanbanTaskRepository(BaseRepository[Task, TaskCreate, TaskUpdate]):
                     selectinload(self._model.column)
                 )
             )
-            
+
             # Применяем фильтры
             if filters.column_id is not None:
                 query = query.where(self._model.column_id == filters.column_id)
-            
+
             if filters.priority is not None:
                 query = query.where(self._model.priority == filters.priority)
-            
+
             if filters.assignee_id is not None:
                 query = query.join(TaskAssignee).where(TaskAssignee.user_id == filters.assignee_id)
-            
+
             if filters.created_by_id is not None:
                 query = query.where(self._model.created_by_id == filters.created_by_id)
-            
+
             if filters.tag is not None:
                 query = query.where(self._model.tags.like(f"%{filters.tag}%"))
-            
+
             if filters.search is not None:
                 search_term = f"%{filters.search}%"
                 query = query.where(
@@ -443,40 +461,40 @@ class KanbanTaskRepository(BaseRepository[Task, TaskCreate, TaskUpdate]):
                         self._model.description.ilike(search_term)
                     )
                 )
-            
+
             if filters.due_before is not None:
                 query = query.where(self._model.due_date <= filters.due_before)
-            
+
             if filters.due_after is not None:
                 query = query.where(self._model.due_date >= filters.due_after)
-            
+
             # Получаем общее количество
             count_query = select(func.count()).select_from(query.subquery())
             total_result = await self.uow.session.execute(count_query)
             total = total_result.scalar_one()
-            
+
             # Пагинация
             query = query.offset((page - 1) * page_size).limit(page_size)
-            
+
             # Сортировка
             query = query.order_by(self._model.position)
-            
+
             result = await self.uow.session.execute(query)
             tasks = list(result.scalars().all())
-            
+
             duration = time.time() - start_time
             self._logger.info(f"Filtered {len(tasks)} tasks (total {total}) for project {project_id} in {duration:.3f}s")
-            
-            return tasks, total
-            
+
         except Exception:
             duration = time.time() - start_time
             self._logger.exception(f"Error filtering tasks for project {project_id} in {duration:.3f}s")
             raise
+        else:
+            return tasks, total
 
 #   ========== Вспомогательные методы ==========
 
-    async def _get_users_by_ids(self, user_ids: List[int]) -> List[User]:
+    async def _get_users_by_ids(self, user_ids: list[int]) -> list[User]:
         """Получить пользователей по списку ID."""
         query = select(User).where(User.id.in_(user_ids))
         result = await self.uow.session.execute(query)
@@ -543,13 +561,14 @@ class KanbanSubtaskRepository(BaseRepository[Subtask, SubtaskCreate, SubtaskUpda
             else:
                 self._logger.warning(f"Subtask with ID {id} not found in {duration:.3f}s")
 
-            return subtask
         except Exception:
             duration = time.time() - start_time
             self._logger.exception(f"Error getting Subtask with ID {id} in {duration:.3f}s")
             raise
+        else:
+            return subtask
 
-    async def get_subtasks_by_task(self, task_id: int) -> List[Subtask]:
+    async def get_subtasks_by_task(self, task_id: int) -> list[Subtask]:
         """Получить все подзадачи задачи"""
         start_time = time.time()
         self._logger.debug(f"Getting subtasks for task {task_id}")
@@ -567,11 +586,12 @@ class KanbanSubtaskRepository(BaseRepository[Subtask, SubtaskCreate, SubtaskUpda
             duration = time.time() - start_time
             self._logger.info(f"Retrieved {len(subtasks)} subtasks for task {task_id} in {duration:.3f}s")
 
-            return subtasks
         except Exception:
             duration = time.time() - start_time
             self._logger.exception(f"Error getting subtasks for task {task_id} in {duration:.3f}s")
             raise
+        else:
+            return subtasks
 
     async def create(self, obj_data: SubtaskCreate, created_by_id: int) -> Subtask:
         """Создать новую подзадачу"""
@@ -581,9 +601,9 @@ class KanbanSubtaskRepository(BaseRepository[Subtask, SubtaskCreate, SubtaskUpda
         try:
             # Определяем следующую позицию
             next_position = await self._get_next_position(obj_data.task_id)
-            
+
             data = obj_data.model_dump(exclude_unset=True)
-            
+
             db_obj = self._model(
                 **data,
                 position=next_position,
@@ -615,7 +635,7 @@ class KanbanSubtaskRepository(BaseRepository[Subtask, SubtaskCreate, SubtaskUpda
 
             data = obj_data.model_dump(exclude_unset=True)
             updated_fields = list(data.keys())
-            
+
             for field, value in data.items():
                 setattr(db_obj, field, value)
 
@@ -627,7 +647,7 @@ class KanbanSubtaskRepository(BaseRepository[Subtask, SubtaskCreate, SubtaskUpda
             return await self.get_by_id(id)
         except Exception:
             duration = time.time() - start_time
-            self._logger.exception(f"Error updating Subtask with ID {id}")
+            self._logger.exception(f"Error updating Subtask with ID {id} in {duration:.3f}s")
             raise
 
     async def delete(self, id: int) -> bool:
@@ -648,10 +668,10 @@ class KanbanSubtaskRepository(BaseRepository[Subtask, SubtaskCreate, SubtaskUpda
                 return False
         except Exception:
             duration = time.time() - start_time
-            self._logger.exception(f"Error deleting Subtask with ID {id}")
+            self._logger.exception(f"Error deleting Subtask with ID {id} in {duration:.3f}s")
             raise
 
-    async def reorder_subtasks(self, task_id: int, subtask_orders: List[Dict[str, Any]]) -> bool:
+    async def reorder_subtasks(self, task_id: int, subtask_orders: list[dict[str, Any]]) -> bool:
         """Изменить порядок подзадачи"""
         start_time = time.time()
         self._logger.info(f"Reordering subtasks in task {task_id}")
@@ -673,11 +693,12 @@ class KanbanSubtaskRepository(BaseRepository[Subtask, SubtaskCreate, SubtaskUpda
             duration = time.time() - start_time
             self._logger.info(f"Reordered {len(subtask_orders)} subtasks in {duration:.3f}s")
 
-            return True
         except Exception:
             duration = time.time() - start_time
-            self._logger.exception(f"Error reordering subtasks")
+            self._logger.exception(f"Error reordering subtasks in {duration:.3f}s")
             raise
+        else:
+            return True
 
     async def _get_next_position(self, task_id: int) -> int:
         """Получить следующую позицию для подзадачи"""

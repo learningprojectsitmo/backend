@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional, List
+
 from pydantic import BaseModel, Field
 
 from src.schema.user import UserResponse
-
 
 # ========== Базовые типы ==========
 
@@ -22,7 +21,7 @@ class ProjectBoardResponse(BaseModel):
     """Схема канбан-доски проекта"""
     project_id: int
     project_name: str
-    columns: List[ColumnWithTasksAndSubtasksResponse]
+    columns: list[ColumnWithTasksAndSubtasksResponse]
 
 # ========== Схемы для колонок ==========
 
@@ -30,7 +29,7 @@ class ColumnBase(BaseModel):
     """Базовая схема колонки"""
     name: str = Field(..., min_length=1, max_length=50)
     color: str = Field("gray", description="Цвет колонки (hex или имя)")
-    wip_limit: Optional[int] = Field(None, ge=1, description="Лимит задач в колонке")
+    wip_limit: int | None = Field(None, ge=1, description="Лимит задач в колонке")
 
 class ColumnCreate(ColumnBase):
     """Схема создания колонки"""
@@ -38,10 +37,10 @@ class ColumnCreate(ColumnBase):
 
 class ColumnUpdate(BaseModel):
     """Схема обновления колонки"""
-    name: Optional[str] = Field(None, min_length=1, max_length=50)
-    color: Optional[str] = None
-    position: Optional[int] = Field(None, ge=0)
-    wip_limit: Optional[int] = Field(None, ge=1)
+    name: str | None = Field(None, min_length=1, max_length=50)
+    color: str | None = None
+    position: int | None = Field(None, ge=0)
+    wip_limit: int | None = Field(None, ge=1)
 
 class ColumnResponse(ColumnBase):
     """Схема ответа с колонкой"""
@@ -56,12 +55,12 @@ class ColumnResponse(ColumnBase):
 
 class ColumnWithTasksAndSubtasksResponse(ColumnResponse):
     """Схема колонки с задачами"""
-    tasks: List[TaskWithSubtasksResponse] = []
+    tasks: list[TaskWithSubtasksResponse] = []
     task_count: int = 0
 
 class ColumnListResponse(BaseModel):
     """Схема списка колонок"""
-    items: List[ColumnResponse]
+    items: list[ColumnResponse]
     total: int
 
 # ========== Схемы для задач ==========
@@ -69,26 +68,26 @@ class ColumnListResponse(BaseModel):
 class TaskBase(BaseModel):
     """Базовая схема задачи"""
     title: str = Field(..., min_length=1, max_length=200)
-    description: Optional[str] = None
-    priority: Optional[str] = Field(None, pattern="^(low|medium|high|urgent)$")
-    due_date: Optional[datetime] = None
-    tags: Optional[List[str]] = None
+    description: str | None = None
+    priority: str | None = Field(None, pattern="^(low|medium|high|urgent)$")
+    due_date: datetime | None = None
+    tags: list[str] | None = None
 
 class TaskCreate(TaskBase):
     """Схема создания задачи"""
     column_id: int = Field(..., description="ID колонки, куда поместить задачу")
-    assignee_ids: Optional[List[int]] = []
+    assignee_ids: list[int] | None = []
 
 class TaskUpdate(BaseModel):
     """Схема обновления задачи"""
-    title: Optional[str] = Field(None, min_length=1, max_length=200)
-    description: Optional[str] = None
-    priority: Optional[str] = Field(None, pattern="^(low|medium|high|urgent)$")
-    column_id: Optional[int] = Field(None, description="ID новой колонки (для перемещения)")
-    position: Optional[int] = Field(None, description="Новая позиция в колонке")
-    due_date: Optional[datetime] = None
-    tags: Optional[List[str]] = None
-    assignee_ids: Optional[List[int]] = None
+    title: str | None = Field(None, min_length=1, max_length=200)
+    description: str | None = None
+    priority: str | None = Field(None, pattern="^(low|medium|high|urgent)$")
+    column_id: int | None = Field(None, description="ID новой колонки (для перемещения)")
+    position: int | None = Field(None, description="Новая позиция в колонке")
+    due_date: datetime | None = None
+    tags: list[str] | None = None
+    assignee_ids: list[int] | None = None
 
 class TaskMove(BaseModel):
     """Схема для перемещения задачи (drag-and-drop)"""
@@ -97,38 +96,38 @@ class TaskMove(BaseModel):
 
 class TaskReorder(BaseModel):
     """Схема для изменения порядка задач в колонке"""
-    tasks: List[dict] = Field(..., description='[{"id": 1, "position": 0}, ...]')
+    tasks: list[dict] = Field(..., description='[{"id": 1, "position": 0}, ...]')
 
 class TaskResponse(BaseModel):
     """Схема ответа с задачей"""
     id: int
     title: str
-    description: Optional[str] = None
-    priority: Optional[str] = None
+    description: str | None = None
+    priority: str | None = None
     position: int
     column_id: int
     project_id: int
     created_by_id: int
-    due_date: Optional[datetime] = None
-    tags: Optional[str] = None
+    due_date: datetime | None = None
+    tags: str | None = None
     created_at: datetime
     updated_at: datetime
-    
+
     # Вложенные объекты — используем существующие схемы пользователя
-    assignees: List[UserResponse] = []
-    created_by: Optional[UserResponse] = None
+    assignees: list[UserResponse] = []
+    created_by: UserResponse | None = None
 
     class Config:
         from_attributes = True
 
 class TaskWithSubtasksResponse(TaskResponse):
     """Схема задачи с подзадачами"""
-    subtasks: List[SubtaskResponse] = []
+    subtasks: list[SubtaskResponse] = []
     subtask_count: int = 0
 
 class TaskListResponse(BaseModel):
     """Схема списка задач"""
-    items: List[TaskResponse]
+    items: list[TaskResponse]
     total: int
 
 class TaskHistoryResponse(BaseModel):
@@ -136,10 +135,10 @@ class TaskHistoryResponse(BaseModel):
     id: int
     task_id: int
     changed_by: UserResponse
-    old_column_id: Optional[int] = None
-    new_column_id: Optional[int] = None
+    old_column_id: int | None = None
+    new_column_id: int | None = None
     change_type: str  # "move", "title", "description", "assignees"
-    change_data: Optional[dict] = None
+    change_data: dict | None = None
     created_at: datetime
 
     class Config:
@@ -158,13 +157,13 @@ class SubtaskCreate(SubtaskBase):
 
 class SubtaskUpdate(BaseModel):
     """Схема обновления подзадачи"""
-    title: Optional[str] = Field(None, min_length=1, max_length=200)
-    is_completed: Optional[bool] = None
-    position: Optional[int] = Field(None, ge=0, description="Новая позиция в списке")
+    title: str | None = Field(None, min_length=1, max_length=200)
+    is_completed: bool | None = None
+    position: int | None = Field(None, ge=0, description="Новая позиция в списке")
 
 class SubtaskReorder(BaseModel):
     """Схема для изменения порядка подзадач"""
-    subtasks: List[dict] = Field(..., description='[{"id": 1, "position": 0}, ...]')
+    subtasks: list[dict] = Field(..., description='[{"id": 1, "position": 0}, ...]')
 
 class SubtaskResponse(SubtaskBase):
     """Схема ответа с подзадачей"""
@@ -172,7 +171,7 @@ class SubtaskResponse(SubtaskBase):
     task_id: int
     position: int
     created_by_id: int
-    created_by: Optional[UserResponse] = None
+    created_by: UserResponse | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -181,18 +180,18 @@ class SubtaskResponse(SubtaskBase):
 
 class SubtaskListResponse(BaseModel):
     """Схема списка подзадач"""
-    items: List[SubtaskResponse]
+    items: list[SubtaskResponse]
     total: int
 
 # ========== Схемы для фильтрации ==========
 
 class TaskFilter(BaseModel):
     """Схема фильтрации задач"""
-    column_id: Optional[int] = None
-    priority: Optional[str] = Field(None, pattern="^(low|medium|high|urgent)$")
-    assignee_id: Optional[int] = None
-    created_by_id: Optional[int] = None
-    tag: Optional[str] = None
-    search: Optional[str] = None
-    due_before: Optional[datetime] = None
-    due_after: Optional[datetime] = None
+    column_id: int | None = None
+    priority: str | None = Field(None, pattern="^(low|medium|high|urgent)$")
+    assignee_id: int | None = None
+    created_by_id: int | None = None
+    tag: str | None = None
+    search: str | None = None
+    due_before: datetime | None = None
+    due_after: datetime | None = None

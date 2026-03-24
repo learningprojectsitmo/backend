@@ -6,19 +6,19 @@ from fastapi import Depends
 
 from src.core.uow import IUnitOfWork, SqlAlchemyUoW
 from src.repository.audit_repository import AuditRepository
+from src.repository.kanban_repository import KanbanColumnRepository, KanbanSubtaskRepository, KanbanTaskRepository
 from src.repository.password_reset_repository import PasswordResetRepository
 from src.repository.project_repository import ProjectRepository
 from src.repository.resume_repository import ResumeRepository
 from src.repository.session_repository import SessionRepository
 from src.repository.user_repository import UserRepository
-from src.repository.kanban_repository import KanbanColumnRepository, KanbanTaskRepository, KanbanSubtaskRepository
 from src.services.audit_service import AuditService
 from src.services.auth_service import AuthService
+from src.services.kanban_service import KanbanService
 from src.services.project_service import ProjectService
 from src.services.resume_service import ResumeService
 from src.services.session_service import SessionService
 from src.services.user_service import UserService
-from src.services.kanban_service import KanbanService
 
 
 async def get_uow() -> AsyncGenerator[IUnitOfWork, None]:
