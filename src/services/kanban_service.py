@@ -39,7 +39,7 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
         kanban_task_repository: KanbanTaskRepository,
         kanban_subtask_repository: KanbanSubtaskRepository,
         user_repository: UserRepository,
-        project_repository: ProjectRepository
+        project_repository: ProjectRepository,
     ):
         super().__init__(kanban_task_repository)
         self._kanban_column_repository = kanban_column_repository
@@ -49,7 +49,7 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
         self._project_repository = project_repository
         self._logger = get_logger(__name__)
 
-#   === Метод для проектов ===
+    #   === Метод для проектов ===
 
     async def get_board(self, project_id: int) -> ProjectBoardResponse:
         """Получить полную канбан-доску проекта"""
@@ -62,12 +62,10 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
         return ProjectBoardResponse(
             project_id=project.id,
             project_name=project.name,
-            columns=[
-                ColumnWithTasksAndSubtasksResponse.model_validate(col) for col in columns
-            ]
+            columns=[ColumnWithTasksAndSubtasksResponse.model_validate(col) for col in columns],
         )
 
-#   === Методы для колонок ===
+    #   === Методы для колонок ===
 
     async def create_column(self, column_data: ColumnCreate) -> ColumnResponse:
         """Создать новую колонку."""
@@ -107,7 +105,7 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
         column_ids = {col.id for col in columns}
 
         for item in column_orders:
-            if item['id'] not in column_ids:
+            if item["id"] not in column_ids:
                 raise NotFoundError(f"Column with id {item['id']} not found in project {project_id}")
 
         return await self._kanban_column_repository.reorder_columns(project_id, column_orders)
@@ -116,7 +114,7 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
         columns = await self._kanban_column_repository.get_columns_by_project(project_id)
         return [ColumnResponse.model_validate(col) for col in columns]
 
-#   === Методы для задач ===
+    #   === Методы для задач ===
 
     async def get_task_by_id(self, task_id: int) -> TaskResponse:
         """Получить задачу по ID."""
@@ -188,7 +186,9 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
         if target_column.wip_limit and move_data.column_id != task.column_id:
             tasks_in_column = await self._kanban_task_repository.get_tasks_by_column(target_column.id)
             if len(tasks_in_column) >= target_column.wip_limit:
-                raise ValidationError(f"Column '{target_column.name}' has reached its WIP limit ({target_column.wip_limit})")
+                raise ValidationError(
+                    f"Column '{target_column.name}' has reached its WIP limit ({target_column.wip_limit})"
+                )
 
         moved_task = await self._kanban_task_repository.move_task(task_id, move_data, current_user_id)
         if not moved_task:
@@ -223,7 +223,7 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
 
         return [TaskHistoryResponse.model_validate(h) for h in history]
 
-#   === Методы для подзадач ===
+    #   === Методы для подзадач ===
 
     async def get_subtask_by_id(self, subtask_id: int) -> SubtaskResponse:
         """Получить подзадачу по ID."""
@@ -240,10 +240,7 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
 
         subtasks = await self._kanban_subtask_repository.get_subtasks_by_task(task_id)
 
-        return SubtaskListResponse(
-            items=[SubtaskResponse.model_validate(s) for s in subtasks],
-            total=len(subtasks)
-        )
+        return SubtaskListResponse(items=[SubtaskResponse.model_validate(s) for s in subtasks], total=len(subtasks))
 
     async def create_subtask(self, subtask_data: SubtaskCreate, created_by_id: int) -> SubtaskResponse:
         """Создать новую подзадачу."""
@@ -258,7 +255,9 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
 
         return SubtaskResponse.model_validate(subtask)
 
-    async def update_subtask(self, subtask_id: int, subtask_data: SubtaskUpdate, current_user_id: int) -> SubtaskResponse:
+    async def update_subtask(
+        self, subtask_id: int, subtask_data: SubtaskUpdate, current_user_id: int
+    ) -> SubtaskResponse:
         """Обновить подзадачу."""
         subtask = await self._kanban_subtask_repository.get_by_id(subtask_id)
         if not subtask:
@@ -280,8 +279,7 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
             raise NotFoundError(f"Subtask with id {subtask_id} not found")
 
         updated_subtask = await self._kanban_subtask_repository.update(
-            subtask_id,
-            SubtaskUpdate(is_completed=not subtask.is_completed)
+            subtask_id, SubtaskUpdate(is_completed=not subtask.is_completed)
         )
 
         if not updated_subtask:
@@ -316,12 +314,12 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
         existing_ids = {s.id for s in existing_subtasks}
 
         for item in subtask_orders:
-            if item['id'] not in existing_ids:
+            if item["id"] not in existing_ids:
                 raise NotFoundError(f"Subtask with id {item['id']} not found in task {task_id}")
 
         return await self._kanban_subtask_repository.reorder_subtasks(task_id, subtask_orders)
 
-#   === Метод для статистики ===
+    #   === Метод для статистики ===
 
     async def get_project_stats(self, project_id: int) -> dict:
         """Получить статистику по задачам проекта."""
@@ -337,14 +335,9 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
         stats = {
             "total": len(tasks),
             "by_column": {},
-            "by_priority": {
-                "low": 0,
-                "medium": 0,
-                "high": 0,
-                "urgent": 0
-            },
+            "by_priority": {"low": 0, "medium": 0, "high": 0, "urgent": 0},
             "overdue": 0,
-            "without_assignee": 0
+            "without_assignee": 0,
         }
 
         for task in tasks:
@@ -370,9 +363,11 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
 
         return stats
 
-#   === Методы для фильтрации и поиска ===
+    #   === Методы для фильтрации и поиска ===
 
-    async def filter_tasks(self, project_id: int, filters: TaskFilter | None = None, page: int = 1, page_size: int = 50) -> TaskListResponse:
+    async def filter_tasks(
+        self, project_id: int, filters: TaskFilter | None = None, page: int = 1, page_size: int = 50
+    ) -> TaskListResponse:
         if filters is None:
             filters = TaskFilter()
 
@@ -380,19 +375,17 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
         if not project:
             raise NotFoundError(f"Project with id {project_id} not found")
 
-        tasks, total = await self._kanban_task_repository.filter_tasks(
-            project_id, filters, page, page_size
-        )
+        tasks, total = await self._kanban_task_repository.filter_tasks(project_id, filters, page, page_size)
 
         return TaskListResponse(
             items=[TaskResponse.model_validate(t) for t in tasks],
             total=total,
             page=page,
             page_size=page_size,
-            total_pages=(total + page_size - 1) // page_size
+            total_pages=(total + page_size - 1) // page_size,
         )
 
-#   === Уведомления для задач ===
+    #   === Уведомления для задач ===
 
     async def _notify_task_created(self, task: Task, created_by_id: int) -> None:
         """Уведомление о создании задачи."""
@@ -435,12 +428,9 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
     async def _notify_task_deleted(self, task: Task, deleted_by_id: int) -> None:
         """Уведомление об удалении задачи."""
         deleter = await self._user_repository.get_by_id(deleted_by_id)
-        self._logger.info(
-            f"TASK DELETED: '{task.title}' (ID: {task.id}) "
-            f"by {deleter.first_name} {deleter.last_name}"
-        )
+        self._logger.info(f"TASK DELETED: '{task.title}' (ID: {task.id}) by {deleter.first_name} {deleter.last_name}")
 
-#   === Уведомления для подзадач ===
+    #   === Уведомления для подзадач ===
 
     async def _notify_subtask_created(self, subtask: Subtask, created_by_id: int) -> None:
         """Уведомление о создании подзадачи."""
@@ -477,6 +467,5 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
         """Уведомление об удалении подзадачи."""
         deleter = await self._user_repository.get_by_id(deleted_by_id)
         self._logger.info(
-            f"SUBTASK DELETED: '{subtask.title}' (ID: {subtask.id}) "
-            f"by {deleter.first_name} {deleter.last_name}"
+            f"SUBTASK DELETED: '{subtask.title}' (ID: {subtask.id}) by {deleter.first_name} {deleter.last_name}"
         )

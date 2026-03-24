@@ -11,14 +11,15 @@ from src.core.database import Base
 if TYPE_CHECKING:
     from src.model.models import Column, Task
 
+
 class User(Base):
     __tablename__ = "user"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
-    first_name: Mapped[str] = mapped_column(String(30), nullable=False)        #Имя
-    last_name: Mapped[str | None] = mapped_column(String(30), nullable=True)   #Фамилия
-    middle_name: Mapped[str] = mapped_column(String(40), nullable=False)       #Отчество
+    first_name: Mapped[str] = mapped_column(String(30), nullable=False)  # Имя
+    last_name: Mapped[str | None] = mapped_column(String(30), nullable=True)  # Фамилия
+    middle_name: Mapped[str] = mapped_column(String(40), nullable=False)  # Отчество
 
     email: Mapped[str | None] = mapped_column(String(50), nullable=True, unique=True)
     isu_number: Mapped[int | None] = mapped_column(nullable=True)
@@ -43,10 +44,7 @@ class User(Base):
         back_populates="participant",
         cascade="all, delete-orphan",
     )
-    tasks: Mapped[list[Task]] = relationship(
-        secondary="task_assignee",
-        back_populates="assignees"
-    )
+    tasks: Mapped[list[Task]] = relationship(secondary="task_assignee", back_populates="assignees")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
@@ -145,9 +143,7 @@ class Project(Base):
     )
 
     columns: Mapped[list[Column]] = relationship(
-        back_populates="project",
-        cascade="all, delete-orphan",
-        order_by="Column.position"
+        back_populates="project", cascade="all, delete-orphan", order_by="Column.position"
     )
 
     participants: Mapped[list[ProjectParticipation]] = relationship(back_populates="project")

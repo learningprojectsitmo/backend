@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 
 class Column(Base):
     """Колонка канбан-доски"""
+
     __tablename__ = "column"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -34,9 +35,7 @@ class Column(Base):
     # Отношения
     project: Mapped[Project] = relationship(back_populates="columns")
     tasks: Mapped[list[Task]] = relationship(
-        back_populates="column",
-        cascade="all, delete-orphan",
-        order_by="Task.position"
+        back_populates="column", cascade="all, delete-orphan", order_by="Task.position"
     )
 
     def __repr__(self) -> str:
@@ -45,35 +44,33 @@ class Column(Base):
 
 class Task(Base):
     """Задача внутри колонки канбан-доски"""
+
     __tablename__ = "task"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
     # Привязка к колонке (обязательно!)
     column_id: Mapped[int] = mapped_column(ForeignKey("column.id"), nullable=False)
-    project_id: Mapped[int] = mapped_column(ForeignKey("project.id"), nullable=False)  # Денормализация для быстрых запросов
+    project_id: Mapped[int] = mapped_column(
+        ForeignKey("project.id"), nullable=False
+    )  # Денормализация для быстрых запросов
 
     # Основные поля
     title: Mapped[str] = mapped_column(String(200), nullable=False)
-    created_by_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False) # id того, кто создал задачу
+    created_by_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)  # id того, кто создал задачу
 
     # Дополнительные поля
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     priority: Mapped[str | None] = mapped_column(String(20), nullable=True)  # "low", "medium", "high", "urgent"
-    position: Mapped[int] = mapped_column(Integer, default=0, nullable=False) # Порядок сортировки внутри колонки
+    position: Mapped[int] = mapped_column(Integer, default=0, nullable=False)  # Порядок сортировки внутри колонки
     tags: Mapped[str | None] = mapped_column(String(500), nullable=True)  # "backend,frontend,bug"
 
     # Множество ответственных
-    assignees: Mapped[list[User]] = relationship(
-        secondary="task_assignee",
-        back_populates="tasks"
-    )
+    assignees: Mapped[list[User]] = relationship(secondary="task_assignee", back_populates="tasks")
 
     # Множество подзадач
     subtasks: Mapped[list[Subtask]] = relationship(
-        back_populates="task",
-        cascade="all, delete-orphan",
-        order_by="Subtask.position"
+        back_populates="task", cascade="all, delete-orphan", order_by="Subtask.position"
     )
 
     # Временные метки
@@ -94,6 +91,7 @@ class Task(Base):
 
 class TaskAssignee(Base):
     """Связь задачи с ответственными"""
+
     __tablename__ = "task_assignee"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -107,6 +105,7 @@ class TaskAssignee(Base):
 
 class TaskHistory(Base):
     """История изменений задачи"""
+
     __tablename__ = "task_history"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -133,8 +132,10 @@ class TaskHistory(Base):
     def __repr__(self) -> str:
         return f"TaskHistory(id={self.id!r}, task_id={self.task_id!r}, change_type={self.change_type!r})"
 
+
 class Subtask(Base):
     """Подзадача внутри задачи канбан-доски"""
+
     __tablename__ = "subtask"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)

@@ -44,7 +44,7 @@ class KanbanColumnRepository(BaseRepository[Column, ColumnCreate, ColumnUpdate])
                     selectinload(self._model.tasks).selectinload(Task.assignees),
                     selectinload(self._model.tasks).selectinload(Task.created_by),
                     selectinload(self._model.tasks).selectinload(Task.column),
-                    selectinload(self._model.tasks).selectinload(Task.subtasks)
+                    selectinload(self._model.tasks).selectinload(Task.subtasks),
                 )
                 .order_by(self._model.position)
             )
@@ -98,13 +98,8 @@ class KanbanColumnRepository(BaseRepository[Column, ColumnCreate, ColumnUpdate])
             for item in column_orders:
                 stmt = (
                     update(self._model)
-                    .where(
-                        and_(
-                            self._model.id == item['id'],
-                            self._model.project_id == project_id
-                        )
-                    )
-                    .values(position=item['position'])
+                    .where(and_(self._model.id == item["id"], self._model.project_id == project_id))
+                    .values(position=item["position"])
                 )
                 await self.uow.session.execute(stmt)
 
@@ -118,6 +113,7 @@ class KanbanColumnRepository(BaseRepository[Column, ColumnCreate, ColumnUpdate])
         else:
             return True
 
+
 class KanbanTaskRepository(BaseRepository[Task, TaskCreate, TaskUpdate]):
     """Репозиторий для работы с задачами канбан-доски."""
 
@@ -126,7 +122,7 @@ class KanbanTaskRepository(BaseRepository[Task, TaskCreate, TaskUpdate]):
         self._model = Task
         self._logger = get_logger(__name__)
 
-#   ========== Базовые методы ==========
+    #   ========== Базовые методы ==========
 
     async def get_by_id(self, id: int) -> Task | None:
         """Получить задачу по ID с загрузкой связанных данных."""
@@ -141,7 +137,7 @@ class KanbanTaskRepository(BaseRepository[Task, TaskCreate, TaskUpdate]):
                     selectinload(self._model.assignees),
                     selectinload(self._model.created_by),
                     selectinload(self._model.column),
-                    selectinload(self._model.project)
+                    selectinload(self._model.project),
                 )
             )
             result = await self.uow.session.execute(query)
@@ -168,17 +164,12 @@ class KanbanTaskRepository(BaseRepository[Task, TaskCreate, TaskUpdate]):
         try:
             next_position = await self._get_next_position(obj_data.column_id)
             project_id = await self._get_project_id(obj_data.column_id)
-            data = obj_data.model_dump(exclude_unset=True, exclude={'assignee_ids'})
+            data = obj_data.model_dump(exclude_unset=True, exclude={"assignee_ids"})
 
-            if 'tags' in data and isinstance(data['tags'], list):
-                data['tags'] = ','.join(data['tags'])
+            if "tags" in data and isinstance(data["tags"], list):
+                data["tags"] = ",".join(data["tags"])
 
-            db_obj = self._model(
-                **data,
-                position=next_position,
-                created_by_id=created_by_id,
-                project_id=project_id
-            )
+            db_obj = self._model(**data, position=next_position, created_by_id=created_by_id, project_id=project_id)
             self.uow.session.add(db_obj)
             await self.uow.session.flush()
 
@@ -208,10 +199,10 @@ class KanbanTaskRepository(BaseRepository[Task, TaskCreate, TaskUpdate]):
                 self._logger.warning(f"Task with ID {id} not found for update")
                 return None
 
-            data = obj_data.model_dump(exclude_unset=True, exclude={'assignee_ids'})
+            data = obj_data.model_dump(exclude_unset=True, exclude={"assignee_ids"})
 
-            if 'tags' in data and isinstance(data['tags'], list):
-                data['tags'] = ','.join(data['tags'])
+            if "tags" in data and isinstance(data["tags"], list):
+                data["tags"] = ",".join(data["tags"])
 
             updated_fields = list(data.keys())
 
@@ -221,7 +212,7 @@ class KanbanTaskRepository(BaseRepository[Task, TaskCreate, TaskUpdate]):
             if obj_data.assignee_ids is not None:
                 users = await self._get_users_by_ids(obj_data.assignee_ids)
                 db_obj.assignees = users
-                updated_fields.append('assignees')
+                updated_fields.append("assignees")
 
             await self.uow.session.flush()
 
@@ -260,7 +251,7 @@ class KanbanTaskRepository(BaseRepository[Task, TaskCreate, TaskUpdate]):
             self._logger.exception(f"Error deleting Task with ID {id} in {duration:.3f}s")
             raise
 
-#   ========== Специфические методы для канбан-доски ==========
+    #   ========== Специфические методы для канбан-доски ==========
 
     async def move_task(self, id: int, move_data: TaskMove, changed_by_id: int) -> Task | None:
         """Переместить задачу в другую колонку или изменить позицию."""
@@ -292,7 +283,7 @@ class KanbanTaskRepository(BaseRepository[Task, TaskCreate, TaskUpdate]):
                 changed_by_id=changed_by_id,
                 old_column_id=old_column_id,
                 new_column_id=move_data.column_id,
-                change_type='move'
+                change_type="move",
             )
             self.uow.session.add(history)
 
@@ -316,13 +307,8 @@ class KanbanTaskRepository(BaseRepository[Task, TaskCreate, TaskUpdate]):
             for item in task_orders:
                 stmt = (
                     update(self._model)
-                    .where(
-                        and_(
-                            self._model.id == item['id'],
-                            self._model.column_id == column_id
-                        )
-                    )
-                    .values(position=item['position'])
+                    .where(and_(self._model.id == item["id"], self._model.column_id == column_id))
+                    .values(position=item["position"])
                 )
                 await self.uow.session.execute(stmt)
 
@@ -342,11 +328,7 @@ class KanbanTaskRepository(BaseRepository[Task, TaskCreate, TaskUpdate]):
         self._logger.debug(f"Getting tasks for column {column_id}")
 
         try:
-            query = (
-                select(self._model)
-                .where(self._model.column_id == column_id)
-                .order_by(self._model.position)
-            )
+            query = select(self._model).where(self._model.column_id == column_id).order_by(self._model.position)
             result = await self.uow.session.execute(query)
             tasks = list(result.scalars().all())
 
@@ -372,7 +354,7 @@ class KanbanTaskRepository(BaseRepository[Task, TaskCreate, TaskUpdate]):
                 .options(
                     selectinload(self._model.assignees),
                     selectinload(self._model.created_by),
-                    selectinload(self._model.column)
+                    selectinload(self._model.column),
                 )
                 .order_by(self._model.column_id, self._model.position)
             )
@@ -401,7 +383,7 @@ class KanbanTaskRepository(BaseRepository[Task, TaskCreate, TaskUpdate]):
                 .options(
                     selectinload(TaskHistory.changed_by),
                     selectinload(TaskHistory.old_column),
-                    selectinload(TaskHistory.new_column)
+                    selectinload(TaskHistory.new_column),
                 )
                 .order_by(TaskHistory.created_at.desc())
                 .limit(limit)
@@ -419,9 +401,11 @@ class KanbanTaskRepository(BaseRepository[Task, TaskCreate, TaskUpdate]):
         else:
             return history
 
-#   ========== Методы для фильтрации и поиска ==========
+    #   ========== Методы для фильтрации и поиска ==========
 
-    async def filter_tasks(self, project_id: int, filters: TaskFilter, page: int, page_size: int) -> tuple[list[Task], int]:
+    async def filter_tasks(
+        self, project_id: int, filters: TaskFilter, page: int, page_size: int
+    ) -> tuple[list[Task], int]:
         """Отфильтровать задачи проекта по критериям."""
         start_time = time.time()
         self._logger.debug(f"Filtering tasks for project {project_id} with filters: {filters}")
@@ -433,7 +417,7 @@ class KanbanTaskRepository(BaseRepository[Task, TaskCreate, TaskUpdate]):
                 .options(
                     selectinload(self._model.assignees),
                     selectinload(self._model.created_by),
-                    selectinload(self._model.column)
+                    selectinload(self._model.column),
                 )
             )
 
@@ -456,10 +440,7 @@ class KanbanTaskRepository(BaseRepository[Task, TaskCreate, TaskUpdate]):
             if filters.search is not None:
                 search_term = f"%{filters.search}%"
                 query = query.where(
-                    or_(
-                        self._model.title.ilike(search_term),
-                        self._model.description.ilike(search_term)
-                    )
+                    or_(self._model.title.ilike(search_term), self._model.description.ilike(search_term))
                 )
 
             if filters.due_before is not None:
@@ -483,7 +464,9 @@ class KanbanTaskRepository(BaseRepository[Task, TaskCreate, TaskUpdate]):
             tasks = list(result.scalars().all())
 
             duration = time.time() - start_time
-            self._logger.info(f"Filtered {len(tasks)} tasks (total {total}) for project {project_id} in {duration:.3f}s")
+            self._logger.info(
+                f"Filtered {len(tasks)} tasks (total {total}) for project {project_id} in {duration:.3f}s"
+            )
 
         except Exception:
             duration = time.time() - start_time
@@ -492,7 +475,7 @@ class KanbanTaskRepository(BaseRepository[Task, TaskCreate, TaskUpdate]):
         else:
             return tasks, total
 
-#   ========== Вспомогательные методы ==========
+    #   ========== Вспомогательные методы ==========
 
     async def _get_users_by_ids(self, user_ids: list[int]) -> list[User]:
         """Получить пользователей по списку ID."""
@@ -502,10 +485,7 @@ class KanbanTaskRepository(BaseRepository[Task, TaskCreate, TaskUpdate]):
 
     async def _get_next_position(self, column_id: int) -> int:
         """Получить следующую позицию для задачи в колонке."""
-        query = (
-            select(func.max(self._model.position))
-            .where(self._model.column_id == column_id)
-        )
+        query = select(func.max(self._model.position)).where(self._model.column_id == column_id)
         result = await self.uow.session.execute(query)
         max_pos = result.scalar_one()
         return (max_pos + 1) if max_pos is not None else 0
@@ -520,15 +500,11 @@ class KanbanTaskRepository(BaseRepository[Task, TaskCreate, TaskUpdate]):
         """Сдвинуть позиции задач в колонке (delta = 1 для раздвижки, -1 для сдвижки)."""
         stmt = (
             update(self._model)
-            .where(
-                and_(
-                    self._model.column_id == column_id,
-                    self._model.position >= from_position
-                )
-            )
+            .where(and_(self._model.column_id == column_id, self._model.position >= from_position))
             .values(position=self._model.position + delta)
         )
         await self.uow.session.execute(stmt)
+
 
 class KanbanSubtaskRepository(BaseRepository[Subtask, SubtaskCreate, SubtaskUpdate]):
     """Репозиторий для работы с подзадачами канбан-доски"""
@@ -547,10 +523,7 @@ class KanbanSubtaskRepository(BaseRepository[Subtask, SubtaskCreate, SubtaskUpda
             query = (
                 select(self._model)
                 .where(self._model.id == id)
-                .options(
-                    selectinload(self._model.created_by),
-                    selectinload(self._model.task)
-                )
+                .options(selectinload(self._model.created_by), selectinload(self._model.task))
             )
             result = await self.uow.session.execute(query)
             subtask = result.scalar_one_or_none()
@@ -604,11 +577,7 @@ class KanbanSubtaskRepository(BaseRepository[Subtask, SubtaskCreate, SubtaskUpda
 
             data = obj_data.model_dump(exclude_unset=True)
 
-            db_obj = self._model(
-                **data,
-                position=next_position,
-                created_by_id=created_by_id
-            )
+            db_obj = self._model(**data, position=next_position, created_by_id=created_by_id)
             self.uow.session.add(db_obj)
             await self.uow.session.flush()
 
@@ -680,13 +649,8 @@ class KanbanSubtaskRepository(BaseRepository[Subtask, SubtaskCreate, SubtaskUpda
             for item in subtask_orders:
                 stmt = (
                     update(self._model)
-                    .where(
-                        and_(
-                            self._model.id == item['id'],
-                            self._model.task_id == task_id
-                        )
-                    )
-                    .values(position=item['position'])
+                    .where(and_(self._model.id == item["id"], self._model.task_id == task_id))
+                    .values(position=item["position"])
                 )
                 await self.uow.session.execute(stmt)
 
@@ -702,10 +666,7 @@ class KanbanSubtaskRepository(BaseRepository[Subtask, SubtaskCreate, SubtaskUpda
 
     async def _get_next_position(self, task_id: int) -> int:
         """Получить следующую позицию для подзадачи"""
-        query = (
-            select(func.max(self._model.position))
-            .where(self._model.task_id == task_id)
-        )
+        query = select(func.max(self._model.position)).where(self._model.task_id == task_id)
         result = await self.uow.session.execute(query)
         max_pos = result.scalar_one()
         return (max_pos + 1) if max_pos is not None else 0

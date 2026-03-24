@@ -34,6 +34,7 @@ kanban_router = APIRouter(prefix="/kanban", tags=["kanban"])
 
 # ========== ЭНДПОЙНТЫ ДЛЯ КАНБАН-ДОСКИ ==========
 
+
 @kanban_router.get("/{project_id}", response_model=ProjectBoardResponse)
 async def get_board(
     project_id: int = Path(..., ge=1, description="ID проекта"),
@@ -48,6 +49,7 @@ async def get_board(
 
 
 # ========== ЭНДПОЙНТЫ ДЛЯ КОЛОНОК ==========
+
 
 @kanban_router.get("/columns/project/{project_id}", response_model=ColumnListResponse)
 async def get_project_columns(
@@ -119,9 +121,7 @@ async def reorder_columns(
     """Изменить порядок колонок"""
     try:
         success = await kanban_service.reorder_columns(
-            project_id=project_id,
-            column_orders=column_orders.tasks,
-            current_user_id=current_user.id
+            project_id=project_id, column_orders=column_orders.tasks, current_user_id=current_user.id
         )
 
     except Exception as e:
@@ -131,6 +131,7 @@ async def reorder_columns(
 
 
 # ========== ЭНДПОЙНТЫ ДЛЯ ЗАДАЧ ==========
+
 
 @kanban_router.get("/tasks/{task_id}", response_model=TaskResponse)
 async def get_task(
@@ -218,10 +219,7 @@ async def reorder_tasks_in_column(
 ) -> dict:
     """Изменить порядок задач в колонке"""
     try:
-        success = await kanban_service.reorder_tasks_in_column(
-            column_id=column_id,
-            task_orders=task_orders.tasks
-        )
+        success = await kanban_service.reorder_tasks_in_column(column_id=column_id, task_orders=task_orders.tasks)
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to reorder tasks: {e!s}") from e
@@ -230,6 +228,7 @@ async def reorder_tasks_in_column(
 
 
 # ========== ЭНДПОЙНТЫ ДЛЯ ПОДЗАДАЧ ==========
+
 
 @kanban_router.get("/tasks/{task_id}/subtasks", response_model=SubtaskListResponse)
 async def get_task_subtasks(
@@ -330,9 +329,7 @@ async def reorder_subtasks(
     """Изменить порядок подзадач"""
     try:
         success = await kanban_service.reorder_subtasks(
-            task_id=task_id,
-            subtask_orders=subtask_orders.subtasks,
-            current_user_id=current_user.id
+            task_id=task_id, subtask_orders=subtask_orders.subtasks, current_user_id=current_user.id
         )
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to reorder subtasks: {e!s}") from e
@@ -341,6 +338,7 @@ async def reorder_subtasks(
 
 
 # ========== ЭНДПОЙНТЫ ДЛЯ ФИЛЬТРАЦИИ ==========
+
 
 @kanban_router.get("/tasks/filter/{project_id}", response_model=TaskListResponse)
 async def filter_tasks(
@@ -368,13 +366,14 @@ async def filter_tasks(
         tag=tag,
         search=search,
         due_before=datetime.fromisoformat(due_before) if due_before else None,
-        due_after=datetime.fromisoformat(due_after) if due_after else None
+        due_after=datetime.fromisoformat(due_after) if due_after else None,
     )
 
     return await kanban_service.filter_tasks(project_id, filters, page, page_size)
 
 
 # ========== ЭНДПОЙНТЫ ДЛЯ ИСТОРИИ ==========
+
 
 @kanban_router.get("/tasks/{task_id}/history", response_model=list[TaskHistoryResponse])
 async def get_task_history(
@@ -391,6 +390,7 @@ async def get_task_history(
 
 
 # ========== ЭНДПОЙНТЫ ДЛЯ СТАТИСТИКИ ==========
+
 
 @kanban_router.get("/stats/{project_id}", response_model=dict)
 async def get_project_stats(

@@ -28,6 +28,7 @@ async def get_uow() -> AsyncGenerator[IUnitOfWork, None]:
 
 # ========== Репозитории ==========
 
+
 async def get_project_repository(uow: IUnitOfWork = Depends(get_uow)) -> ProjectRepository:
     return ProjectRepository(uow)
 
@@ -66,15 +67,14 @@ async def get_kanban_subtask_repository(uow: IUnitOfWork = Depends(get_uow)) -> 
 
 # ========== Сервисы ==========
 
+
 async def get_session_service(
     session_repository: SessionRepository = Depends(get_session_repository),
 ) -> SessionService:
     return SessionService(session_repository)
 
 
-async def get_resume_service(
-    resume_repository: ResumeRepository = Depends(get_resume_repository)
-) -> ResumeService:
+async def get_resume_service(resume_repository: ResumeRepository = Depends(get_resume_repository)) -> ResumeService:
     return ResumeService(resume_repository)
 
 
@@ -112,4 +112,6 @@ async def get_kanban_service(
     user_repository: UserRepository = Depends(get_user_repository),
     project_repository: ProjectRepository = Depends(get_project_repository),
 ) -> KanbanService:
-    return KanbanService(kanban_column_repository, kanban_task_repository, kanban_subtask_repository, user_repository, project_repository)
+    return KanbanService(
+        kanban_column_repository, kanban_task_repository, kanban_subtask_repository, user_repository, project_repository
+    )

@@ -11,15 +11,7 @@ from src.api.v1.endpoints.sessions import sessions_router
 from src.api.v1.endpoints.user import user_router
 
 routers = APIRouter(prefix="/v1")
-router_list = [
-    auth_router,
-    user_router,
-    resume_router,
-    project_router,
-    sessions_router,
-    audit_router,
-    kanban_router
-]
+router_list = [auth_router, user_router, resume_router, project_router, sessions_router, audit_router, kanban_router]
 
 for router in router_list:
     routers.tags.append("v1")
