@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, List, Dict, Any, Optional
 from src.core.logging_config import get_logger
 from src.core.exceptions import NotFoundError, ValidationError
 from src.services.base_service import BaseService
-from src.model.models import Task, Subtask
+from src.model.kanban_models import Task, Subtask
 from src.schema.kanban import (
     ProjectBoardResponse,
     ColumnCreate, ColumnUpdate, ColumnResponse, ColumnWithTasksAndSubtasksResponse,

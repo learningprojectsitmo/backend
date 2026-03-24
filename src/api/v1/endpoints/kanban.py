@@ -213,53 +213,6 @@ async def reorder_tasks_in_column(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to reorder tasks: {e!s}")
 
-
-@kanban_router.get("/tasks/filter/{project_id}", response_model=TaskListResponse)
-async def filter_tasks(
-    project_id: int = Path(..., ge=1, description="ID проекта"),
-    column_id: Optional[int] = Query(None, description="Фильтр по колонке"),
-    priority: Optional[str] = Query(None, description="Фильтр по приоритету"),
-    assignee_id: Optional[int] = Query(None, description="Фильтр по ответственному"),
-    created_by_id: Optional[int] = Query(None, description="Фильтр по автору"),
-    tag: Optional[str] = Query(None, description="Фильтр по тегу"),
-    search: Optional[str] = Query(None, description="Поиск по названию/описанию"),
-    due_before: Optional[str] = Query(None, description="Дедлайн до"),
-    due_after: Optional[str] = Query(None, description="Дедлайн после"),
-    page: int = Query(1, ge=1, description="Номер страницы"),
-    page_size: int = Query(50, ge=1, le=100, description="Размер страницы"),
-    kanban_service: KanbanService = Depends(get_kanban_service),
-    current_user: User = Depends(get_current_user),
-) -> TaskListResponse:
-    """Отфильтровать задачи по различным критериям"""
-    from datetime import datetime
-    
-    filters = TaskFilter(
-        column_id=column_id,
-        priority=priority,
-        assignee_id=assignee_id,
-        created_by_id=created_by_id,
-        tag=tag,
-        search=search,
-        due_before=datetime.fromisoformat(due_before) if due_before else None,
-        due_after=datetime.fromisoformat(due_after) if due_after else None
-    )
-    
-    return await kanban_service.filter_tasks(project_id, filters, page, page_size)
-
-
-@kanban_router.get("/tasks/{task_id}/history", response_model=List[TaskHistoryResponse])
-async def get_task_history(
-    task_id: int = Path(..., ge=1, description="ID задачи"),
-    limit: int = Query(50, ge=1, le=200, description="Количество записей"),
-    kanban_service: KanbanService = Depends(get_kanban_service),
-    current_user: User = Depends(get_current_user),
-) -> List[TaskHistoryResponse]:
-    """Получить историю изменений задачи"""
-    try:
-        return await kanban_service.get_task_history(task_id, limit)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Failed to get task history: {e!s}")
-
     
 # ========== ЭНДПОЙНТЫ ДЛЯ ПОДЗАДАЧ ==========
 
@@ -318,20 +271,6 @@ async def update_subtask(
         raise HTTPException(status_code=400, detail=f"Failed to update subtask: {e!s}")
 
 
-@kanban_router.patch("/subtasks/{subtask_id}/toggle", response_model=SubtaskResponse)
-async def toggle_subtask_completion(
-    subtask_id: int = Path(..., ge=1, description="ID подзадачи"),
-    kanban_service: KanbanService = Depends(get_kanban_service),
-    current_user: User = Depends(get_current_user),
-    _audit=Depends(setup_audit),
-) -> SubtaskResponse:
-    """Переключить статус выполнения подзадачи"""
-    try:
-        return await kanban_service.toggle_subtask_completion(subtask_id, current_user.id)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Failed to toggle subtask: {e!s}")
-
-
 @kanban_router.delete("/subtasks/{subtask_id}")
 async def delete_subtask(
     subtask_id: int = Path(..., ge=1, description="ID подзадачи"),
@@ -349,6 +288,20 @@ async def delete_subtask(
         raise HTTPException(status_code=400, detail=f"Failed to delete subtask: {e!s}")
 
 
+@kanban_router.patch("/subtasks/{subtask_id}/toggle", response_model=SubtaskResponse)
+async def toggle_subtask_completion(
+    subtask_id: int = Path(..., ge=1, description="ID подзадачи"),
+    kanban_service: KanbanService = Depends(get_kanban_service),
+    current_user: User = Depends(get_current_user),
+    _audit=Depends(setup_audit),
+) -> SubtaskResponse:
+    """Переключить статус выполнения подзадачи"""
+    try:
+        return await kanban_service.toggle_subtask_completion(subtask_id, current_user.id)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to toggle subtask: {e!s}")
+    
+    
 @kanban_router.post("/tasks/{task_id}/subtasks/reorder", response_model=dict)
 async def reorder_subtasks(
     task_id: int = Path(..., ge=1, description="ID задачи"),
@@ -367,6 +320,57 @@ async def reorder_subtasks(
         return {"message": "Subtasks reordered successfully", "success": success}
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to reorder subtasks: {e!s}")
+
+
+# ========== ЭНДПОЙНТЫ ДЛЯ ФИЛЬТРАЦИИ ==========
+
+@kanban_router.get("/tasks/filter/{project_id}", response_model=TaskListResponse)
+async def filter_tasks(
+    project_id: int = Path(..., ge=1, description="ID проекта"),
+    column_id: Optional[int] = Query(None, description="Фильтр по колонке"),
+    priority: Optional[str] = Query(None, description="Фильтр по приоритету"),
+    assignee_id: Optional[int] = Query(None, description="Фильтр по ответственному"),
+    created_by_id: Optional[int] = Query(None, description="Фильтр по автору"),
+    tag: Optional[str] = Query(None, description="Фильтр по тегу"),
+    search: Optional[str] = Query(None, description="Поиск по названию/описанию"),
+    due_before: Optional[str] = Query(None, description="Дедлайн до"),
+    due_after: Optional[str] = Query(None, description="Дедлайн после"),
+    page: int = Query(1, ge=1, description="Номер страницы"),
+    page_size: int = Query(50, ge=1, le=100, description="Размер страницы"),
+    kanban_service: KanbanService = Depends(get_kanban_service),
+    current_user: User = Depends(get_current_user),
+) -> TaskListResponse:
+    """Отфильтровать задачи по различным критериям"""
+    from datetime import datetime
+    
+    filters = TaskFilter(
+        column_id=column_id,
+        priority=priority,
+        assignee_id=assignee_id,
+        created_by_id=created_by_id,
+        tag=tag,
+        search=search,
+        due_before=datetime.fromisoformat(due_before) if due_before else None,
+        due_after=datetime.fromisoformat(due_after) if due_after else None
+    )
+    
+    return await kanban_service.filter_tasks(project_id, filters, page, page_size)
+
+
+# ========== ЭНДПОЙНТЫ ДЛЯ ИСТОРИИ ==========
+
+@kanban_router.get("/tasks/{task_id}/history", response_model=List[TaskHistoryResponse])
+async def get_task_history(
+    task_id: int = Path(..., ge=1, description="ID задачи"),
+    limit: int = Query(50, ge=1, le=200, description="Количество записей"),
+    kanban_service: KanbanService = Depends(get_kanban_service),
+    current_user: User = Depends(get_current_user),
+) -> List[TaskHistoryResponse]:
+    """Получить историю изменений задачи"""
+    try:
+        return await kanban_service.get_task_history(task_id, limit)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to get task history: {e!s}")
 
 
 # ========== ЭНДПОЙНТЫ ДЛЯ СТАТИСТИКИ ==========

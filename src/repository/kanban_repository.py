@@ -9,7 +9,8 @@ from sqlalchemy.sql import Select
 from src.core.logging_config import get_logger
 from src.core.uow import IUnitOfWork
 from src.repository.base_repository import BaseRepository
-from src.model.models import User, Column, Task, TaskAssignee, TaskHistory, Subtask
+from src.model.models import User
+from src.model.kanban_models import Column, Task, TaskAssignee, TaskHistory, Subtask
 from src.schema.kanban import ColumnCreate, ColumnUpdate, TaskCreate, TaskUpdate, TaskMove, TaskFilter, SubtaskCreate, SubtaskUpdate
 
 
@@ -493,7 +494,6 @@ class KanbanTaskRepository(BaseRepository[Task, TaskCreate, TaskUpdate]):
 
     async def _get_project_id(self, column_id: int) -> int:
         """Получить project_id через колонку."""
-        from src.model.models import Column
         query = select(Column.project_id).where(Column.id == column_id)
         result = await self.uow.session.execute(query)
         return result.scalar_one()

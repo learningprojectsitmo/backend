@@ -1,17 +1,18 @@
 from __future__ import annotations
 
-from src.model.models import Subtask, TaskHistory, TaskAssignee, Task, Column, AuditLog, Project, ProjectParticipation, Response, Resume, User
-
+from src.model.models import AuditLog, Project, ProjectParticipation, Response, Resume, User
+from src.model.kanban_models import Column, Task, TaskHistory, TaskAssignee, Subtask
 __all__ = [
-    "Subtask",
-    "TaskHistory",
-    "TaskAssignee",
-    "Task",
-    "Column",
     "AuditLog",
     "Project",
     "ProjectParticipation",
     "Response",
     "Resume",
     "User",
+    # Канбан
+    "Column",
+    "Task",
+    "TaskHistory",
+    "TaskAssignee",
+    "Subtask",
 ]
