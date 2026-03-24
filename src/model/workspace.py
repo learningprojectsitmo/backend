@@ -1,8 +1,10 @@
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy import ForeignKey, Integer, Text, TIMESTAMP
+from __future__ import annotations
+
+from sqlalchemy import TIMESTAMP, ForeignKey, Integer, Text
+from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
+
 from src.core.database import Base
-from src.model.models import User
 
 
 class WorkSpace(Base):
@@ -38,7 +40,7 @@ class WorkSpaceParticipation(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     workspace_id: Mapped[int] = mapped_column(ForeignKey("workspace.id"), nullable=False)
-    participants: Mapped[list[User]] = relationship(back_populates="workspace_participants")
+    participant_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
     created_at: Mapped[TIMESTAMP] = mapped_column(TIMESTAMP, server_default=func.now(), nullable=False)
 
     def __repr__(self) -> str:

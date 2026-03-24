@@ -33,7 +33,7 @@ async def fetch_workspaces(
     _current_user: User = Depends(get_current_user),
 ) -> list[WorkSpaceFull]:
     """Получить список workspace с пагинацией"""
-    workspaces, total = await workspace_service.get_workspaces_paginated(page, limit)
+    workspaces, _ = await workspace_service.get_workspaces_paginated(page, limit)
     return [WorkSpaceFull.model_validate(workspace) for workspace in workspaces]
 
 

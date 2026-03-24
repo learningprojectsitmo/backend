@@ -31,7 +31,7 @@ class UserFull(UserBase):
 
     model_config = ConfigDict(from_attributes=True)
 
-    @field_validator('tg_nickname')
+    @field_validator("tg_nickname")
     @classmethod
     def validate_tg_nickname(cls, v):
         return TelegramValidator.validate_tg_nickname_optional(v)
