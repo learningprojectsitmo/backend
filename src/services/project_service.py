@@ -107,7 +107,7 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
     ) -> Project | None:
         """Обновить проект (только автор может обновлять)"""
         project = await self.get_project_by_id(project_id)
-        if not project: 
+        if not project:
             return None
 
         if project.author_id != current_user_id:
