@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String, Table, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.core.database import Base
@@ -24,9 +24,8 @@ class User(Base):
     email: Mapped[str | None] = mapped_column(String(50), nullable=True, unique=True)
     isu_number: Mapped[int | None] = mapped_column(nullable=True)
     tg_nickname: Mapped[str | None] = mapped_column(String(40), nullable=True)
-
+    role_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     password_hashed: Mapped[str] = mapped_column(String, nullable=False)
-
     resumes: Mapped[list[Resume]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
@@ -73,6 +72,12 @@ class Resume(Base):
     def __repr__(self) -> str:
         return f"Resume(id={self.id!r}, author_id={self.author_id!r}, header={self.header!r})"
 
+project_tag = Table(
+    "project_tag",
+    Base.metadata,
+    Column("project_id", Integer, ForeignKey("project.id"), primary_key=True),
+    Column("tag_id", Integer, ForeignKey("tag.id"), primary_key=True),
+)
 
 class Project(Base):
     __tablename__ = "project"
@@ -81,10 +86,18 @@ class Project(Base):
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     author_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
     description: Mapped[str | None] = mapped_column(nullable=True)
-    max_participants: Mapped[str | None] = mapped_column(nullable=True)
-    status: Mapped[str] = mapped_column(String(30), nullable=False, server_default="draft")
+    max_participants: Mapped[int | None] = mapped_column(nullable=True)
+
+    status_id: Mapped[int | None] = mapped_column(ForeignKey("project_status.id"), nullable=True)
+    status: Mapped[ProjectStatus | None] = relationship(back_populates="projects")
     progress: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     deadline: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    tags: Mapped[list[Tag]] = relationship(
+        secondary=project_tag,
+        back_populates="projects",
+        lazy="selectin",
+    )
 
     author: Mapped[User] = relationship(back_populates="projects_led")
     responses: Mapped[list[Response]] = relationship(
@@ -106,12 +119,6 @@ class Project(Base):
         back_populates="project", cascade="all, delete-orphan", order_by="Column.position"
     )
 
-    participants: Mapped[list[ProjectParticipation]] = relationship(back_populates="project")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
-    )
-
     def __repr__(self) -> str:
         return f"Project(id={self.id!r}, author_id={self.author_id!r}, description={self.description!r})"
 
@@ -130,6 +137,31 @@ class ProjectParticipation(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
+class ProjectStatus(Base):
+    __tablename__ = "project_status"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
+    color: Mapped[str] = mapped_column(String(20), nullable=False, default="#000000")
+
+    projects: Mapped[list["Project"]] = relationship(back_populates="status")
+
+    def __repr__(self) -> str:
+        return f"ProjectStatus(id={self.id!r}, name={self.name!r}, color={self.color!r})"
+
+class Tag(Base):
+    __tablename__ = "tag"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(60), nullable=False, unique=True)
+
+    projects: Mapped[list["Project"]] = relationship(
+        secondary=project_tag,
+        back_populates="tags",
+    )
+
+    def __repr__(self) -> str:
+        return f"Tag(id={self.id!r}, name={self.name!r})"
 
 class Response(Base):
     __tablename__ = "response"

@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from src.core.container import get_project_service
 from src.core.dependencies import get_current_user, setup_audit
 from src.model.models import User
-from src.schema.project import ProjectCreate, ProjectFull, ProjectListItem, ProjectListResponse, ProjectUpdate
+from src.schema.project import ProjectCreate, ProjectFull, ProjectListResponse, ProjectUpdate
 from src.services.project_service import ProjectService
 
 project_router = APIRouter(prefix="/projects", tags=["project"])
@@ -34,7 +34,7 @@ async def fetch_projects(
 ) -> ProjectListResponse:
     """Получить список проектов с пагинацией"""
     projects, total = await project_service.get_projects_paginated(page, limit)
-    projects_list = [ProjectListItem.model_validate(project) for project in projects]
+    projects_list = [project_service.to_project_list_item(project) for project in projects]
 
     total_pages = (total + limit - 1) // limit if total > 0 else 0
 
@@ -70,19 +70,11 @@ async def update_project(
 ) -> ProjectFull:
     """Обновить проект (только автор может обновлять)"""
 
-    def _get_project_or_raise_not_found() -> None:
-        if not project:
-            raise HTTPException(status_code=404, detail="Project not found")
+    project = await project_service.update_project(project_id, project_data, current_user.id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
 
-    try:
-        project = await project_service.update_project(project_id, project_data, current_user.id)
-        _get_project_or_raise_not_found()
-    except PermissionError as e:
-        raise HTTPException(status_code=403, detail=str(e)) from e
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Failed to update project: {e!s}") from e
-    else:
-        return ProjectFull.model_validate(project)
+    return ProjectFull.model_validate(project)
 
 
 @project_router.delete("/{project_id}")
@@ -93,14 +85,8 @@ async def delete_project(
 ) -> dict[str, str]:
     """Удалить проект (только автор может удалять)"""
 
-    def _check_success_or_raise_not_found() -> None:
-        if not success:
-            raise HTTPException(status_code=404, detail="Project not found")
+    success = await project_service.delete_project(project_id, current_user.id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Project not found")
 
-    try:
-        success = await project_service.delete_project(project_id, current_user.id)
-        _check_success_or_raise_not_found()
-    except PermissionError as e:
-        raise HTTPException(status_code=403, detail=str(e)) from e
-    else:
-        return {"message": "Project deleted successfully"}
+    return {"message": "Project deleted successfully"}
