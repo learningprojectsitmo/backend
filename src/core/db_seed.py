@@ -1,6 +1,11 @@
-from sqlalchemy import select, insert
-from src.model.models import ProjectStatus
+from __future__ import annotations
+
 import logging
+
+from sqlalchemy import insert, select
+
+from src.model.models import ProjectStatus
+
 
 def seed_project_statuses(connection) -> None:
     logger = logging.getLogger(__name__)

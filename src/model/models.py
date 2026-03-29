@@ -144,7 +144,7 @@ class ProjectStatus(Base):
     name: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
     color: Mapped[str] = mapped_column(String(20), nullable=False, default="#000000")
 
-    projects: Mapped[list["Project"]] = relationship(back_populates="status")
+    projects: Mapped[list[Project]] = relationship(back_populates="status")
 
     def __repr__(self) -> str:
         return f"ProjectStatus(id={self.id!r}, name={self.name!r}, color={self.color!r})"
@@ -155,7 +155,7 @@ class Tag(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(60), nullable=False, unique=True)
 
-    projects: Mapped[list["Project"]] = relationship(
+    projects: Mapped[list[Project]] = relationship(
         secondary=project_tag,
         back_populates="tags",
     )

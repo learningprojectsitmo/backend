@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, field_validator
@@ -61,7 +62,7 @@ class ProjectFull(ProjectCreate):
         if isinstance(v, list):
             return [tag.name if hasattr(tag, "name") else tag for tag in v]
         return v
-    
+
     @field_validator("participants_count", mode="before")
     @classmethod
     def set_participants_count(cls, v, info):

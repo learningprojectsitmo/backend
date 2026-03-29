@@ -93,10 +93,10 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         if tags_names:
             project.tags = await self._project_repository.get_or_create_tags(tags_names)
             await self._project_repository.uow.session.flush()
-        
+
         # Чтобы Pydantic увидел обновленные связи после flush
         await self._project_repository.uow.session.refresh(project, ["tags", "status"])
-        
+
         return project
 
     async def update_project(
@@ -107,7 +107,8 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
     ) -> Project | None:
         """Обновить проект (только автор может обновлять)"""
         project = await self.get_project_by_id(project_id)
-        if not project: return None
+        if not project: 
+            return None
 
         if project.author_id != current_user_id:
             raise PermissionError("Only project author can update project")
@@ -123,7 +124,7 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
             if tags_names is not None:
                 project.tags = await self._project_repository.get_or_create_tags(tags_names)
                 await self._project_repository.uow.session.flush()
-            
+
             await self._project_repository.uow.session.refresh(project, ["tags", "status", "participants"])
 
         return project
