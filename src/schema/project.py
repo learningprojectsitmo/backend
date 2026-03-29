@@ -48,6 +48,7 @@ class ProjectUpdate(BaseModel):
 
 class ProjectFull(ProjectCreate):
     """Полная схема проекта"""
+
     id: int
     status: ProjectStatusItem | None = None
     tags: list[str] = []
@@ -67,8 +68,8 @@ class ProjectFull(ProjectCreate):
     @classmethod
     def set_participants_count(cls, v, info):
         # Если v — это None, пробуем посчитать длину списка участников из объекта
-        if v is None and hasattr(info.data.get('participants'), '__len__'):
-             return len(info.data.get('participants'))
+        if v is None and hasattr(info.data.get("participants"), "__len__"):
+            return len(info.data.get("participants"))
         return v or 0
 
 

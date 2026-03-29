@@ -72,12 +72,14 @@ class Resume(Base):
     def __repr__(self) -> str:
         return f"Resume(id={self.id!r}, author_id={self.author_id!r}, header={self.header!r})"
 
+
 project_tag = Table(
     "project_tag",
     Base.metadata,
     Column("project_id", Integer, ForeignKey("project.id"), primary_key=True),
     Column("tag_id", Integer, ForeignKey("tag.id"), primary_key=True),
 )
+
 
 class Project(Base):
     __tablename__ = "project"
@@ -137,6 +139,7 @@ class ProjectParticipation(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
+
 class ProjectStatus(Base):
     __tablename__ = "project_status"
 
@@ -148,6 +151,7 @@ class ProjectStatus(Base):
 
     def __repr__(self) -> str:
         return f"ProjectStatus(id={self.id!r}, name={self.name!r}, color={self.color!r})"
+
 
 class Tag(Base):
     __tablename__ = "tag"
@@ -162,6 +166,7 @@ class Tag(Base):
 
     def __repr__(self) -> str:
         return f"Tag(id={self.id!r}, name={self.name!r})"
+
 
 class Response(Base):
     __tablename__ = "response"

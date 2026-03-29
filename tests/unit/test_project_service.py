@@ -11,6 +11,7 @@ from src.services.project_service import ProjectService
 
 EXPECTED_PROJECTS_COUNT = 2
 
+
 class TestProjectService:
     """Тесты для ProjectService"""
 
@@ -29,7 +30,6 @@ class TestProjectService:
         # given
         mock_repository = self._setup_mock_repo()
         mock_project = Project(id=1, name="Test Project", author_id=1)
-
 
         mock_repository.create.return_value = mock_project
         mock_repository.get_or_create_tags = AsyncMock(return_value=[])

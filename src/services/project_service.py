@@ -44,9 +44,12 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
             user = relation.participant
             if not user:
                 continue
-            full_name = " ".join(
-                part for part in (getattr(user, "first_name", ""), getattr(user, "last_name", "")) if part
-            ).strip() or "Unknown"
+            full_name = (
+                " ".join(
+                    part for part in (getattr(user, "first_name", ""), getattr(user, "last_name", "")) if part
+                ).strip()
+                or "Unknown"
+            )
             preview.append(
                 ParticipantPreview(
                     id=user.id,
