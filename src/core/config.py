@@ -18,17 +18,19 @@ class Settings(BaseSettings):
 
     # CORS - исправленные настройки для Docker
     CORS_ORIGINS: list = [
-        "http://localhost:3000/",
-        "http://localhost:5173/",
-        "http://localhost:8000",
+        "http://localhost:3000",
         "http://localhost:5173",
-        "http://backend:8000",
-        "http://localhost",
+        "http://localhost:8000",
         "http://localhost:8083",
+        "http://localhost:80",
+        "http://localhost",
+        "http://backend:8000",
         "http://frontend:80",
-        "fpin-projects.ru",
-        "http://fpin-projects.ru:1268/",
-        "http://fpin-projects.ru:12683/",
+        "http://127.0.0.1",
+        "http://127.0.0.1:80",
+        "http://127.0.0.1:8083",
+        "http://fpin-projects.ru",
+        "https://fpin-projects.ru",
     ]
 
     # Logging

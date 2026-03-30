@@ -123,7 +123,7 @@ def mock_auth_service(mock_user):
 @pytest.fixture
 def user_create_data():
     """Фикстура для данных создания пользователя"""
-    return UserCreate(email="test@example.com", first_name="Test", middle_name="User", password_string="plain_password")
+    return UserCreate(email="test@example.com", first_name="Test", middle_name="User", password="plain_password")
 
 
 @pytest.fixture

@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.core.database import Base
+
+if TYPE_CHECKING:
+    from src.model.models import Column, Task
 
 
 class User(Base):
@@ -13,9 +17,9 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
-    first_name: Mapped[str] = mapped_column(String(30), nullable=False)
-    middle_name: Mapped[str] = mapped_column(String(40), nullable=False)
-    last_name: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    first_name: Mapped[str] = mapped_column(String(30), nullable=False)  # Имя
+    last_name: Mapped[str | None] = mapped_column(String(30), nullable=True)  # Фамилия
+    middle_name: Mapped[str] = mapped_column(String(40), nullable=False)  # Отчество
 
     email: Mapped[str | None] = mapped_column(String(50), nullable=True, unique=True)
     isu_number: Mapped[int | None] = mapped_column(nullable=True)
@@ -40,6 +44,7 @@ class User(Base):
         back_populates="participant",
         cascade="all, delete-orphan",
     )
+    tasks: Mapped[list[Task]] = relationship(secondary="task_assignee", back_populates="assignees")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
@@ -131,6 +136,16 @@ class Project(Base):
     # status_id (for later, need to create the Status table first)
     # skills (particular, like docker, git etc.)
     # roles (general, like backend, Project Management etc.)
+    participants: Mapped[list[ProjectParticipation]] = relationship(back_populates="project")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    columns: Mapped[list[Column]] = relationship(
+        back_populates="project", cascade="all, delete-orphan", order_by="Column.position"
+    )
+
     participants: Mapped[list[ProjectParticipation]] = relationship(back_populates="project")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
