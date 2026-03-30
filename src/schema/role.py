@@ -39,6 +39,15 @@ class RolePermissionRepr(BaseModel):
     entity_name: str
     allowed_permissions: list[str]
 
+class PermissionMatrixElement(BaseModel):
+    read: bool
+    write: bool
+    create: bool
+    delete: bool
+
+class PermissionMatrix(BaseModel):
+    entity_name: str
+    allowed_permissions: list[PermissionMatrixElement]
 
 class RolePermissionFull(RolePermissionCreate):
     id: int

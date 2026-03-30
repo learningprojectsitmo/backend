@@ -13,6 +13,7 @@ from src.schema.role import (
     RoleListResponse,
     RolePermissionCreateAPI,
     RolePermissionFull,
+    PermissionMatrix,
     RolePermissionRepr,
 )
 from src.services.role_service import RoleService
@@ -20,7 +21,7 @@ from src.services.role_service import RoleService
 role_router = APIRouter(prefix="/roles", tags=["roles"])
 role_permission_router = APIRouter(prefix="/role_permissions", tags=["roles"])
 
-
+"""
 @role_permission_router.delete("/")
 async def delete_role_permission(
     role_permission_data: RolePermissionCreateAPI,
@@ -54,13 +55,30 @@ async def create_role_permission(
     else:
         return role_permission
 
+"""
+@role_permission_router.post("/{role_id}")
+async def remap_role_permission(
+    role_id: int,
+    role_permission_matrix: PermissionMatrix,
+    role_service: RoleService = Depends(get_role_service),
+    current_user: User = Depends(get_current_user),
+) -> RolePermissionFull:
+    try:
+        role_permission = await role_service.remap_role_permission(role_permission_matrix)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to create role permission: {e!s}",
+        ) from e
+    else:
+        return role_permission
 
 @role_permission_router.get("/{role_id}")
 async def get_permissions(
     role_id: int,
     role_service: RoleService = Depends(get_role_service),
     current_user: User = Depends(get_current_user),
-) -> list[RolePermissionRepr]:
+) -> PermissionMatrix:
     result = await role_service.get_role_permissions(role_id=role_id)
     return result
 
