@@ -26,7 +26,8 @@ class User(Base):
     tg_nickname: Mapped[str | None] = mapped_column(String(40), nullable=True)
 
     password_hashed: Mapped[str] = mapped_column(String, nullable=False)
-    
+    role_id: Mapped[int] = mapped_column(ForeignKey("role.id"), nullable=False)
+
     resumes: Mapped[list[Resume]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
