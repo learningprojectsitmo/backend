@@ -5,33 +5,40 @@ from sqlalchemy.exc import IntegrityError
 from src.core.logging_config import get_logger
 from src.repository.permission_repository import PermissionRepository
 from src.schema.permission import PermissionCreate
-from src.schema.role import RoleCreate, RolePermissionCreate
+from src.schema.role import RoleCreate
+from src.schema.user import UserCreate
 from src.services.permission_service import PermissionService
 from src.services.role_service import RoleService
+from src.services.user_service import UserService
 
 logger = get_logger(__name__)
 
+# TODO: delete in production the users fixture!!
+
+admin_user_for_dev = UserCreate(
+    email="user@example.com",
+    first_name="string",
+    middle_name="string",
+    role_id=1,
+    password_string="string",
+)
+USERS = [admin_user_for_dev]
+
 PERMISSIONS = [
-    "users:read",
     "users:create",
-    "users:delete",
+    "users:read",
     "users:update",
-    "projects:read",
+    "users:delete",
     "projects:create",
-    "projects:delete",
+    "projects:read",
     "projects:update",
-    "resumes:read",
+    "projects:delete",
     "resumes:create",
-    "resumes:delete",
+    "resumes:read",
     "resumes:update",
+    "resumes:delete",
 ]
 
-ROLES = [
-    "admin",
-    "student_bak",
-    "student_mag",
-    "teacher",
-]
 
 ROLE_PERMISSIONS = {
     "student_bak": [
@@ -54,45 +61,61 @@ ROLE_PERMISSIONS = {
     "admin": PERMISSIONS,
 }
 
+ROLES = ROLE_PERMISSIONS.keys()
+
 
 class FixtureService:
     """Сервис для создания тестовых данных (фикстур)"""
 
-    def __init__(self, permission_service: PermissionService, role_service: RoleService, permission_repository: PermissionRepository) -> None:
-        """Initialize with permission service dependency"""
+    def __init__(
+        self,
+        permission_service: PermissionService,
+        role_service: RoleService,
+        permission_repository: PermissionRepository,
+        user_service: UserService,
+    ) -> None:
         self._permission_service = permission_service
         self._permission_repository = permission_repository
         self._role_service = role_service
+        self._user_service = user_service
 
     async def create_fixtures(self) -> None:
-        """
-        Создание всех фикстур
-        """
+        # TODO: remove commits and rollbacks
+        # (they were added because of async bugs)
         try:
             for perm_name in PERMISSIONS:
                 try:
-                    new_perm = PermissionCreate(name=perm_name)
-                    await self._permission_service.create(new_perm)
+                    await self._permission_service.create(PermissionCreate(name=perm_name))
+                    await self._permission_repository.uow.commit()
                 except IntegrityError:
-                    await self._permission_service._permission_repository.uow.session.rollback()
+                    await self._permission_repository.uow.session.rollback()
                     logger.info(f"Permission '{perm_name}' already exists, skipping.")
 
             for role_name in ROLES:
                 try:
-                    new_role = RoleCreate(name=role_name)
-                    created_role = await self._role_service.create(new_role)
+                    role = await self._role_service.create(RoleCreate(name=role_name))
+                    await self._role_service._role_repository.uow.commit()
 
-                    for permission_name in ROLE_PERMISSIONS.get(role_name, []):
-                        permission = await self._permission_repository.get_by_name(permission_name)
-                        if permission:
-                            new_role_permission = RolePermissionCreate(role_id=created_role.id, permission_id=permission.id)
-                            await self._permission_service.create(new_role_permission)
+                    for perm_name in ROLE_PERMISSIONS.get(role_name, []):
+                        perm = await self._permission_repository.get_by_name(perm_name)
+                        if perm:
+                            await self._role_service.create_role_permission(role.id, perm.id)
                         else:
-                            logger.exception(f"Permission '{permission_name}' does not exist, cannot map it to a role {role_name}.")
+                            logger.error(f"Permission '{perm_name}' not found.")
+                    await self._role_service._role_repository.uow.commit()
 
                 except IntegrityError:
                     await self._role_service._role_repository.uow.session.rollback()
                     logger.info(f"Role '{role_name}' already exists, skipping.")
+
+            for user in USERS:
+                try:
+                    await self._user_service.create(user)
+                    await self._user_service._user_repository.uow.commit()
+
+                except IntegrityError:
+                    await self._user_service._user_repository.uow.session.rollback()
+                    logger.info(f"User '{user}' already exists, skipping.")
 
             logger.info("Fixtures created successfully")
 

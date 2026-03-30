@@ -13,9 +13,12 @@ class PermissionFull(PermissionCreate):
     model_config = ConfigDict(from_attributes=True)
 
 
-class PermissionListResponse(BaseModel):
-    items: list[PermissionFull]
-    total: int
-    page: int
-    page_size: int
-    total_pages: int
+class PermissionMatrixElement(BaseModel):
+    create: bool
+    read: bool
+    update: bool  # use update instead of write
+    delete: bool
+
+
+class PermissionMatrix(BaseModel):
+    permissions_matrix: dict[str, PermissionMatrixElement]

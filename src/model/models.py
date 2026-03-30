@@ -53,7 +53,7 @@ class Permission(Base):
     __tablename__ = "permission"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    name: Mapped[str] = mapped_column(String(30), nullable=False, unique=True)
+    name: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
 
     def __repr__(self) -> str:
         return f"Permission(id={self.id!r}, permission_name={self.name!r}"
@@ -74,7 +74,7 @@ class Role(Base):
     __tablename__ = "role"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    name: Mapped[str] = mapped_column(String(30), nullable=False)
+    name: Mapped[str] = mapped_column(String(30), nullable=False, unique=True)
 
     def __repr__(self) -> str:
         return f"Role(id={self.id!r}, role_name={self.name!r}"

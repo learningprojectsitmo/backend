@@ -99,8 +99,11 @@ async def get_user_service(
     user_repository: UserRepository = Depends(get_user_repository),
     auth_service: AuthService = Depends(get_auth_service),
     user_permission_repository: UserPermissionRepository = Depends(get_user_permission_repository),
+    permission_repository: PermissionRepository = Depends(get_permission_repository),
 ) -> UserService:
-    return UserService(user_repository, auth_service, user_permission_repository)
+    return UserService(
+        user_repository, auth_service, user_permission_repository, permission_repository=permission_repository
+    )
 
 
 async def get_role_service(
@@ -121,8 +124,9 @@ async def get_fixtures_service(
     permission_service: PermissionService = Depends(get_permission_service),
     role_service: RoleService = Depends(get_role_service),
     permission_repository: PermissionRepository = Depends(get_permission_repository),
+    user_service: UserService = Depends(get_user_service),
 ) -> FixtureService:
-    return FixtureService(permission_service, role_service, permission_repository)
+    return FixtureService(permission_service, role_service, permission_repository, user_service)
 
 
 async def get_audit_service(

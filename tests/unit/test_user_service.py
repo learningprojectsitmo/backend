@@ -46,7 +46,7 @@ class TestUserService:
         )
 
         # when
-        result = await user_service.create_user(user_data)
+        result = await user_service.create(user_data)
 
         # then
         assert result == mock_user

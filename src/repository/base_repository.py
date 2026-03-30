@@ -5,6 +5,7 @@ from collections.abc import Sequence
 from typing import Any, Protocol, TypeVar
 
 from sqlalchemy import Row, RowMapping, func, select
+from sqlalchemy.exc import IntegrityError
 
 from src.core.logging_config import get_logger
 from src.core.uow import IUnitOfWork
@@ -189,6 +190,13 @@ class BaseRepository(RepositoryProtocol[ModelType_co, CreateType_contra, UpdateT
 
             duration = time.time() - start_time
             self._logger.info(f"Created {self._model.__name__} with ID {db_obj.id} in {duration:.3f}s")
+        except IntegrityError as e:
+            # Crucial: Rollback the poisoned transaction so the session can be reused
+            await self.uow.session.rollback()
+            duration = time.time() - start_time
+            self._logger.info(f"Integrity error for {self._model.__name__} in {duration:.3f}s: {e.orig}")
+            # Re-raise so the service layer knows it existed and can handle/ignore it
+            raise
         except Exception:
             duration = time.time() - start_time
             self._logger.exception(f"Error creating {self._model.__name__} in {duration:.3f}s")

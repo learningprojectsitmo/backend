@@ -59,7 +59,7 @@ async def create_user(
 ) -> UserFull:
     """Создать нового пользователя"""
 
-    user = await user_service.create_user(user_data)
+    user = await user_service.create(user_data)
     return UserFull.model_validate(user)
 
 

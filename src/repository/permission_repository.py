@@ -19,3 +19,7 @@ class PermissionRepository(BaseRepository[Permission, PermissionCreate, BaseMode
             select(Permission).where(Permission.name == permission_name),
         )
         return result.scalar_one_or_none()
+
+    async def get_all_possible(self) -> list[str]:
+        all_permissions_result = await self.uow.session.execute(select(Permission.name))
+        return list(all_permissions_result.scalars().all())

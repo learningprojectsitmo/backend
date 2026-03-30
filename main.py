@@ -6,7 +6,6 @@ import uvicorn
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from services.fixtures_service import FixtureService
 from src.api.v1.routes import routers as v1_router
 from src.core.config import settings
 from src.core.container import get_fixtures_service
@@ -59,10 +58,8 @@ app.add_middleware(
 @app.get("/")
 async def root(
     request: Request,
-    fixtures_service: FixtureService = Depends(get_fixtures_service),
-    ):
+):
     """Корневой endpoint API"""
-    await fixtures_service.create_fixtures()
 
     logger = get_logger(__name__)
 
@@ -73,6 +70,14 @@ async def root(
 
     return {"message": "System API", "version": "1.0.0"}
 
+
+@app.get("/init_fixtures")
+async def init_fixture(
+    request: Request,
+    fixtures_service = Depends(get_fixtures_service)
+):
+    await fixtures_service.create_fixtures()
+    return {"message": "Fixtures initialized"}
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
