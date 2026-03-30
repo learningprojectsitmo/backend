@@ -24,8 +24,9 @@ class User(Base):
     email: Mapped[str | None] = mapped_column(String(50), nullable=True, unique=True)
     isu_number: Mapped[int | None] = mapped_column(nullable=True)
     tg_nickname: Mapped[str | None] = mapped_column(String(40), nullable=True)
-    role_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
     password_hashed: Mapped[str] = mapped_column(String, nullable=False)
+    
     resumes: Mapped[list[Resume]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
