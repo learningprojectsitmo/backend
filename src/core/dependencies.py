@@ -40,8 +40,6 @@ async def get_current_user(
 
 
 def permission_required(permission: str):
-    print("entered permission_required !!!!!!!!!!!")
-
     async def permission_dependency(
         current_user: User = Depends(get_current_user),
         user_permission_repository: UserPermissionRepository = Depends(get_user_permission_repository),
@@ -57,8 +55,6 @@ def permission_required(permission: str):
 
         user_permissions = await user_permission_repository.get_user_permissions(current_user.id)
         user_role_permissions = await role_permission_repository.get_role_permissions(current_user.role_id)
-        print(f"entered the permission_required dependency for user {current_user} with permission {permission}")
-        print(f"here is the list of all permissions for this user: {set(user_permissions + user_role_permissions)}")
 
         if permission in set(user_permissions + user_role_permissions):
             return current_user

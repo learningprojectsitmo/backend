@@ -41,6 +41,8 @@ PERMISSIONS = [
 
 
 ROLE_PERMISSIONS = {
+    "admin": PERMISSIONS,
+    "teacher": PERMISSIONS,
     "student_bak": [
         "users:read",
         "projects:read",
@@ -57,8 +59,6 @@ ROLE_PERMISSIONS = {
         "projects:update",
         "resumes:read",
     ],
-    "teacher": PERMISSIONS,
-    "admin": PERMISSIONS,
 }
 
 ROLES = ROLE_PERMISSIONS.keys()
