@@ -20,7 +20,7 @@ admin_user_for_dev = UserCreate(
     first_name="string",
     middle_name="string",
     role_id=1,
-    password_string="string",
+    password="string",
 )
 USERS = [admin_user_for_dev]
 
@@ -82,6 +82,7 @@ class FixtureService:
     async def create_fixtures(self) -> None:
         # TODO: remove commits and rollbacks
         # (they were added because of async bugs)
+        # TODO: remove permission repository, do all operations through the service
         try:
             for perm_name in PERMISSIONS:
                 try:

@@ -87,9 +87,11 @@ async def logout(
 async def get_current_user_info(
     request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
+    auth_service: AuthService = Depends(get_auth_service),
 ) -> dict[str, object]:
     """Получить информацию о текущем пользователе"""
     client_ip = request.client.host if request.client else "unknown"
+    permissions = await auth_service.get_all_user_permissions(current_user)
 
     api_logger.log_request(
         method="GET", path="/auth/me", user_id=current_user.id, ip_address=client_ip, status_code=200, response_time=0.0
@@ -101,6 +103,7 @@ async def get_current_user_info(
         "first_name": current_user.first_name,
         "middle_name": current_user.middle_name,
         "last_name": current_user.last_name,
+        "permissions": permissions,
     }
 
 

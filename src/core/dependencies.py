@@ -8,8 +8,6 @@ from src.core.audit_context import set_audit_context
 from src.core.container import (
     get_auth_service,
     get_permission_repository,
-    get_role_permission_repository,
-    get_user_permission_repository,
 )
 from src.core.logging_config import get_logger
 from src.core.security import oauth2_scheme
@@ -17,8 +15,6 @@ from src.core.security import oauth2_scheme
 if TYPE_CHECKING:
     from src.model.models import User
     from src.repository.permission_repository import PermissionRepository
-    from src.repository.role_repository import UserPermissionRepository
-    from src.repository.user_repository import RolePermissionRepository
     from src.services.auth_service import AuthService
 
 
@@ -42,9 +38,8 @@ async def get_current_user(
 def permission_required(permission: str):
     async def permission_dependency(
         current_user: User = Depends(get_current_user),
-        user_permission_repository: UserPermissionRepository = Depends(get_user_permission_repository),
-        role_permission_repository: RolePermissionRepository = Depends(get_role_permission_repository),
         permission_repository: PermissionRepository = Depends(get_permission_repository),
+        auth_service: AuthService = Depends(get_auth_service),
     ):
         permission_obj = await permission_repository.get_by_name(permission)
         if not permission_obj:
@@ -53,10 +48,9 @@ def permission_required(permission: str):
                 detail=f"Permission '{permission}' not found",
             )
 
-        user_permissions = await user_permission_repository.get_user_permissions(current_user.id)
-        user_role_permissions = await role_permission_repository.get_role_permissions(current_user.role_id)
+        permissions = await auth_service.get_all_user_permissions(current_user)
 
-        if permission in set(user_permissions + user_role_permissions):
+        if permission in permissions:
             return current_user
         else:
             raise HTTPException(

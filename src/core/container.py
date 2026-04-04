@@ -17,8 +17,8 @@ from src.repository.user_repository import UserPermissionRepository, UserReposit
 from src.services.audit_service import AuditService
 from src.services.auth_service import AuthService
 from src.services.fixtures_service import FixtureService
-from src.services.permission_service import PermissionService
 from src.services.kanban_service import KanbanService
+from src.services.permission_service import PermissionService
 from src.services.project_service import ProjectService
 from src.services.resume_service import ResumeService
 from src.services.role_service import RoleService
@@ -109,8 +109,16 @@ async def get_auth_service(
     user_repository: UserRepository = Depends(get_user_repository),
     session_service: SessionService = Depends(get_session_service),
     password_reset_repository: PasswordResetRepository = Depends(get_password_reset_repository),
+    user_permission_repository: UserPermissionRepository = Depends(get_user_permission_repository),
+    role_permission_repository: RolePermissionRepository = Depends(get_role_permission_repository),
 ) -> AuthService:
-    return AuthService(user_repository, session_service, password_reset_repository)
+    return AuthService(
+        user_repository,
+        session_service,
+        password_reset_repository,
+        user_permission_repository,
+        role_permission_repository,
+    )
 
 
 async def get_user_service(
