@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from src.schema.user import UserResponse
 
@@ -36,7 +36,7 @@ class ColumnBase(BaseModel):
     """Базовая схема колонки"""
 
     name: str = Field(..., min_length=1, max_length=50)
-    color: str = Field("gray", description="Цвет колонки (hex или имя)")
+    color: str = Field("white", description="Цвет колонки (hex или имя)")
     wip_limit: int | None = Field(None, ge=1, description="Лимит задач в колонке")
 
 

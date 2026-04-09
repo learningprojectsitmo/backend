@@ -120,9 +120,7 @@ async def reorder_columns(
 ) -> dict:
     """Изменить порядок колонок"""
     try:
-        success = await kanban_service.reorder_columns(
-            project_id=project_id, column_orders=column_orders.tasks, current_user_id=current_user.id
-        )
+        success = await kanban_service.reorder_columns(project_id, column_orders.tasks, current_user.id)
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to reorder columns: {e!s}") from e
@@ -219,7 +217,7 @@ async def reorder_tasks_in_column(
 ) -> dict:
     """Изменить порядок задач в колонке"""
     try:
-        success = await kanban_service.reorder_tasks_in_column(column_id=column_id, task_orders=task_orders.tasks)
+        success = await kanban_service.reorder_tasks_in_column(column_id, task_orders.tasks)
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to reorder tasks: {e!s}") from e
@@ -328,9 +326,8 @@ async def reorder_subtasks(
 ) -> dict:
     """Изменить порядок подзадач"""
     try:
-        success = await kanban_service.reorder_subtasks(
-            task_id=task_id, subtask_orders=subtask_orders.subtasks, current_user_id=current_user.id
-        )
+        success = await kanban_service.reorder_subtasks(task_id, subtask_orders.subtasks, current_user.id)
+
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to reorder subtasks: {e!s}") from e
     else:

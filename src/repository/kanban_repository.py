@@ -88,6 +88,27 @@ class KanbanColumnRepository(BaseRepository[Column, ColumnCreate, ColumnUpdate])
             raise
         else:
             return db_obj
+        
+    async def delete(self, id: int) -> bool:
+        """Удалить колонку"""
+        start_time = time.time()
+        self._logger.info(f"Deleting Column with ID {id}")
+
+        try:
+            stmt = delete(self._model).where(self._model.id == id)
+            result = await self.uow.session.execute(stmt)
+
+            duration = time.time() - start_time
+            if result.rowcount > 0:
+                self._logger.info(f"Deleted Column with ID {id}")
+                return True
+            else:
+                self._logger.warning(f"Column with ID {id} not found for deletion")
+                return False
+        except Exception:
+            duration = time.time() - start_time
+            self._logger.exception(f"Error deleting Column with ID {id} in {duration:.3f}s")
+            raise
 
     async def reorder_columns(self, project_id: int, column_orders: list[dict[str, Any]]) -> bool:
         """Изменить порядок колонок."""
@@ -231,11 +252,6 @@ class KanbanTaskRepository(BaseRepository[Task, TaskCreate, TaskUpdate]):
         self._logger.info(f"Deleting Task with ID {id}")
 
         try:
-            # Сначала удаляем связанные записи
-            await self.uow.session.execute(delete(TaskAssignee).where(TaskAssignee.task_id == id))
-            await self.uow.session.execute(delete(TaskHistory).where(TaskHistory.task_id == id))
-
-            # Затем удаляем задачу
             stmt = delete(self._model).where(self._model.id == id)
             result = await self.uow.session.execute(stmt)
 
