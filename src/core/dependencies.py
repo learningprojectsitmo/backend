@@ -2,15 +2,19 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from fastapi import Depends, HTTPException, Request
+from fastapi import Depends, HTTPException, Request, status
 
-from core.container import get_auth_service
 from src.core.audit_context import set_audit_context
+from src.core.container import (
+    get_auth_service,
+    get_permission_repository,
+)
 from src.core.logging_config import get_logger
 from src.core.security import oauth2_scheme
 
 if TYPE_CHECKING:
     from src.model.models import User
+    from src.repository.permission_repository import PermissionRepository
     from src.services.auth_service import AuthService
 
 
@@ -29,6 +33,32 @@ async def get_current_user(
     else:
         logger.debug(f"Successfully retrieved current user: {user.email} (ID: {user.id})")
         return user
+
+
+def permission_required(permission: str):
+    async def permission_dependency(
+        current_user: User = Depends(get_current_user),
+        permission_repository: PermissionRepository = Depends(get_permission_repository),
+        auth_service: AuthService = Depends(get_auth_service),
+    ):
+        permission_obj = await permission_repository.get_by_name(permission)
+        if not permission_obj:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Permission '{permission}' not found",
+            )
+
+        permissions = await auth_service.get_all_user_permissions(current_user)
+
+        if permission in permissions:
+            return current_user
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Permission '{permission}' required",
+            )
+
+    return permission_dependency
 
 
 async def get_current_user_no_exception(

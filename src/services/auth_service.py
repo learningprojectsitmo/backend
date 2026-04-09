@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import secrets
 from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 
 from fastapi import HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
@@ -12,7 +13,11 @@ from core.config import settings
 from src.core.logging_config import get_logger, security_logger
 from src.model.models import User
 from src.repository.password_reset_repository import PasswordResetRepository
-from src.repository.user_repository import UserRepository
+
+if TYPE_CHECKING:
+    from src.repository.role_repository import UserPermissionRepository
+    from src.repository.user_repository import RolePermissionRepository, UserRepository
+
 from src.schema.auth import Token
 from src.schema.session import SessionCreate, SessionTerminateRequest
 from src.services.session_service import SessionService
@@ -24,9 +29,18 @@ class AuthService:
         user_repository: UserRepository,
         session_service: SessionService,
         password_reset_repository: PasswordResetRepository,
+        user_permission_repository: UserPermissionRepository,
+        role_permission_repository: RolePermissionRepository,
     ):
+        """
+        TODO:
+        Аттрибуты других сервисов и репозиториев в ините нужны для того, чтобы избежать циклического импорта (auth_service.py <-> container.py).
+        Лучшее ли это решение?
+        """
         self._user_repository = user_repository
         self._session_service = session_service
+        self._user_permission_repository = user_permission_repository
+        self._role_permission_repository = role_permission_repository
         self._password_reset_repository = password_reset_repository
         self._pwd_context = PasswordHash.recommended()
         self._secret_key = settings.SECRET_KEY
@@ -58,6 +72,7 @@ class AuthService:
         self._logger.info(f"Successful authentication for user: {email} (ID: {user.id})")
         return user
 
+    # TODO: why email is used in token validation?
     async def get_current_user(self, token: str) -> User:
         """Получить текущего пользователя из токена"""
         credentials_exception = HTTPException(
@@ -392,3 +407,14 @@ class AuthService:
 
         self._logger.info(f"Password reset successful for user {reset.user_id}")
         return True
+
+    async def get_all_user_permissions(
+        self,
+        current_user: User,
+    ) -> list[str]:
+        """Получить список всех разрешений, которые есть у пользователя и его роли"""
+
+        user_permissions = await self._user_permission_repository.get_user_permissions(current_user.id)
+        user_role_permissions = await self._role_permission_repository.get_role_permissions(current_user.role_id)
+
+        return list(set(user_permissions + user_role_permissions))

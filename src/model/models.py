@@ -54,35 +54,14 @@ class User(Base):
         return f"User(id={self.id!r}, first_name={self.first_name!r}, isu_number={self.isu_number!r})"
 
 
-class Role(Base):
-    __tablename__ = "role"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    name: Mapped[str] = mapped_column(String(30), nullable=False)
-
-    def __repr__(self) -> str:
-        return f"Role(id={self.id!r}, role_name={self.name!r}"
-
-
 class Permission(Base):
     __tablename__ = "permission"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    name: Mapped[str] = mapped_column(String(30), nullable=False)
+    name: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
 
     def __repr__(self) -> str:
         return f"Permission(id={self.id!r}, permission_name={self.name!r}"
-
-
-class RolePermission(Base):
-    __tablename__ = "role_permission"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    role_id: Mapped[int] = mapped_column(ForeignKey("role.id"), nullable=False)
-    permission_id: Mapped[int] = mapped_column(ForeignKey("permission.id"), nullable=False)
-
-    def __repr__(self) -> str:
-        return f"Role_id({self.role_id!r}, perm_id={self.permission_id!r}"
 
 
 class UserPermission(Base):
@@ -94,6 +73,27 @@ class UserPermission(Base):
 
     def __repr__(self) -> str:
         return f"User_id({self.user_id!r}, perm_id={self.permission_id!r}"
+
+
+class Role(Base):
+    __tablename__ = "role"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(30), nullable=False, unique=True)
+
+    def __repr__(self) -> str:
+        return f"Role(id={self.id!r}, role_name={self.name!r}"
+
+
+class RolePermission(Base):
+    __tablename__ = "role_permission"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    role_id: Mapped[int] = mapped_column(ForeignKey("role.id"), nullable=False)
+    permission_id: Mapped[int] = mapped_column(ForeignKey("permission.id"), nullable=False)
+
+    def __repr__(self) -> str:
+        return f"Role_id({self.role_id!r}, perm_id={self.permission!r}"
 
 
 class Resume(Base):
