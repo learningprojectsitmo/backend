@@ -357,7 +357,7 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
         stats = {
             "total": len(tasks),
             "by_column": {},
-            "by_priority": {"low": 0, "medium": 0, "high": 0, "urgent": 0},
+            "by_priority": {"default": 0, "low": 0, "medium": 0, "high": 0, "urgent": 0},
             "overdue": 0,
             "without_assignee": 0,
         }

@@ -12,6 +12,7 @@ from src.schema.user import UserResponse
 class TaskPriority(str):
     """Приоритет задачи (опционально)"""
 
+    DEFAULT = "default"
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
@@ -90,7 +91,7 @@ class TaskBase(BaseModel):
 
     title: str = Field(..., min_length=1, max_length=200)
     description: str | None = None
-    priority: str | None = Field(None, pattern="^(low|medium|high|urgent)$")
+    priority: str | None = Field(None, pattern="^(default|low|medium|high|urgent)$")
     due_date: datetime | None = None
     tags: list[str] | None = None
 
@@ -107,7 +108,7 @@ class TaskUpdate(BaseModel):
 
     title: str | None = Field(None, min_length=1, max_length=200)
     description: str | None = None
-    priority: str | None = Field(None, pattern="^(low|medium|high|urgent)$")
+    priority: str | None = Field(None, pattern="^(default|low|medium|high|urgent)$")
     column_id: int | None = Field(None, description="ID новой колонки (для перемещения)")
     position: int | None = Field(None, description="Новая позиция в колонке")
     due_date: datetime | None = None
@@ -241,7 +242,7 @@ class TaskFilter(BaseModel):
     """Схема фильтрации задач"""
 
     column_id: int | None = None
-    priority: str | None = Field(None, pattern="^(low|medium|high|urgent)$")
+    priority: str | None = Field(None, pattern="^(default|low|medium|high|urgent)$")
     assignee_id: int | None = None
     created_by_id: int | None = None
     tag: str | None = None

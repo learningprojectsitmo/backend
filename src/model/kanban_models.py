@@ -59,7 +59,7 @@ class Task(Base):
 
     # Дополнительные поля
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    priority: Mapped[str | None] = mapped_column(String(20), nullable=True)  # "low", "medium", "high", "urgent"
+    priority: Mapped[str | None] = mapped_column(String(20), nullable=True)  # "default", "low", "medium", "high", "urgent"
     position: Mapped[int] = mapped_column(Integer, default=0, nullable=False)  # Порядок сортировки внутри колонки
     tags: Mapped[str | None] = mapped_column(String(500), nullable=True)  # "backend,frontend,bug"
 
