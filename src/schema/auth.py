@@ -15,6 +15,7 @@ class LoginForm(OAuth2PasswordRequestForm):
         super().__init__(username=email, password=password)
         self.remember_me = remember_me
 
+
 class Token(BaseModel):
     """Схема токена для аутентификации"""
 

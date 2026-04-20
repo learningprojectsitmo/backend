@@ -72,12 +72,10 @@ async def root(
 
 
 @app.get("/init_fixtures")
-async def init_fixture(
-    request: Request,
-    fixtures_service = Depends(get_fixtures_service)
-):
+async def init_fixture(request: Request, fixtures_service=Depends(get_fixtures_service)):
     await fixtures_service.create_fixtures()
     return {"message": "Fixtures initialized"}
+
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
