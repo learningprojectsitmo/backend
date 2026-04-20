@@ -1,10 +1,9 @@
 from __future__ import annotations
 
+from fastapi import Form
+from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr
 
-
-from fastapi import Depends, Form
-from fastapi.security import OAuth2PasswordRequestForm
 
 class LoginForm(OAuth2PasswordRequestForm):
     def __init__(

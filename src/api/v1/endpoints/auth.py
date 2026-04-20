@@ -9,11 +9,12 @@ from src.core.dependencies import get_current_user
 from src.core.logging_config import api_logger
 from src.model.models import User
 from src.schema.auth import (
+    LoginForm,
     PasswordResetConfirm,
     PasswordResetRequest,
     PasswordResetResponse,
     PasswordResetSuccessfulResponse,
-    Token, LoginForm,
+    Token,
 )
 from src.schema.user import UserCreate, UserFull
 from src.services.auth_service import AuthService
