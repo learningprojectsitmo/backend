@@ -35,7 +35,7 @@ class TestUserService:
         )
         mock_repository.create.return_value = mock_user
 
-        user_service = UserService(mock_repository, mock_auth_service)
+        user_service = UserService(mock_repository, mock_auth_service, Mock(), Mock())
 
         user_data = UserCreate(
             email="test@example.com",
@@ -46,7 +46,7 @@ class TestUserService:
         )
 
         # when
-        result = await user_service.create_user(user_data)
+        result = await user_service.create(user_data)
 
         # then
         assert result == mock_user
@@ -61,7 +61,7 @@ class TestUserService:
         mock_user = User(id=1, email="test@example.com", first_name="Test", middle_name="User")
         mock_repository.get_by_id.return_value = mock_user
 
-        user_service = UserService(mock_repository, Mock())
+        user_service = UserService(mock_repository, Mock(), Mock(), Mock())
 
         # when
         result = await user_service.get_user_by_id(1)
@@ -77,7 +77,7 @@ class TestUserService:
         mock_repository = Mock(spec=UserRepository)
         mock_repository.get_by_id.return_value = None
 
-        user_service = UserService(mock_repository, Mock())
+        user_service = UserService(mock_repository, Mock(), Mock(), Mock())
 
         # when
         result = await user_service.get_user_by_id(999)
@@ -94,7 +94,7 @@ class TestUserService:
         updated_user = User(id=1, email="updated@example.com", first_name="Updated", middle_name="User")
         mock_repository.update.return_value = updated_user
 
-        user_service = UserService(mock_repository, Mock())
+        user_service = UserService(mock_repository, Mock(), Mock(), Mock())
 
         update_data = UserUpdate(email="updated@example.com", first_name="Updated")
 
@@ -112,7 +112,7 @@ class TestUserService:
         mock_repository = Mock(spec=UserRepository)
         mock_repository.delete.return_value = True
 
-        user_service = UserService(mock_repository, Mock())
+        user_service = UserService(mock_repository, Mock(), Mock(), Mock())
 
         # when
         result = await user_service.delete_user(1)
@@ -128,7 +128,7 @@ class TestUserService:
         mock_repository = Mock(spec=UserRepository)
         mock_repository.delete.return_value = False
 
-        user_service = UserService(mock_repository, Mock())
+        user_service = UserService(mock_repository, Mock(), Mock(), Mock())
 
         # when
         result = await user_service.delete_user(999)
@@ -150,7 +150,7 @@ class TestUserService:
         mock_repository.get_multi.return_value = mock_users
         mock_repository.count.return_value = 2
 
-        user_service = UserService(mock_repository, Mock())
+        user_service = UserService(mock_repository, Mock(), Mock(), Mock())
 
         # when
         result = await user_service.get_users_paginated(page=1, limit=10)

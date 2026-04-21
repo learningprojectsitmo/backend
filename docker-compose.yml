@@ -40,6 +40,10 @@ services:
       - "8083:8000"
     volumes:
       - ./:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+
 
   frontend:
     build:

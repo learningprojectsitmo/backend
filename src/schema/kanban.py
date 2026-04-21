@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from src.schema.user import UserResponse
 
@@ -64,8 +64,7 @@ class ColumnResponse(ColumnBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ColumnWithTasksAndSubtasksResponse(ColumnResponse):
@@ -128,7 +127,7 @@ class TaskReorder(BaseModel):
     tasks: list[dict] = Field(..., description='[{"id": 1, "position": 0}, ...]')
 
 
-class TaskResponse(BaseModel):
+class TaskResponse(TaskBase):
     """Схема ответа с задачей"""
 
     id: int
@@ -148,8 +147,7 @@ class TaskResponse(BaseModel):
     assignees: list[UserResponse] = []
     created_by: UserResponse | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TaskWithSubtasksResponse(TaskResponse):
@@ -178,8 +176,7 @@ class TaskHistoryResponse(BaseModel):
     change_data: dict | None = None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ========== Схемы для подзадач ==========
@@ -223,8 +220,7 @@ class SubtaskResponse(SubtaskBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SubtaskListResponse(BaseModel):
