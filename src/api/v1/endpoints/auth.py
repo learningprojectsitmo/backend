@@ -3,28 +3,30 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.security import OAuth2PasswordRequestForm
 
-from src.core.container import get_auth_service
+from src.core.container import get_auth_service, get_user_service
 from src.core.dependencies import get_current_user
 from src.core.logging_config import api_logger
 from src.model.models import User
 from src.schema.auth import (
+    LoginForm,
     PasswordResetConfirm,
     PasswordResetRequest,
     PasswordResetResponse,
     PasswordResetSuccessfulResponse,
     Token,
 )
+from src.schema.user import UserCreate, UserFull
 from src.services.auth_service import AuthService
+from src.services.user_service import UserService
 
 auth_router = APIRouter(prefix="/auth", tags=["authentication"])
 
 
-@auth_router.post("/token", response_model=Token)
+@auth_router.post("/login", response_model=Token)
 async def login_for_access_token(
     request: Request,
-    form_data: OAuth2PasswordRequestForm = Depends(OAuth2PasswordRequestForm),
+    form_data: LoginForm = Depends(),
     auth_service: AuthService = Depends(get_auth_service),
 ) -> Token:
     """Вход в систему и получение токена доступа"""
@@ -48,6 +50,17 @@ async def login_for_access_token(
         raise
     else:
         return result
+
+
+@auth_router.post("/signup", response_model=UserFull)
+async def create_user(
+    user_data: UserCreate,
+    user_service: UserService = Depends(get_user_service),
+) -> UserFull:
+    """Создать нового пользователя"""
+
+    user = await user_service.create(user_data)
+    return UserFull.model_validate(user)
 
 
 @auth_router.post("/logout")
@@ -74,9 +87,11 @@ async def logout(
 async def get_current_user_info(
     request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
+    auth_service: AuthService = Depends(get_auth_service),
 ) -> dict[str, object]:
     """Получить информацию о текущем пользователе"""
     client_ip = request.client.host if request.client else "unknown"
+    permissions = await auth_service.get_all_user_permissions(current_user)
 
     api_logger.log_request(
         method="GET", path="/auth/me", user_id=current_user.id, ip_address=client_ip, status_code=200, response_time=0.0
@@ -88,6 +103,7 @@ async def get_current_user_info(
         "first_name": current_user.first_name,
         "middle_name": current_user.middle_name,
         "last_name": current_user.last_name,
+        "permissions": permissions,
     }
 
 

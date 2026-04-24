@@ -1,6 +1,19 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, EmailStr
+from fastapi import Form
+from fastapi.security import OAuth2PasswordRequestForm
+from pydantic import BaseModel, EmailStr
+
+
+class LoginForm(OAuth2PasswordRequestForm):
+    def __init__(
+        self,
+        email: str = Form(...),
+        password: str = Form(...),
+        remember_me: bool = Form(default=False),
+    ):
+        super().__init__(username=email, password=password)
+        self.remember_me = remember_me
 
 
 class Token(BaseModel):
@@ -33,51 +46,3 @@ class PasswordResetConfirm(BaseModel):
 
     token: str
     new_password: str
-
-
-class RoleCreate(BaseModel):
-    name: str
-    model_config = ConfigDict(from_attributes=True)
-
-
-class RoleFull(RoleCreate):
-    id: int
-    model_config = ConfigDict(from_attributes=True)
-
-
-class RoleListResponse(BaseModel):
-    items: list[RoleFull]
-    total: int
-    page: int
-    limit: int
-    total_pages: int
-
-
-class PermissionCreate(BaseModel):
-    name: str
-    model_config = ConfigDict(from_attributes=True)
-
-
-class PermissionFull(PermissionCreate):
-    id: int
-    model_config = ConfigDict(from_attributes=True)
-
-
-class PermissionListResponse(BaseModel):
-    items: list[PermissionFull]
-    total: int
-    page: int
-    limit: int
-    total_pages: int
-
-
-class UserPermissionFull(BaseModel):
-    user_id: int
-    permission_id: int
-    model_config = ConfigDict(from_attributes=True)
-
-
-class RolePermissionFull(BaseModel):
-    role_id: int
-    permission_id: int
-    model_config = ConfigDict(from_attributes=True)

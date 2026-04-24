@@ -197,3 +197,7 @@ cython_debug/
 .cursorindexingignore
 /.idea/
 /data/
+
+# macOS
+.DS_Store
+**/.DS_Store

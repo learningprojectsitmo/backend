@@ -18,7 +18,7 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     """Схема для создания пользователя"""
 
-    password_string: str
+    password: str
     isu_number: int | None = None
 
 
@@ -90,3 +90,13 @@ class UserListResponse(BaseModel):
     page: int
     limit: int
     total_pages: int
+
+
+class UserPermissionCreate(BaseModel):
+    user_id: int
+    permission_id: int
+
+
+class UserPermissionFull(UserPermissionCreate):
+    id: int
+    model_config = ConfigDict(from_attributes=True)
