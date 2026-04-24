@@ -22,7 +22,7 @@ router_list = [
     audit_router,
     role_permission_router,
     user_permission_router,
-    workspace_router
+    workspace_router,
 ]
 
 for router in router_list:
