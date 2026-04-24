@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from sqlalchemy import Sequence, desc, select
 
-from core.uow import IUnitOfWork
+from src.core.uow import IUnitOfWork
 from src.model.models import AuditLog
 
 

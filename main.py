@@ -10,6 +10,7 @@ from src.api.v1.routes import routers as v1_router
 from src.core.config import settings
 from src.core.container import get_fixtures_service
 from src.core.database import Base, engine
+from src.core.db_seed import seed_project_statuses
 from src.core.logging_config import get_logger, setup_logging
 from src.core.middleware.logging_middleware import setup_logging_middleware
 
@@ -27,6 +28,7 @@ async def lifespan(_app: FastAPI):
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(seed_project_statuses)
         logger.info("Database tables created/verified")
 
     logger.info("API startup completed successfully")
