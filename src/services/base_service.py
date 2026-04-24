@@ -59,10 +59,19 @@ class BaseService[ModelType, CreateSchemaType, UpdateSchemaType]:
 
     async def get_or_create(self, defaults: dict | None = None, **kwargs) -> tuple[ModelType, bool]:
         """Получить объект или создать новый, если не найден"""
-        id = kwargs.get("id", 0)
-        existing = await self._repository.get_by_id(id)
+        # Ищем по переданным kwargs или defaults
+        search_criteria = kwargs.copy()
+        if defaults and not search_criteria:
+            # Если kwargs пуст, используем defaults для поиска
+            search_criteria = defaults.copy()
 
-        # Если объект не найден по ID, создаем новый
+        existing = None
+
+        # Если есть поле для поиска (например, name), ищем по нему
+        if "name" in search_criteria and hasattr(self._repository, "get_by_name"):
+            existing = await self._repository.get_by_name(search_criteria["name"])
+
+        # Если объект не найден, создаем новый
         if existing is None:
             create_data = kwargs.copy()
             if defaults:

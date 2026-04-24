@@ -64,7 +64,8 @@ class RoleService(BaseService[Role, RoleCreate, RoleUpdate]):
 
             for action in ["create", "read", "update", "delete"]:
                 new_val = getattr(new_elements, action)
-                curr_val = getattr(curr_elements, action)
+                # Если entity нет в текущей матрице, считаем все права как False
+                curr_val = getattr(curr_elements, action) if curr_elements else False
 
                 if new_val != curr_val:
                     perm_str = f"{entity}:{action}"

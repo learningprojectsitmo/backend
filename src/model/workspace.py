@@ -13,7 +13,7 @@ class WorkSpace(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(Text, nullable=False)
     author_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
-    status_id: Mapped[int] = mapped_column(ForeignKey("status.id"), nullable=False)
+    status_id: Mapped[int] = mapped_column(ForeignKey("workspace_status.id"), nullable=False)
     created_at: Mapped[TIMESTAMP] = mapped_column(TIMESTAMP, server_default=func.now(), nullable=False)
 
     def __repr__(self) -> str:

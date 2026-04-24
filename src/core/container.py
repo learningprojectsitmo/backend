@@ -153,13 +153,19 @@ async def get_permission_service(
     return PermissionService(permission_repository)
 
 
+async def get_workspace_service(
+    workspace_repository: WorkSpaceRepository = Depends(get_workspace_repository),
+) -> WorkSpaceService:
+    return WorkSpaceService(workspace_repository)
+
+
 async def get_fixtures_service(
     permission_service: PermissionService = Depends(get_permission_service),
     role_service: RoleService = Depends(get_role_service),
-    permission_repository: PermissionRepository = Depends(get_permission_repository),
     user_service: UserService = Depends(get_user_service),
+    workspace_service: WorkSpaceService = Depends(get_workspace_service),
 ) -> FixtureService:
-    return FixtureService(permission_service, role_service, permission_repository, user_service)
+    return FixtureService(permission_service, role_service, user_service, workspace_service)
 
 
 async def get_audit_service(
@@ -178,9 +184,3 @@ async def get_kanban_service(
     return KanbanService(
         kanban_column_repository, kanban_task_repository, kanban_subtask_repository, user_repository, project_repository
     )
-
-
-async def get_workspace_service(
-    workspace_repository: WorkSpaceRepository = Depends(get_workspace_repository),
-) -> WorkSpaceService:
-    return WorkSpaceService(workspace_repository)

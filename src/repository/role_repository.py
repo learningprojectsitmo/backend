@@ -14,6 +14,12 @@ class RoleRepository(BaseRepository[Role, RoleCreate, RoleUpdate]):
         super().__init__(uow)
         self._model = Role
 
+    async def get_by_name(self, role_name: str) -> Role | None:
+        result = await self.uow.session.execute(
+            select(Role).where(Role.name == role_name),
+        )
+        return result.scalar_one_or_none()
+
 
 class RolePermissionRepository(BaseRepository[RolePermission, RolePermissionCreate, BaseModel]):
     def __init__(self, uow: IUnitOfWork) -> None:
@@ -29,6 +35,12 @@ class RolePermissionRepository(BaseRepository[RolePermission, RolePermissionCrea
     async def get_by_name_and_role(self, perm_id: int, role_id: int) -> int | None:
         result = await self.uow.session.execute(
             select(RolePermission.id).where(RolePermission.role_id == role_id, RolePermission.permission_id == perm_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def get_by_name(self, role_name: str) -> Role | None:
+        result = await self.uow.session.execute(
+            select(Role).where(Role.name == role_name),
         )
         return result.scalar_one_or_none()
 
