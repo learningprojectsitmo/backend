@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from sqlalchemy import select
 
-from src.model.workspace import WorkSpaceStatus
+from src.model.workspace import WorkSpaceCategories, WorkSpaceStatus
 from src.schema.permission import PermissionMatrix
 from src.schema.user import UserCreate
 from src.schema.workspace import WorkSpaceFull
@@ -118,12 +118,37 @@ class FixtureService:
         ]
 
         for status_data in statuses:
-            # TODO fix use repository
-            existing_status = await self._workspace_service._repository.uow.session.execute(
+            result = await self._workspace_service._repository.uow.session.execute(
                 select(WorkSpaceStatus).where(WorkSpaceStatus.name == status_data["name"])
             )
-            if not existing_status.scalar_one_or_none():
-                self._workspace_service._repository.uow.session.add(WorkSpaceStatus(**status_data))
+            existing_status = result.scalar_one_or_none()
+            
+            if not existing_status:
+                self._workspace_service._repository.uow.session.add(
+                    WorkSpaceStatus(**status_data)
+                )
+
+        await self._workspace_service._repository.uow.commit()
+
+        # 5.1 Создаём workspace_categories (если их нет)
+        categories = [
+            {"name": "General", "color": "#6366f1"},
+            {"name": "Development", "color": "#10b981"},
+            {"name": "Design", "color": "#f59e0b"},
+            {"name": "Marketing", "color": "#ec4899"},
+            {"name": "Education", "color": "#8b5cf6"},
+        ]
+
+        for category_data in categories:
+            result = await self._workspace_service._repository.uow.session.execute(
+                select(WorkSpaceCategories).where(WorkSpaceCategories.name == category_data["name"])
+            )
+            existing_category = result.scalar_one_or_none()
+            
+            if not existing_category:
+                self._workspace_service._repository.uow.session.add(
+                    WorkSpaceCategories(**category_data)
+                )
 
         await self._workspace_service._repository.uow.commit()
 

@@ -7,7 +7,34 @@ from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
-from src.model.models import Base
+from src.core.database import Base
+
+# Import all models to ensure metadata is populated
+from src.model import (  # noqa: F401
+    AuditLog,
+    Column,
+    PasswordReset,
+    Permission,
+    Project,
+    ProjectParticipation,
+    ProjectStatus,
+    Response,
+    Resume,
+    Role,
+    RolePermission,
+    Session,
+    Subtask,
+    Tag,
+    Task,
+    TaskAssignee,
+    TaskHistory,
+    User,
+    UserPermission,
+    WorkSpace,
+    WorkSpaceCategories,
+    WorkSpaceParticipation,
+    WorkSpaceStatus,
+)
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

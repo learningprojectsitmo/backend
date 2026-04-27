@@ -4,7 +4,7 @@ import logging
 
 from sqlalchemy import insert, select
 
-from src.model.models import ProjectStatus
+from src.model.project import ProjectStatus
 
 
 def seed_project_statuses(connection) -> None:

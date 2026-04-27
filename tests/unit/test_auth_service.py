@@ -4,7 +4,7 @@ from unittest.mock import Mock, patch
 
 from fastapi.security import OAuth2PasswordRequestForm
 
-from src.model.models import User
+from src.model.user import User
 from src.repository.user_repository import UserRepository
 from src.schema import Token
 from src.services.auth_service import AuthService

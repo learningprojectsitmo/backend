@@ -9,7 +9,8 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from src.core.database import Base
 
 if TYPE_CHECKING:
-    from src.model.models import Project, User
+    from src.model.project import Project
+    from src.model.user import User
 
 
 class Column(Base):

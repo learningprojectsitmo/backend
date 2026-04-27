@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel
 
-from src.model.models import Permission
+from src.model.user import Permission
 from src.schema.permission import PermissionCreate
 from src.services.base_service import BaseService
 

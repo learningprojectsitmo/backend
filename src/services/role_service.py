@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from src.model.models import Role  # , RolePermission
+from src.model.user import Role  # , RolePermission
 from src.schema.permission import PermissionMatrix, PermissionMatrixElement
 from src.schema.role import (
     RoleCreate,

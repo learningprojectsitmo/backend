@@ -9,6 +9,9 @@ class WorkSpaceCreate(BaseModel):
     name: str
     author_id: int | None = None
     status_id: int | None = None
+    category_id: int | None = None
+    color: str | None = None
+    description: str | None = None
 
 
 class WorkSpaceUpdate(BaseModel):
@@ -16,6 +19,9 @@ class WorkSpaceUpdate(BaseModel):
 
     name: str | None = None
     status_id: int | None = None
+    category_id: int | None = None
+    color: str | None = None
+    description: str | None = None
 
 
 class WorkSpaceFull(WorkSpaceCreate):
@@ -24,6 +30,7 @@ class WorkSpaceFull(WorkSpaceCreate):
     id: int
     author_id: int
     status_id: int
+    category_id: int | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -35,3 +42,34 @@ class WorkSpaceResponse(BaseModel):
     name: str
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class Space(BaseModel):
+    """Схема workspace для списка с расширенными данными"""
+
+    id: int
+    title: str
+    projectsCount: int
+    membersCount: int
+    color: str
+    category: str
+    category_id: int | None = None
+    description: str | None = None
+
+
+class Category(BaseModel):
+    """Схема категории workspace"""
+
+    id: int
+    name: str
+    color: str | None = None
+
+
+class SpacesListResponse(BaseModel):
+    """Схема ответа со списком workspace"""
+
+    categories: list[Category]
+    spaces: list[Space]
+    page: int | None = None
+    limit: int | None = None
+    total: int | None = None

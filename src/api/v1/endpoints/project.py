@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from src.core.container import get_project_service
 from src.core.dependencies import get_current_user, setup_audit
-from src.model.models import User
+from src.model.user import User
 from src.schema.project import ProjectCreate, ProjectFull, ProjectListResponse, ProjectUpdate
 from src.services.project_service import ProjectService
 

@@ -9,7 +9,7 @@ from sqlalchemy.orm import selectinload
 from src.core.logging_config import get_logger
 from src.core.uow import IUnitOfWork
 from src.model.kanban_models import Column, Subtask, Task, TaskAssignee, TaskHistory
-from src.model.models import User
+from src.model.user import User
 from src.repository.base_repository import BaseRepository
 from src.schema.kanban import (
     ColumnCreate,

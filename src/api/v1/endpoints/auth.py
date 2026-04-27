@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from src.core.container import get_auth_service, get_user_service
 from src.core.dependencies import get_current_user
 from src.core.logging_config import api_logger
-from src.model.models import User
+from src.model.user import User
 from src.schema.auth import (
     LoginForm,
     PasswordResetConfirm,

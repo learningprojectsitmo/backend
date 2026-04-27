@@ -8,7 +8,7 @@ from sqlalchemy import and_, func, select
 
 from src.core.logging_config import get_logger
 from src.core.uow import IUnitOfWork
-from src.model.models import Session
+from src.model.auth import Session
 from src.schema.session import SessionCreate, SessionUpdate
 
 

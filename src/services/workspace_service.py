@@ -2,8 +2,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from sqlalchemy import func, select
+from sqlalchemy.orm import selectinload
+
 from src.core.exceptions import PermissionError
-from src.model.workspace import WorkSpace
+from src.model.workspace import WorkSpace, WorkSpaceCategories
 from src.schema.workspace import WorkSpaceCreate, WorkSpaceUpdate
 from src.services.base_service import BaseService
 
@@ -67,3 +70,46 @@ class WorkSpaceService(BaseService[WorkSpace, WorkSpaceCreate, WorkSpaceUpdate])
             raise PermissionError("Only workspace author can delete workspace")
 
         return await self._workspace_repository.delete(workspace_id)
+
+    async def get_workspaces_with_stats(
+        self, skip: int = 0, limit: int = 10
+    ) -> tuple[list[WorkSpace], int]:
+        """Получить workspace с подсчетом статистики"""
+        return await self._workspace_repository.get_workspaces_with_stats(skip, limit)
+
+    async def get_workspace_participants_count(self, workspace_id: int) -> int:
+        """Получить количество участников workspace"""
+        from src.model.workspace import WorkSpaceParticipation
+
+        result = await self._workspace_repository.uow.session.execute(
+            select(func.count()).where(WorkSpaceParticipation.workspace_id == workspace_id)
+        )
+        return result.scalar()
+
+    async def get_all_categories(self) -> list:
+        """Получить все категории workspace"""
+        from src.model.workspace import WorkSpaceCategories
+
+        return WorkSpaceCategories.sort("id").session(self._workspace_repository.uow.session).all()
+
+    async def get_workspace_category_name(self, category_id: int) -> str | None:
+        """Получить имя категории по ID"""
+        from src.model.workspace import WorkSpaceCategories
+
+        category = WorkSpaceCategories.find(category_id, session=self._workspace_repository.uow.session)
+        return category.name if category else None
+
+    async def get_or_create_category(self, category_data: dict) -> WorkSpaceCategories:
+        """Получить категорию или создать если не существует"""
+        from src.model.workspace import WorkSpaceCategories
+
+        existing = WorkSpaceCategories.where(
+            name=category_data["name"]
+        ).session(self._workspace_repository.uow.session).first()
+
+        if existing:
+            return existing
+
+        category = WorkSpaceCategories(**category_data)
+        self._workspace_repository.uow.session.add(category)
+        return category

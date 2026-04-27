@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from src.core.exceptions import PermissionError
-from src.model.models import Project
+from src.model.project import Project
 from src.schema.project import (
     ParticipantPreview,
     ProjectCreate,

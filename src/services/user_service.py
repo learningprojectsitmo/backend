@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from src.model.models import User
+from src.model.user import User
 from src.repository.permission_repository import PermissionRepository
 from src.repository.user_repository import UserPermissionRepository, UserRepository
 from src.schema.permission import PermissionMatrix, PermissionMatrixElement

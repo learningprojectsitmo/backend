@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from src.core.container import get_resume_service
 from src.core.dependencies import get_current_user, setup_audit
-from src.model.models import User
+from src.model.user import User
 from src.schema.resume import ResumeCreate, ResumeFull, ResumeListResponse, ResumeUpdate
 from src.services.resume_service import ResumeService
 

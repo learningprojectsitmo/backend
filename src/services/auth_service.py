@@ -11,7 +11,7 @@ from pwdlib import PasswordHash
 
 from src.core.config import settings
 from src.core.logging_config import get_logger, security_logger
-from src.model.models import User
+from src.model.user import User
 from src.repository.password_reset_repository import PasswordResetRepository
 
 if TYPE_CHECKING:

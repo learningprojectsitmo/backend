@@ -13,7 +13,7 @@ from src.core.logging_config import get_logger
 from src.core.security import oauth2_scheme
 
 if TYPE_CHECKING:
-    from src.model.models import User
+    from src.model.user import User
     from src.repository.permission_repository import PermissionRepository
     from src.services.auth_service import AuthService
 
