@@ -62,6 +62,35 @@ async def create_user(
     user = await user_service.create(user_data)
     return UserFull.model_validate(user)
 
+@auth_router.post("/signup_with_email")
+async def create_user_with_email(
+    user_data: UserCreate,
+    user_service: UserService = Depends(get_user_service),
+) -> int:
+    """Создать нового пользователя и вернуть временный Id"""
+
+    return await user_service.request_signup(user_data)
+
+@auth_router.post("/resend_signup_code")
+async def resend_signup_code(
+    newuser_id: int,
+    user_service: UserService = Depends(get_user_service),
+) -> bool:
+    """Отправить заново код подтверждения"""
+
+    return await user_service.resend_signup_code(newuser_id)
+
+
+@auth_router.post("/verify_signup_code")
+async def verify_signup_code(
+    newuser_id: int,
+    code: int,
+    user_service: UserService = Depends(get_user_service),
+) -> UserFull | bool:
+    """Подтвердить код"""
+
+    return await user_service.confirm_signup(newuser_id, code)
+
 
 @auth_router.post("/logout")
 async def logout(

@@ -13,7 +13,7 @@ from src.repository.project_repository import ProjectRepository
 from src.repository.resume_repository import ResumeRepository
 from src.repository.role_repository import RolePermissionRepository, RoleRepository
 from src.repository.session_repository import SessionRepository
-from src.repository.user_repository import UserPermissionRepository, UserRepository
+from src.repository.user_repository import UserPermissionRepository, UserRepository, NewUserRepository
 from src.services.audit_service import AuditService
 from src.services.auth_service import AuthService
 from src.services.fixtures_service import FixtureService
@@ -56,6 +56,10 @@ async def get_resume_repository(uow: IUnitOfWork = Depends(get_uow)) -> ResumeRe
 
 async def get_user_repository(uow: IUnitOfWork = Depends(get_uow)) -> UserRepository:
     return UserRepository(uow)
+
+
+async def get_newuser_repository(uow: IUnitOfWork = Depends(get_uow)) -> NewUserRepository:
+    return NewUserRepository(uow)
 
 
 async def get_user_permission_repository(uow: IUnitOfWork = Depends(get_uow)) -> UserPermissionRepository:
@@ -123,12 +127,13 @@ async def get_auth_service(
 
 async def get_user_service(
     user_repository: UserRepository = Depends(get_user_repository),
+    newuser_repository: NewUserRepository = Depends(get_newuser_repository),
     auth_service: AuthService = Depends(get_auth_service),
     user_permission_repository: UserPermissionRepository = Depends(get_user_permission_repository),
     permission_repository: PermissionRepository = Depends(get_permission_repository),
 ) -> UserService:
     return UserService(
-        user_repository, auth_service, user_permission_repository, permission_repository=permission_repository
+        user_repository, newuser_repository, auth_service, user_permission_repository, permission_repository=permission_repository
     )
 
 

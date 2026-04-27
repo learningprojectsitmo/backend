@@ -11,7 +11,7 @@ Base = declarative_base()
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=settings.DEBUG.lower() == "true",
-    future=True,
+    future=True, # TODO: consider removing, as this options is True by default
     pool_pre_ping=True,
     pool_size=20,
     max_overflow=30,

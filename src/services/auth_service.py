@@ -65,7 +65,7 @@ class AuthService:
             self._logger.warning(f"User not found with email: {email}")
             return None
 
-        if not self.verify_password(password, user.password_hashed):
+        if not self.verify_password(password, user.hashed_password):
             self._logger.warning(f"Invalid password for user: {email}")
             return None
 
@@ -402,7 +402,7 @@ class AuthService:
             return False
 
         hashed_password = self.get_password_hash(new_password)
-        await self._user_repository.update(reset.user_id, {"password_hashed": hashed_password})
+        await self._user_repository.update(reset.user_id, {"hashed_password": hashed_password})
         await self._password_reset_repository.delete(reset.id)
 
         self._logger.info(f"Password reset successful for user {reset.user_id}")

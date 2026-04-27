@@ -1,10 +1,16 @@
 from __future__ import annotations
 
-from src.model.models import User
+import secrets
+from src.core.logging_config import get_logger, security_logger
+from datetime import UTC, datetime, timedelta
+import random
+
+from src.model.models import NewUser, User
 from src.repository.permission_repository import PermissionRepository
-from src.repository.user_repository import UserPermissionRepository, UserRepository
+from src.repository.user_repository import (UserPermissionRepository,
+                                            UserRepository, NewUserRepository)
 from src.schema.permission import PermissionMatrix, PermissionMatrixElement
-from src.schema.user import UserCreate, UserFull, UserListResponse, UserUpdate
+from src.schema.user import NewUserCreate, NewUserUpdate, UserCreate, UserCreateHashedPwd, UserFull, UserListResponse, UserUpdate
 from src.services.auth_service import AuthService
 from src.services.base_service import BaseService
 
@@ -13,44 +19,36 @@ class UserService(BaseService[User, UserCreate, UserUpdate]):
     def __init__(
         self,
         user_repository: UserRepository,
+        newuser_repository: NewUserRepository,
         auth_service: AuthService,
         user_permission_repository: UserPermissionRepository,
         permission_repository: PermissionRepository,
     ):
         super().__init__(user_repository)
         self._user_repository = user_repository
+        self._newuser_repository = newuser_repository
         self._user_permission_repository = user_permission_repository
         self._permission_repository = permission_repository
         self._auth_service = auth_service
+        self._logger = get_logger(self.__class__.__name__)
 
     async def create(self, obj_data: UserCreate) -> User:
         """Создать нового пользователя с хешированием пароля"""
-        hashed_password = self._auth_service.get_password_hash(obj_data.password)
+        user_data = obj_data.model_dump()
+        user_data['hashed_password'] = self._auth_service.get_password_hash(user_data.pop('password'))
 
-        # Создаем словарь с правильными ключами для модели User
-        # TODO сделать распаковку как было раньше? model dump
-        user_data_dict = {
-            "email": obj_data.email,
-            "first_name": obj_data.first_name,
-            "middle_name": obj_data.middle_name,
-            "last_name": obj_data.last_name,
-            "isu_number": obj_data.isu_number,
-            "role_id": obj_data.role_id,
-            "password_hashed": hashed_password,
-        }
+        user_create = UserCreateHashedPwd(**user_data)
+        return await self._user_repository.create(user_create)
 
-        return await self._user_repository.create(user_data_dict)
-
-    async def get_user_by_id(self, id: int) -> User | None:
-        """Получить пользователя по ID"""
-        return await self._user_repository.get_by_id(id)
 
     async def get_user_by_email(self, email: str) -> User | None:
         """Получить пользователя по email"""
         return await self._user_repository.get_by_email(email)
 
+
     async def get_users_paginated(self, page: int = 1, limit: int = 10) -> UserListResponse:
         """Получить пользователей с пагинацией"""
+        # TODO why don't we use get_multi from base_service?
         skip = (page - 1) * limit
         users = await self._user_repository.get_multi(skip=skip, limit=limit)
         total = await self._user_repository.count()
@@ -64,18 +62,6 @@ class UserService(BaseService[User, UserCreate, UserUpdate]):
             limit=limit,
             total_pages=total_pages,
         )
-
-    async def update_user(self, id: int, user_data: UserUpdate) -> User | None:
-        """Обновить пользователя"""
-        return await self._user_repository.update(id, user_data)
-
-    async def delete_user(self, id: int) -> bool:
-        """Удалить пользователя"""
-        return await self._user_repository.delete(id)
-
-    async def count_users(self) -> int:
-        """Подсчитать количество пользователей"""
-        return await self._user_repository.count()
 
     async def get_user_full(self, id: int) -> UserFull | None:
         """Получить полную информацию о пользователе"""
@@ -136,3 +122,82 @@ class UserService(BaseService[User, UserCreate, UserUpdate]):
                 await self._user_permission_repository.remove_permissions(user_id, to_remove)
 
         return permission_matrix
+
+
+    async def request_signup(self, user_data: UserCreate) -> int:
+        """Создать нового пользователя во временной таблице БД с проверкой email"""
+        hashed_password = self._auth_service.get_password_hash(user_data.password)
+
+        code = random.randint(10000, 99999)
+        self._logger.info(f"Signup with email for newuser, sent code {code}")
+        expires_at = datetime.now(UTC) + timedelta(minutes=5)
+
+        newuser = NewUserCreate(
+            **user_data.model_dump(),
+            hashed_password=hashed_password,
+            code=code,
+            expires_at=expires_at
+        )
+
+        newuser = await self._newuser_repository.create(newuser)
+
+        # TODO: добавить отправку кода через email-клиент, сейчас токен доступен в БД
+        # Пример интерфейса:
+        # email_service.send(user.email, token)
+
+        self._logger.info(f"Signup attempt with email {newuser.email}")
+        return newuser.id
+
+
+    async def resend_signup_code(self, newuser_id: int) -> bool:
+        """Создать нового пользователя во временной таблице БД с проверкой email"""
+        code = random.randint(10000, 99999)
+        self._logger.info(f"Signup with email for newuser with {newuser_id}, sent code {code}")
+        expires_at = datetime.now(UTC) + timedelta(minutes=5)
+
+        newuser_update = NewUserUpdate(
+            code = code,
+            expires_at = expires_at,
+        )
+
+        await self._newuser_repository.update(newuser_id, newuser_update)
+
+        # TODO: добавить генерацию и отправку кода через email-клиент, сейчас токен доступен в БД
+        # Пример интерфейса:
+        # email_service.send(user.email, token)
+
+        self._logger.info(f"Code resend attempt for newuser with id {newuser_id}")
+        return True
+
+
+    async def confirm_signup(self, newuser_id: int, code: int) -> bool | UserFull:
+        """Проверить введённый код и переместить пользователя из временной таблицы БД в постоянную"""
+
+        newuser = await self._newuser_repository.get_by_id(newuser_id)
+
+        if not newuser:
+            self._logger.warning(f"User signup attempted with invalid newuser_id {newuser_id}")
+            return False
+
+        if newuser.code != code:
+            self._logger.warning(f"User signup attempted with invalid code for newuser with id {newuser_id}")
+            # TODO: inform frontend that the code is invalid
+            return False
+
+        if datetime.now(UTC) > newuser.expires_at:
+            self._logger.warning(f"User signup attempted with expired token for user with email {newuser.email}")
+            # TODO: inform frontend that the time has expired
+            return False
+
+        newuser_data = {
+            k: v for k, v in newuser.__dict__.items()
+            if k not in {"_sa_instance_state", "code", "expires_at"}
+        }
+        user_create = UserCreateHashedPwd(**newuser_data)
+
+        user_full = await self._user_repository.create(user_create)
+        await self._newuser_repository.delete(newuser_id)
+
+        self._logger.info(f"Signup with email verification successful for user with email {newuser.email}")
+        return user_full
+

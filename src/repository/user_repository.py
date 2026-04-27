@@ -4,12 +4,13 @@ from pydantic import BaseModel
 from sqlalchemy import delete, select
 
 from src.core.uow import IUnitOfWork
-from src.model.models import Permission, User, UserPermission
+from src.model.models import NewUser, Permission, User, UserPermission
 from src.repository.base_repository import BaseRepository
-from src.schema.user import UserCreate, UserPermissionCreate, UserUpdate
+from src.schema.user import (NewUserCreate, UserCreateHashedPwd, NewUserUpdate, UserCreate,
+                             UserPermissionCreate, UserUpdate)
 
 
-class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
+class UserRepository(BaseRepository[User, UserCreateHashedPwd, UserUpdate]):
     def __init__(self, uow: IUnitOfWork) -> None:
         super().__init__(uow)
         self._model = User
@@ -19,6 +20,12 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
             select(User).where(User.email == email),
         )
         return result.scalar_one_or_none()
+
+
+class NewUserRepository(BaseRepository[NewUser, NewUserCreate, NewUserUpdate]):
+    def __init__(self, uow: IUnitOfWork) -> None:
+        super().__init__(uow)
+        self._model = NewUser
 
 
 class UserPermissionRepository(BaseRepository[UserPermission, UserPermissionCreate, BaseModel]):
