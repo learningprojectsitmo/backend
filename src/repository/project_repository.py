@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from sqlalchemy import select
-from sqlalchemy.orm import selectinload
+from sqlalchemy import or_, select
 
 from src.core.uow import IUnitOfWork
-from src.model.models import Project, ProjectParticipation, Tag
+from src.model.models import Project, ProjectParticipation
 from src.repository.base_repository import BaseRepository
 from src.schema.project import ProjectCreate, ProjectUpdate
 
@@ -19,36 +18,18 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         result = await self.uow.session.execute(select(Project).where(Project.author_id == author_id))
         return list(result.scalars().all())
 
-    async def get_projects_with_details(self, skip: int = 0, limit: int = 100) -> list[Project]:
-        query = (
-            select(Project)
-            .options(
-                selectinload(Project.participants).selectinload(ProjectParticipation.participant),
-                selectinload(Project.tags),
-                selectinload(Project.status),
+    async def is_user_in_project(self, project_id: int, user_id: int) -> bool:
+        """Проверить, является ли пользователь автором или участником проекта."""
+        result = await self.uow.session.execute(
+            select(Project.id)
+            .outerjoin(ProjectParticipation, ProjectParticipation.project_id == Project.id)
+            .where(
+                Project.id == project_id,
+                or_(
+                    Project.author_id == user_id,
+                    ProjectParticipation.participant_id == user_id,
+                ),
             )
-            .offset(skip)
-            .limit(limit)
+            .limit(1)
         )
-        result = await self.uow.session.execute(query)
-        return list(result.scalars().all())
-
-    async def get_or_create_tags(self, tag_names: list[str]) -> list[Tag]:
-        if not tag_names:
-            return []
-
-        result = await self.uow.session.execute(select(Tag).where(Tag.name.in_(tag_names)))
-        existing_tags = {tag.name: tag for tag in result.scalars().all()}
-
-        tags = []
-        for tag_name in tag_names:
-            tag = existing_tags.get(tag_name)
-            if tag is None:
-                tag = Tag(name=tag_name)
-                self.uow.session.add(tag)
-                tags.append(tag)
-            else:
-                tags.append(tag)
-
-        await self.uow.session.flush()
-        return tags
+        return result.scalar_one_or_none() is not None
