@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 
 from src.core.container import get_kanban_service
 from src.core.dependencies import get_current_user, setup_audit
+from src.core.exceptions import PermissionError
 from src.model.models import User
 from src.schema.kanban import (
     ColumnCreate,
@@ -72,6 +73,8 @@ async def create_column(
     """Создать новую колонку"""
     try:
         return await kanban_service.create_column(column_data, current_user.id)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to create column: {e!s}") from e
 
@@ -87,6 +90,8 @@ async def update_column(
     """Обновить колонку"""
     try:
         return await kanban_service.update_column(column_id, column_data, current_user.id)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to update column: {e!s}") from e
 
@@ -102,6 +107,8 @@ async def delete_column(
     try:
         success = await kanban_service.delete_column(column_id, current_user.id)
 
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to delete column: {e!s}") from e
     else:
@@ -122,6 +129,8 @@ async def reorder_columns(
     try:
         success = await kanban_service.reorder_columns(project_id, column_orders.tasks, current_user.id)
 
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to reorder columns: {e!s}") from e
     else:
@@ -328,6 +337,8 @@ async def reorder_subtasks(
     try:
         success = await kanban_service.reorder_subtasks(task_id, subtask_orders.subtasks, current_user.id)
 
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to reorder subtasks: {e!s}") from e
     else:
