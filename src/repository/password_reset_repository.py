@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from sqlalchemy import select
 
-from core.uow import IUnitOfWork
+from src.core.uow import IUnitOfWork
 from src.model.models import PasswordReset
 from src.repository.base_repository import BaseRepository
 from src.schema.auth import PasswordResetRequest
