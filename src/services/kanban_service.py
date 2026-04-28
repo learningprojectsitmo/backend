@@ -98,20 +98,6 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
         result = await self._kanban_column_repository.delete(column_id)
 
         return result
-        
-    async def delete_task(self, task_id: int, current_user_id: int) -> bool:
-        """Удалить задачу."""
-        task = await self._kanban_task_repository.get_by_id(task_id)
-        if not task:
-            raise NotFoundError(f"Task with id {task_id} not found")
-
-        result = await self._kanban_task_repository.delete(task_id)
-
-        # TODO: Отправить уведомление об удалении
-        if result:
-            await self._notify_task_deleted(task, current_user_id)
-
-        return result
 
     async def reorder_columns(self, project_id: int, column_orders: list[dict[str, Any]], current_user_id: int) -> bool:
         """Изменить порядок колонок."""
@@ -143,16 +129,10 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
         if not column:
             raise NotFoundError(f"Column with id {task_data.column_id} not found")
 
-        if column.wip_limit:
-            tasks_in_column = await self._kanban_task_repository.get_tasks_by_column(column.id)
-            if len(tasks_in_column) >= column.wip_limit:
-                raise ValidationError(f"Column '{column.name}' has reached its WIP limit ({column.wip_limit})")
-
-        if task_data.assignee_ids:
-            for user_id in task_data.assignee_ids:
-                user = await self._user_repository.get_by_id(user_id)
-                if not user:
-                    raise NotFoundError(f"User with id {user_id} not found")
+        # if column.wip_limit:
+        #     tasks_in_column = await self._kanban_task_repository.get_tasks_by_column(column.id)
+        #     if len(tasks_in_column) >= column.wip_limit:
+        #         raise ValidationError(f"Column '{column.name}' has reached its WIP limit ({column.wip_limit})")
 
         task = await self._kanban_task_repository.create(task_data, current_user_id)
 
@@ -255,7 +235,7 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
         subtasks = await self._kanban_subtask_repository.get_subtasks_by_task(task_id)
 
         return SubtaskListResponse(items=[SubtaskResponse.model_validate(s) for s in subtasks], total=len(subtasks))
-    
+
     async def create_subtask(self, subtask_data: SubtaskCreate, current_user_id: int) -> SubtaskResponse:
         """Создать новую подзадачу."""
         task = await self._kanban_task_repository.get_by_id(subtask_data.task_id)

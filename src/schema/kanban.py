@@ -89,25 +89,26 @@ class ColumnListResponse(BaseModel):
 class TaskBase(BaseModel):
     """Базовая схема задачи"""
 
-    title: str = Field(..., min_length=1, max_length=200)
+    title: str = Field(..., min_length=1, max_length=100)
     description: str | None = None
     priority: str | None = Field(None, pattern="^(default|low|medium|high|urgent)$")
     due_date: datetime | None = None
     tags: list[str] | None = None
 
 
-class TaskCreate(TaskBase):
-    """Схема создания задачи"""
+class TaskCreate(BaseModel):
+    """Схема создания задачи — только обязательный минимум"""
 
+    title: str = Field(..., min_length=1, max_length=100)
     column_id: int = Field(..., description="ID колонки, куда поместить задачу")
-    assignee_ids: list[int] | None = []
+    priority: str = Field("default", pattern="^(default|low|medium|high|urgent)$")
 
 
 class TaskUpdate(BaseModel):
     """Схема обновления задачи"""
 
-    title: str | None = Field(None, min_length=1, max_length=200)
-    description: str | None = None
+    title: str | None = Field(None, min_length=1, max_length=100)
+    description: str | None = Field(None, max_length=1000)
     priority: str | None = Field(None, pattern="^(default|low|medium|high|urgent)$")
     column_id: int | None = Field(None, description="ID новой колонки (для перемещения)")
     position: int | None = Field(None, description="Новая позиция в колонке")
