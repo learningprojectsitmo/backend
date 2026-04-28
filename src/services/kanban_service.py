@@ -33,6 +33,7 @@ if TYPE_CHECKING:
 
 MAX_SUBTASKS_PER_TASK = 5
 
+
 class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
     def __init__(
         self,
@@ -63,9 +64,7 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
             raise NotFoundError(f"Project with id {project_id} not found")
         has_access = await self._project_repository.is_user_in_project(project_id, user_id)
         if not has_access:
-            raise PermissionError(
-                f"User {user_id} has no access to project {project_id}"
-            )
+            raise PermissionError(f"User {user_id} has no access to project {project_id}")
 
     #   === Метод для проектов ===
 
@@ -272,7 +271,9 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
 
         return SubtaskResponse.model_validate(subtask)
 
-    async def update_subtask(self, subtask_id: int, subtask_data: SubtaskUpdate, current_user_id: int) -> SubtaskResponse:
+    async def update_subtask(
+        self, subtask_id: int, subtask_data: SubtaskUpdate, current_user_id: int
+    ) -> SubtaskResponse:
         """Обновить подзадачу."""
         subtask = await self._kanban_subtask_repository.get_by_id(subtask_id)
         if not subtask:

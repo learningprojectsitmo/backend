@@ -51,7 +51,9 @@ class Task(Base):
 
     # Привязка к колонке (обязательно!)
     column_id: Mapped[int] = mapped_column(ForeignKey("column.id", ondelete="CASCADE"), nullable=False)
-    project_id: Mapped[int] = mapped_column(ForeignKey("project.id"), nullable=False)  # Денормализация для быстрых запросов
+    project_id: Mapped[int] = mapped_column(
+        ForeignKey("project.id"), nullable=False
+    )  # Денормализация для быстрых запросов
 
     # Основные поля
     title: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -59,7 +61,9 @@ class Task(Base):
 
     # Дополнительные поля
     description: Mapped[str | None] = mapped_column(String(1000), nullable=True)
-    priority: Mapped[str | None] = mapped_column(String(20), nullable=True)  # "default", "low", "medium", "high", "urgent"
+    priority: Mapped[str | None] = mapped_column(
+        String(20), nullable=True
+    )  # "default", "low", "medium", "high", "urgent"
     position: Mapped[int] = mapped_column(Integer, default=0, nullable=False)  # Порядок сортировки внутри колонки
     tags: Mapped[str | None] = mapped_column(String(500), nullable=True)  # "backend,frontend,bug"
 
@@ -83,9 +87,7 @@ class Task(Base):
         back_populates="task", cascade="all, delete-orphan", order_by="Subtask.position"
     )
 
-    history: Mapped[list[TaskHistory]] = relationship(
-        back_populates="task", cascade="all, delete-orphan"
-    )
+    history: Mapped[list[TaskHistory]] = relationship(back_populates="task", cascade="all, delete-orphan")
 
     def __repr__(self) -> str:
         return f"Task(id={self.id!r}, title={self.title!r}, column_id={self.column_id!r})"
