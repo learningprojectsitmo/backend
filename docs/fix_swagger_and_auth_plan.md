@@ -40,9 +40,10 @@ sequenceDiagram
     Server-->>Server: creates refresh_token (opaque random bytes)
     Server-->>Server: stores SHA-256(refresh_token) in DB (Session table)<br/>with TTL based on remember_me flag
     Server-->>Client: { access_token }
-    Server-->>Client: Set-Cookie: refresh_token;<br/>HttpOnly; Secure; SameSite=Lax
+    Server-->>Client: Set-Cookie: refresh_token,<br/>HttpOnly, Secure, SameSite=Lax
     deactivate Server
 ```
+
 
 **AccessFlow**
 
