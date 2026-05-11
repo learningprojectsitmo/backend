@@ -104,3 +104,23 @@ async def delete_resume(
         raise HTTPException(status_code=403, detail=str(e)) from e
     else:
         return {"message": "Resume deleted successfully"}
+
+@resume_router.get("/me", response_model=ResumeListResponse)
+async def fetch_my_resumes(
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=100),
+    resume_service: ResumeService = Depends(get_resume_service),
+    current_user: User = Depends(get_current_user),
+) -> ResumeListResponse:
+    """Получить резюме текущего пользователя с пагинацией"""
+    resumes, total = await resume_service.get_user_resumes_paginated(current_user.id, page, limit)
+    items = [ResumeFull.model_validate(r) for r in resumes]
+    total_pages = (total + limit - 1) // limit if total > 0 else 0
+    return ResumeListResponse(
+        items=items,
+        total=total,
+        page=page,
+        limit=limit,
+        total_pages=total_pages,
+    )
+

@@ -20,3 +20,15 @@ class ResumeRepository(BaseRepository[Resume, ResumeCreate, ResumeUpdate]):
             select(Resume).where(Resume.author_id == author_id),
         )
         return list(result.scalars().all())
+
+    async def get_by_author_paginated(
+            self, author_id: int, skip: int = 0, limit: int = 10
+    ) -> list[Resume]:
+        """Получить резюме автора с пагинацией."""
+        result = await self.uow.session.execute(
+            select(Resume)
+            .where(Resume.author_id == author_id)
+            .offset(skip)
+            .limit(limit)
+        )
+        return list(result.scalars().all())
