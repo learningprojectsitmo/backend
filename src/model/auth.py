@@ -43,6 +43,10 @@ class Session(Base):
     user_agent: Mapped[str | None] = mapped_column(String(500), nullable=True)
     fingerprint: Mapped[str | None] = mapped_column(String(255), nullable=True)  # Отпечаток браузера
 
+    # Refresh token (opaque, хранится только SHA-256 хеш)
+    refresh_token_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True, index=True)
+    token_family: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+
     # Отношения
     user: Mapped[User] = relationship()
 

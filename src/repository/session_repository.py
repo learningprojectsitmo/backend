@@ -4,7 +4,7 @@ import uuid
 from collections.abc import Sequence
 from datetime import datetime, timedelta
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, or_, select
 
 from src.core.logging_config import get_logger
 from src.core.uow import IUnitOfWork
@@ -293,3 +293,46 @@ class SessionRepository:
         else:
             self._logger.info(f"User {user_id} has {count} active sessions")
             return count
+
+    async def get_by_refresh_token_hash(self, token_hash: str) -> Session | None:
+        """Найти сессию по хешу refresh-токена"""
+        result = await self.uow.session.execute(
+            select(Session).where(
+                and_(Session.refresh_token_hash == token_hash, Session.is_active, Session.expires_at > datetime.utcnow())
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def set_refresh_token(self, session_id: str, token_hash: str, token_family: str) -> None:
+        """Установить refresh_token_hash и token_family для сессии"""
+        session = await self.get_by_id(session_id)
+        if session:
+            session.refresh_token_hash = token_hash
+            session.token_family = token_family
+
+    async def rotate_refresh_token(self, session_id: str, old_hash: str, new_hash: str) -> bool:
+        """Ротация refresh-токена: заменить старый хеш на новый (с защитой от race condition)"""
+        result = await self.uow.session.execute(
+            select(Session).where(
+                and_(Session.id == session_id, Session.refresh_token_hash == old_hash, Session.is_active)
+            )
+        )
+        session = result.scalar_one_or_none()
+        if not session:
+            return False
+        session.refresh_token_hash = new_hash
+        session.last_activity = datetime.utcnow()
+        return True
+
+    async def revoke_token_family(self, token_family: str) -> int:
+        """Отозвать все сессии в token_family (reuse detection)"""
+        result = await self.uow.session.execute(
+            select(Session).where(
+                and_(Session.token_family == token_family, Session.is_active)
+            )
+        )
+        sessions = result.scalars().all()
+        for session in sessions:
+            session.is_active = False
+            session.is_current = False
+        return len(sessions)

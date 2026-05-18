@@ -14,7 +14,9 @@ class Settings(BaseSettings):
     # JWT
     SECRET_KEY: str = "your-secret-key-here"
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 43200
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 30
+    REFRESH_TOKEN_EXPIRE_DAYS_SHORT: int = 1
 
     # CORS - исправленные настройки для Docker
     CORS_ORIGINS: list = [

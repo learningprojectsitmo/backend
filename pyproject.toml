@@ -68,7 +68,7 @@ warn_no_return = true
 warn_unreachable = true
 strict_equality = true
 
-[tool.pytest]
+[tool.pytest.ini_options]
 asyncio_default_fixture_loop_scope = "session"
 asyncio_mode = "auto"
 testpaths = ["tests"]
@@ -79,6 +79,7 @@ addopts = [
     "--cov=src",
     "--cov-report=term-missing"
 ]
+norecursedirs = ["data", "migrations", ".venv", ".git", "__pycache__"]
 
 [tool.ruff]
 #python-target = "py312"
@@ -169,3 +170,9 @@ skip-magic-trailing-comma = false
 line-ending = "auto"
 docstring-code-format = true
 docstring-code-line-length = "dynamic"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.2",
+    "pytest-asyncio>=1.2.0",
+]
