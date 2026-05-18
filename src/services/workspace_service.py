@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import selectinload
 
 from src.core.exceptions import PermissionError
 from src.model.workspace import WorkSpace, WorkSpaceCategories
@@ -77,6 +76,12 @@ class WorkSpaceService(BaseService[WorkSpace, WorkSpaceCreate, WorkSpaceUpdate])
         """Получить workspace с подсчетом статистики"""
         return await self._workspace_repository.get_workspaces_with_stats(skip, limit)
 
+    async def get_workspaces_menu_data(
+        self, skip: int = 0, limit: int = 10
+    ) -> tuple[list[dict], int]:
+        """Получить данные для меню workspace (оптимизированный запрос)"""
+        return await self._workspace_repository.get_workspaces_menu_data(skip, limit)
+
     async def get_workspace_participants_count(self, workspace_id: int) -> int:
         """Получить количество участников workspace"""
         from src.model.workspace import WorkSpaceParticipation
@@ -90,22 +95,29 @@ class WorkSpaceService(BaseService[WorkSpace, WorkSpaceCreate, WorkSpaceUpdate])
         """Получить все категории workspace"""
         from src.model.workspace import WorkSpaceCategories
 
-        return WorkSpaceCategories.sort("id").session(self._workspace_repository.uow.session).all()
+        result = await self._workspace_repository.uow.session.execute(
+            select(WorkSpaceCategories).order_by(WorkSpaceCategories.id)
+        )
+        return list(result.scalars().all())
 
     async def get_workspace_category_name(self, category_id: int) -> str | None:
         """Получить имя категории по ID"""
         from src.model.workspace import WorkSpaceCategories
 
-        category = WorkSpaceCategories.find(category_id, session=self._workspace_repository.uow.session)
+        result = await self._workspace_repository.uow.session.execute(
+            select(WorkSpaceCategories).where(WorkSpaceCategories.id == category_id)
+        )
+        category = result.scalar_one_or_none()
         return category.name if category else None
 
     async def get_or_create_category(self, category_data: dict) -> WorkSpaceCategories:
         """Получить категорию или создать если не существует"""
         from src.model.workspace import WorkSpaceCategories
 
-        existing = WorkSpaceCategories.where(
-            name=category_data["name"]
-        ).session(self._workspace_repository.uow.session).first()
+        result = await self._workspace_repository.uow.session.execute(
+            select(WorkSpaceCategories).where(WorkSpaceCategories.name == category_data["name"])
+        )
+        existing = result.scalar_one_or_none()
 
         if existing:
             return existing

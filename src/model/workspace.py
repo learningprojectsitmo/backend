@@ -1,10 +1,16 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from sqlalchemy import TIMESTAMP, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from src.core.database import Base
+
+if TYPE_CHECKING:
+    from src.model.project import Project
+
 
 class WorkSpaceCategories(Base):
     __tablename__ = "workspace_categories"
@@ -20,7 +26,6 @@ class WorkSpaceCategories(Base):
     def __repr__(self) -> str:
         return f"WorkSpaceCategories(id={self.id!r}, name={self.name!r}, created_at={self.created_at!r})"
 
-
 class WorkSpace(Base):
     __tablename__ = "workspace"
 
@@ -35,6 +40,7 @@ class WorkSpace(Base):
 
     # Отношения
     category: Mapped[WorkSpaceCategories | None] = relationship(back_populates="workspaces")
+    projects: Mapped[list["Project"]] = relationship(back_populates="workspace")
 
     def __repr__(self) -> str:
         return (

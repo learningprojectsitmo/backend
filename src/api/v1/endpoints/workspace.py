@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from src.core.container import get_workspace_service
 from src.core.dependencies import get_current_user, setup_audit
+from src.core.exceptions import PermissionError
 from src.model.user import User
 from src.schema.workspace import (
     Category as SpaceCategory,
@@ -16,6 +17,37 @@ from src.schema.workspace import (
 from src.services.workspace_service import WorkSpaceService
 
 workspace_router = APIRouter(prefix="/workspaces", tags=["workspace"])
+
+
+@workspace_router.get("/menu", response_model=SpacesListResponse)
+async def get_workspace_menu(
+    page: int = Query(1, ge=1, description="Номер страницы"),
+    limit: int = Query(10, ge=1, le=100, description="Количество workspace на странице"),
+    workspace_service: WorkSpaceService = Depends(get_workspace_service),
+    _current_user: User = Depends(get_current_user),
+) -> SpacesListResponse:
+    """Получить меню workspace (упрощённый вид для навигации)"""
+    skip = (page - 1) * limit
+    spaces_data, total = await workspace_service.get_workspaces_menu_data(skip, limit)
+
+    # Получаем реальные категории из БД
+    categories = await workspace_service.get_all_categories()
+
+    # Формируем список категорий для ответа
+    categories_response = [
+        SpaceCategory(id=cat.id, name=cat.name, color=cat.color or "#6366f1")
+        for cat in categories
+    ]
+
+    spaces = [Space.model_validate(item) for item in spaces_data]
+
+    return SpacesListResponse(
+        categories=categories_response,
+        spaces=spaces,
+        page=page,
+        limit=limit,
+        total=total,
+    )
 
 
 @workspace_router.get("/{workspace_id}", response_model=WorkSpaceFull)
@@ -42,57 +74,6 @@ async def fetch_workspaces(
     """Получить список workspace с пагинацией"""
     workspaces, _ = await workspace_service.get_workspaces_paginated(page, limit)
     return [WorkSpaceFull.model_validate(workspace) for workspace in workspaces]
-
-
-@workspace_router.get("/menu", response_model=SpacesListResponse)
-async def get_workspace_menu(
-    page: int = Query(1, ge=1, description="Номер страницы"),
-    limit: int = Query(100, ge=1, le=100, description="Количество workspace на странице"),
-    workspace_service: WorkSpaceService = Depends(get_workspace_service),
-    current_user: User = Depends(get_current_user),
-) -> SpacesListResponse:
-    """Получить меню workspace (упрощённый вид для навигации)"""
-    skip = (page - 1) * limit
-    workspaces, total = await workspace_service.get_workspaces_with_stats(skip, limit)
-
-    # Получаем реальные категории из БД
-    categories = await workspace_service.get_all_categories()
-
-    # Формируем список категорий для ответа
-    categories_response = [
-        SpaceCategory(id=cat.id, name=cat.name, color=cat.color or "#6366f1")
-        for cat in categories
-    ]
-
-    spaces: list[Space] = []
-    for workspace in workspaces:
-        members_count = await workspace_service.get_workspace_participants_count(workspace.id)
-        category_name = (
-            workspace.category.name if hasattr(workspace, 'category') and workspace.category else "General"
-        )
-        category_color = (
-            workspace.category.color if hasattr(workspace, 'category') and workspace.category else "#6366f1"
-        )
-        
-        space = Space(
-            id=workspace.id,
-            title=workspace.name,
-            projectsCount=0,
-            membersCount=members_count,
-            color=workspace.color or category_color or "#6366f1",
-            category=category_name,
-            category_id=workspace.category_id,
-            description=workspace.description,
-        )
-        spaces.append(space)
-
-    return SpacesListResponse(
-        categories=categories_response,
-        spaces=spaces,
-        page=page,
-        limit=limit,
-        total=total,
-    )
 
 
 @workspace_router.post("/", response_model=WorkSpaceFull)

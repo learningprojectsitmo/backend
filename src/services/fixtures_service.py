@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from sqlalchemy import select
 
-from src.model.workspace import WorkSpaceCategories, WorkSpaceStatus
+from src.model.workspace import WorkSpace, WorkSpaceCategories, WorkSpaceStatus
 from src.schema.permission import PermissionMatrix
 from src.schema.user import UserCreate
-from src.schema.workspace import WorkSpaceFull
+from src.schema.workspace import WorkSpaceCreate
 from src.services.permission_service import PermissionService
 from src.services.role_service import RoleService
 from src.services.user_service import UserService
@@ -132,34 +132,35 @@ class FixtureService:
 
         # 5.1 Создаём workspace_categories (если их нет)
         categories = [
-            {"name": "General", "color": "#6366f1"},
-            {"name": "Development", "color": "#10b981"},
-            {"name": "Design", "color": "#f59e0b"},
-            {"name": "Marketing", "color": "#ec4899"},
-            {"name": "Education", "color": "#8b5cf6"},
+            {"name": "Общеуниверситетские проекты", "color": "#6366f1"},
+            {"name": "Дисциплины", "color": "#10b981"},
         ]
 
+        categories_by_name: dict[str, WorkSpaceCategories] = {}
         for category_data in categories:
-            result = await self._workspace_service._repository.uow.session.execute(
-                select(WorkSpaceCategories).where(WorkSpaceCategories.name == category_data["name"])
-            )
-            existing_category = result.scalar_one_or_none()
-            
-            if not existing_category:
-                self._workspace_service._repository.uow.session.add(
-                    WorkSpaceCategories(**category_data)
-                )
+            category = await self._workspace_service.get_or_create_category(category_data)
+            categories_by_name[category.name] = category
 
         await self._workspace_service._repository.uow.commit()
 
         # 6. Создаём тестовые workspace (проверяем существование по имени)
-        admin_workspaces = ["Admin Workspace 1", "Admin Workspace 2"]
+        admin_workspaces = [
+            ("Admin Workspace 1", "Общеуниверситетские проекты"),
+            ("Admin Workspace 2", "Дисциплины"),
+        ]
 
-        for i, ws_name in enumerate(admin_workspaces):
-            workspace_data = WorkSpaceFull(
-                id=i,
-                name=ws_name,
-                author_id=existing_admin.id,
-                status_id=1,
+        for ws_name, category_name in admin_workspaces:
+            existing_workspace_result = await self._workspace_service._repository.uow.session.execute(
+                select(WorkSpace).where(WorkSpace.name == ws_name)
             )
-            await self._workspace_service.update_or_create(defaults=workspace_data.model_dump(), id=i)
+            existing_workspace = existing_workspace_result.scalar_one_or_none()
+
+            if not existing_workspace:
+                category = categories_by_name.get(category_name)
+                workspace_data = WorkSpaceCreate(
+                    name=ws_name,
+                    author_id=existing_admin.id,
+                    status_id=1,
+                    category_id=category.id if category else None,
+                )
+                await self._workspace_service.create_workspace(workspace_data, existing_admin.id)
