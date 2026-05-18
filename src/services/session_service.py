@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from src.core.exceptions import NotFoundError
 from src.core.logging_config import get_logger
@@ -16,6 +17,9 @@ from src.schema.session import (
     SessionTerminateResponse,
     SessionUpdate,
 )
+
+if TYPE_CHECKING:
+    from src.model.auth import Session
 
 
 class SessionService:
@@ -198,7 +202,7 @@ class SessionService:
         await self._repository.set_refresh_token(session.id, refresh_hash, token_family)
         return SessionResponse.model_validate(session)
 
-    async def get_session_by_refresh_hash(self, token_hash: str):
+    async def get_session_by_refresh_hash(self, token_hash: str) -> Session | None:
         return await self._repository.get_by_refresh_token_hash(token_hash)
 
     async def rotate_refresh_token_in_session(self, session_id: str, old_hash: str, new_hash: str) -> bool:

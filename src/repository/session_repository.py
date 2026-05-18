@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, func, select, update
 
 from src.core.logging_config import get_logger
 from src.core.uow import IUnitOfWork
@@ -102,7 +102,7 @@ class SessionRepository:
 
             # Если не указано время истечения, устанавливаем на 30 дней
             if not session_dict.get("expires_at"):
-                session_dict["expires_at"] = datetime.utcnow() + timedelta(days=30)
+                session_dict["expires_at"] = datetime.now(UTC) + timedelta(days=30)
 
             db_session = Session(**session_dict)
             self.uow.session.add(db_session)
@@ -298,7 +298,9 @@ class SessionRepository:
         """Найти сессию по хешу refresh-токена"""
         result = await self.uow.session.execute(
             select(Session).where(
-                and_(Session.refresh_token_hash == token_hash, Session.is_active, Session.expires_at > datetime.utcnow())
+                and_(
+                    Session.refresh_token_hash == token_hash, Session.is_active, Session.expires_at > datetime.utcnow()
+                )
             )
         )
         return result.scalar_one_or_none()
@@ -311,25 +313,18 @@ class SessionRepository:
             session.token_family = token_family
 
     async def rotate_refresh_token(self, session_id: str, old_hash: str, new_hash: str) -> bool:
-        """Ротация refresh-токена: заменить старый хеш на новый (с защитой от race condition)"""
+        """Ротация refresh-токена: атомарный UPDATE с защитой от race condition"""
         result = await self.uow.session.execute(
-            select(Session).where(
-                and_(Session.id == session_id, Session.refresh_token_hash == old_hash, Session.is_active)
-            )
+            update(Session)
+            .where(and_(Session.id == session_id, Session.refresh_token_hash == old_hash, Session.is_active))
+            .values(refresh_token_hash=new_hash, last_activity=datetime.utcnow())
         )
-        session = result.scalar_one_or_none()
-        if not session:
-            return False
-        session.refresh_token_hash = new_hash
-        session.last_activity = datetime.utcnow()
-        return True
+        return result.rowcount > 0
 
     async def revoke_token_family(self, token_family: str) -> int:
         """Отозвать все сессии в token_family (reuse detection)"""
         result = await self.uow.session.execute(
-            select(Session).where(
-                and_(Session.token_family == token_family, Session.is_active)
-            )
+            select(Session).where(and_(Session.token_family == token_family, Session.is_active))
         )
         sessions = result.scalars().all()
         for session in sessions:

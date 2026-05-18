@@ -9,8 +9,8 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from src.core.database import Base
 
 if TYPE_CHECKING:
-    from src.model.project import Project, ProjectParticipation, Response, Resume
     from src.model.kanban_models import Task
+    from src.model.project import Project, ProjectParticipation, Response, Resume
 
 
 class User(Base):

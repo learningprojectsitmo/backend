@@ -143,9 +143,7 @@ class AuthService:
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
-        refresh_expire_days = (
-            self._refresh_token_expire_days if remember_me else self._refresh_token_expire_days_short
-        )
+        refresh_expire_days = self._refresh_token_expire_days if remember_me else self._refresh_token_expire_days_short
         access_ttl = timedelta(minutes=self._access_token_expire_minutes)
         refresh_ttl = timedelta(days=refresh_expire_days)
 
@@ -197,8 +195,8 @@ class AuthService:
 
     # ───────── refresh (opaque token + rotation + reuse detection) ─────────
 
-    async def refresh_access_token(self, raw_refresh_token: str) -> tuple[Token, str]:
-        """Обновить access-токен. Возвращает (Token, новый_raw_refresh_token)."""
+    async def refresh_access_token(self, raw_refresh_token: str) -> tuple[Token, str, int]:
+        """Обновить access-токен. Возвращает (Token, новый_raw_refresh_token, max_age_секунд)."""
         exc = HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid refresh token",
@@ -212,18 +210,15 @@ class AuthService:
             self._logger.warning("Refresh failed: session not found by token hash")
             raise exc
 
-        # Ротация: старый хеш → новый хеш (один раз)
         new_raw, new_hash = self._generate_refresh_token()
-        rotated = await self._session_service.rotate_refresh_token_in_session(
-            session.id, token_hash, new_hash
-        )
+        rotated = await self._session_service.rotate_refresh_token_in_session(session.id, token_hash, new_hash)
 
         if not rotated:
-            # Reuse detection: кто-то пытается использовать уже заменённый токен
             revoked = await self._session_service.revoke_token_family(session.token_family)
             self._logger.warning(
                 "Refresh token reuse detected! Revoked %d sessions in family %s",
-                revoked, session.token_family,
+                revoked,
+                session.token_family,
             )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -241,9 +236,12 @@ class AuthService:
 
         self._logger.info(f"Access token refreshed for user: {user.email} (ID: {user.id})")
 
+        max_age = max(0, int((session.expires_at - datetime.now(UTC)).total_seconds())) if session.expires_at else 0
+
         return (
             Token(access_token=access_token, expires_in=self._access_token_expire_minutes * 60),
             new_raw,
+            max_age,
         )
 
     async def get_user_by_token(self, token: str) -> User:

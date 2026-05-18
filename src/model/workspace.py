@@ -26,6 +26,7 @@ class WorkSpaceCategories(Base):
     def __repr__(self) -> str:
         return f"WorkSpaceCategories(id={self.id!r}, name={self.name!r}, created_at={self.created_at!r})"
 
+
 class WorkSpace(Base):
     __tablename__ = "workspace"
 
@@ -40,7 +41,7 @@ class WorkSpace(Base):
 
     # Отношения
     category: Mapped[WorkSpaceCategories | None] = relationship(back_populates="workspaces")
-    projects: Mapped[list["Project"]] = relationship(back_populates="workspace")
+    projects: Mapped[list[Project]] = relationship(back_populates="workspace")
 
     def __repr__(self) -> str:
         return (
@@ -57,9 +58,7 @@ class WorkSpaceStatus(Base):
     created_at: Mapped[TIMESTAMP] = mapped_column(TIMESTAMP, server_default=func.now(), nullable=False)
 
     def __repr__(self) -> str:
-        return (
-            f"WorkSpaceStatus(id={self.id!r}, name={self.name!r}, status_id={self.status_id!r})"
-        )
+        return f"WorkSpaceStatus(id={self.id!r}, name={self.name!r}, status_id={self.status_id!r})"
 
 
 class WorkSpaceParticipation(Base):
@@ -71,6 +70,4 @@ class WorkSpaceParticipation(Base):
     created_at: Mapped[TIMESTAMP] = mapped_column(TIMESTAMP, server_default=func.now(), nullable=False)
 
     def __repr__(self) -> str:
-        return (
-            f"WorkSpaceParticipation(id={self.id!r}, workspace_id={self.workspace_id!r}, participant_id={self.participant_id!r})"
-        )
+        return f"WorkSpaceParticipation(id={self.id!r}, workspace_id={self.workspace_id!r}, participant_id={self.participant_id!r})"

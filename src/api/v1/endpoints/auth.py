@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 
-from src.core.container import get_auth_service, get_user_service
+from src.core.container import get_auth_service
 from src.core.dependencies import get_current_user
 from src.core.logging_config import api_logger
 from src.model.user import User
@@ -17,9 +17,7 @@ from src.schema.auth import (
     RefreshRequest,
     Token,
 )
-from src.schema.user import UserCreate, UserFull
 from src.services.auth_service import AuthService
-from src.services.user_service import UserService
 
 REFRESH_COOKIE_KEY = "refresh_token"
 REFRESH_COOKIE_PATH = "/v1/auth"
@@ -53,7 +51,7 @@ async def login_for_access_token(
     form_data: OAuth2PasswordRequestForm = Depends(),
     remember_me: bool = Form(default=True),
     auth_service: AuthService = Depends(get_auth_service),
-) -> Token:
+) -> Response:
     """Вход в систему. Access token в JSON, refresh token в HttpOnly cookie."""
     client_ip = request.client.host if request.client else "unknown"
 
@@ -73,13 +71,19 @@ async def login_for_access_token(
         )
         _set_refresh_cookie(response, raw_refresh, max_age)
 
-        api_logger.log_request(
-            method="POST", path="/auth/login", user_id=None, ip_address=client_ip, status_code=200, response_time=0.0,
-        )
-        return response
     except Exception as e:
         api_logger.log_error(method="POST", path="/auth/login", error=e, user_id=None)
         raise
+    else:
+        api_logger.log_request(
+            method="POST",
+            path="/auth/login",
+            user_id=None,
+            ip_address=client_ip,
+            status_code=200,
+            response_time=0.0,
+        )
+        return response
 
 
 # ───────── /token shim for Swagger Authorize ─────────
@@ -89,7 +93,7 @@ async def login_for_access_token(
 async def token_for_swagger(
     form_data: OAuth2PasswordRequestForm = Depends(),
     auth_service: AuthService = Depends(get_auth_service),
-):
+) -> Response:
     """OAuth2-compliant endpoint for Swagger Authorize button only"""
     token, raw_refresh = await auth_service.login_for_access_token(
         email=form_data.username,
@@ -114,7 +118,7 @@ async def refresh_token(
     request: Request,
     data: RefreshRequest | None = None,
     auth_service: AuthService = Depends(get_auth_service),
-) -> Token:
+) -> Response:
     """Обновить access-токен.
 
     Refresh-токен читается из:
@@ -130,23 +134,28 @@ async def refresh_token(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token missing")
 
     try:
-        token, new_raw = await auth_service.refresh_access_token(raw_refresh)
+        token, new_raw, max_age = await auth_service.refresh_access_token(raw_refresh)
 
         response = Response(
             content=token.model_dump_json(),
             media_type="application/json",
             status_code=200,
         )
-        max_age = 30 * 86400  # refresh token присылается с remember_me-сроком; упрощённо 30d
         _set_refresh_cookie(response, new_raw, max_age)
 
-        api_logger.log_request(
-            method="POST", path="/auth/refresh", user_id=None, ip_address=client_ip, status_code=200, response_time=0.0,
-        )
-        return response
     except Exception as e:
         api_logger.log_error(method="POST", path="/auth/refresh", error=e, user_id=None)
         raise
+    else:
+        api_logger.log_request(
+            method="POST",
+            path="/auth/refresh",
+            user_id=None,
+            ip_address=client_ip,
+            status_code=200,
+            response_time=0.0,
+        )
+        return response
 
 
 # ───────── logout ─────────
@@ -157,17 +166,21 @@ async def logout(
     request: Request,
     _current_user: Annotated[User, Depends(get_current_user)],
     auth_service: AuthService = Depends(get_auth_service),
-) -> dict[str, str]:
+) -> Response:
     """Выход из системы — завершает сессию и очищает refresh cookie."""
     client_ip = request.client.host if request.client else "unknown"
 
-    # Инактивируем сессию по refresh cookie (если есть)
     raw_refresh = request.cookies.get(REFRESH_COOKIE_KEY)
     if raw_refresh:
         await auth_service.logout_by_refresh_token(raw_refresh)
 
     api_logger.log_request(
-        method="POST", path="/auth/logout", user_id=None, ip_address=client_ip, status_code=200, response_time=0.0,
+        method="POST",
+        path="/auth/logout",
+        user_id=None,
+        ip_address=client_ip,
+        status_code=200,
+        response_time=0.0,
     )
 
     response = Response(
@@ -193,7 +206,12 @@ async def get_current_user_info(
     permissions = await auth_service.get_all_user_permissions(current_user)
 
     api_logger.log_request(
-        method="GET", path="/auth/me", user_id=current_user.id, ip_address=client_ip, status_code=200, response_time=0.0,
+        method="GET",
+        path="/auth/me",
+        user_id=current_user.id,
+        ip_address=client_ip,
+        status_code=200,
+        response_time=0.0,
     )
 
     return {

@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import func, select
 
 from src.core.exceptions import PermissionError
-from src.model.workspace import WorkSpace, WorkSpaceCategories
+from src.model.workspace import WorkSpace, WorkSpaceCategories, WorkSpaceParticipation
 from src.schema.workspace import WorkSpaceCreate, WorkSpaceUpdate
 from src.services.base_service import BaseService
 
@@ -70,22 +70,16 @@ class WorkSpaceService(BaseService[WorkSpace, WorkSpaceCreate, WorkSpaceUpdate])
 
         return await self._workspace_repository.delete(workspace_id)
 
-    async def get_workspaces_with_stats(
-        self, skip: int = 0, limit: int = 10
-    ) -> tuple[list[WorkSpace], int]:
+    async def get_workspaces_with_stats(self, skip: int = 0, limit: int = 10) -> tuple[list[WorkSpace], int]:
         """Получить workspace с подсчетом статистики"""
         return await self._workspace_repository.get_workspaces_with_stats(skip, limit)
 
-    async def get_workspaces_menu_data(
-        self, skip: int = 0, limit: int = 10
-    ) -> tuple[list[dict], int]:
+    async def get_workspaces_menu_data(self, skip: int = 0, limit: int = 10) -> tuple[list[dict], int]:
         """Получить данные для меню workspace (оптимизированный запрос)"""
         return await self._workspace_repository.get_workspaces_menu_data(skip, limit)
 
     async def get_workspace_participants_count(self, workspace_id: int) -> int:
         """Получить количество участников workspace"""
-        from src.model.workspace import WorkSpaceParticipation
-
         result = await self._workspace_repository.uow.session.execute(
             select(func.count()).where(WorkSpaceParticipation.workspace_id == workspace_id)
         )
@@ -93,8 +87,6 @@ class WorkSpaceService(BaseService[WorkSpace, WorkSpaceCreate, WorkSpaceUpdate])
 
     async def get_all_categories(self) -> list:
         """Получить все категории workspace"""
-        from src.model.workspace import WorkSpaceCategories
-
         result = await self._workspace_repository.uow.session.execute(
             select(WorkSpaceCategories).order_by(WorkSpaceCategories.id)
         )
@@ -102,8 +94,6 @@ class WorkSpaceService(BaseService[WorkSpace, WorkSpaceCreate, WorkSpaceUpdate])
 
     async def get_workspace_category_name(self, category_id: int) -> str | None:
         """Получить имя категории по ID"""
-        from src.model.workspace import WorkSpaceCategories
-
         result = await self._workspace_repository.uow.session.execute(
             select(WorkSpaceCategories).where(WorkSpaceCategories.id == category_id)
         )
@@ -112,8 +102,6 @@ class WorkSpaceService(BaseService[WorkSpace, WorkSpaceCreate, WorkSpaceUpdate])
 
     async def get_or_create_category(self, category_data: dict) -> WorkSpaceCategories:
         """Получить категорию или создать если не существует"""
-        from src.model.workspace import WorkSpaceCategories
-
         result = await self._workspace_repository.uow.session.execute(
             select(WorkSpaceCategories).where(WorkSpaceCategories.name == category_data["name"])
         )

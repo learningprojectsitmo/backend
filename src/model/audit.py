@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Integer, JSON, String, func
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.core.database import Base
@@ -31,4 +31,3 @@ class AuditLog(Base):
 
     def __repr__(self) -> str:
         return f"AuditLog(id={self.id}, entity_type={self.entity_type!r}, entity_id={self.entity_id}, action={self.action!r})"
-

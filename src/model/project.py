@@ -3,7 +3,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Column as SAColumn, DateTime, ForeignKey, Integer, String, Table, Text, func
+from sqlalchemy import Column as SAColumn
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Table, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.core.database import Base
@@ -43,7 +44,7 @@ class Project(Base):
     )
 
     author: Mapped[User] = relationship(back_populates="projects_led")
-    workspace: Mapped["WorkSpace | None"] = relationship(back_populates="projects")
+    workspace: Mapped[WorkSpace | None] = relationship(back_populates="projects")
     responses: Mapped[list[Response]] = relationship(
         back_populates="project",
         cascade="all, delete-orphan",
@@ -57,7 +58,7 @@ class Project(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
-    columns: Mapped[list["Column"]] = relationship(
+    columns: Mapped[list[Column]] = relationship(
         back_populates="project",
         cascade="all, delete-orphan",
         order_by="Column.position",
@@ -137,10 +138,7 @@ class Response(Base):
     project: Mapped[Project] = relationship(back_populates="responses")
 
     def __repr__(self) -> str:
-        return (
-            f"Response(id={self.id!r}, respondent_id={self.respondent_id!r}, "
-            f"project_id={self.project_id!r})"
-        )
+        return f"Response(id={self.id!r}, respondent_id={self.respondent_id!r}, project_id={self.project_id!r})"
 
 
 class Resume(Base):

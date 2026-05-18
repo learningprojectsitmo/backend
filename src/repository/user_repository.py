@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from sqlalchemy import delete, select
-
 from pydantic import BaseModel
+from sqlalchemy import delete, select
 
 from src.core.uow import IUnitOfWork
 from src.model.user import Permission, User, UserPermission

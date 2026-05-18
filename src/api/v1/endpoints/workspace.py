@@ -8,6 +8,8 @@ from src.core.exceptions import PermissionError
 from src.model.user import User
 from src.schema.workspace import (
     Category as SpaceCategory,
+)
+from src.schema.workspace import (
     Space,
     SpacesListResponse,
     WorkSpaceCreate,
@@ -34,10 +36,7 @@ async def get_workspace_menu(
     categories = await workspace_service.get_all_categories()
 
     # Формируем список категорий для ответа
-    categories_response = [
-        SpaceCategory(id=cat.id, name=cat.name, color=cat.color or "#6366f1")
-        for cat in categories
-    ]
+    categories_response = [SpaceCategory(id=cat.id, name=cat.name, color=cat.color or "#6366f1") for cat in categories]
 
     spaces = [Space.model_validate(item) for item in spaces_data]
 

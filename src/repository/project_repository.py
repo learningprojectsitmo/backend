@@ -15,9 +15,7 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         self._model = Project
 
     async def get_by_author_id(self, author_id: int) -> list[Project]:
-        result = await self.uow.session.execute(
-            select(Project).where(Project.author_id == author_id)
-        )
+        result = await self.uow.session.execute(select(Project).where(Project.author_id == author_id))
         return list(result.scalars().all())
 
     async def get_projects_with_details(self, skip: int = 0, limit: int = 100) -> list[Project]:
@@ -38,9 +36,7 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         if not tag_names:
             return []
 
-        existing_tags_result = await self.uow.session.execute(
-            select(Tag).where(Tag.name.in_(tag_names))
-        )
+        existing_tags_result = await self.uow.session.execute(select(Tag).where(Tag.name.in_(tag_names)))
         existing_tags_list = list(existing_tags_result.scalars().all())
         existing_tags = {tag.name: tag for tag in existing_tags_list}
 

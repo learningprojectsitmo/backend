@@ -122,11 +122,9 @@ class FixtureService:
                 select(WorkSpaceStatus).where(WorkSpaceStatus.name == status_data["name"])
             )
             existing_status = result.scalar_one_or_none()
-            
+
             if not existing_status:
-                self._workspace_service._repository.uow.session.add(
-                    WorkSpaceStatus(**status_data)
-                )
+                self._workspace_service._repository.uow.session.add(WorkSpaceStatus(**status_data))
 
         await self._workspace_service._repository.uow.commit()
 

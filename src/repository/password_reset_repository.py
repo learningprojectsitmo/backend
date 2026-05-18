@@ -19,4 +19,3 @@ class PasswordResetRepository(BaseRepository[PasswordReset, PasswordResetRequest
         """Получить токен сброса пароля по токену"""
         result = await self.uow.session.execute(select(PasswordReset).where(PasswordReset.token == token))
         return result.scalar_one_or_none()
-

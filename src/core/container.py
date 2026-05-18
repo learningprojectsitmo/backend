@@ -28,7 +28,7 @@ from src.services.user_service import UserService
 from src.services.workspace_service import WorkSpaceService
 
 
-async def get_uow() -> AsyncGenerator[IUnitOfWork, None]:
+async def get_uow() -> AsyncGenerator[IUnitOfWork]:
     async with SqlAlchemyUoW() as uow:
         yield uow
 
