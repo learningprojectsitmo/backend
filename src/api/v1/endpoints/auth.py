@@ -198,11 +198,31 @@ async def logout(
 @auth_router.get("/me")
 async def get_current_user_info(
     request: Request,
-    current_user: Annotated[User, Depends(get_current_user)],
     auth_service: AuthService = Depends(get_auth_service),
 ) -> dict[str, object]:
-    """Получить информацию о текущем пользователе"""
+    """Получить информацию о текущем пользователе.
+    Принимает access token в Authorization: Bearer, либо refresh_token в cookie.
+    При аутентификации через refresh_token возвращает новый access_token.
+    """
     client_ip = request.client.host if request.client else "unknown"
+    from_refresh = False
+
+    # Пробуем access token
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        token = auth_header.removeprefix("Bearer ")
+        current_user = await auth_service.get_current_user(token)
+    else:
+        # Пробуем refresh token из cookie
+        raw_refresh = request.cookies.get(REFRESH_COOKIE_KEY)
+        if not raw_refresh:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Not authenticated",
+            )
+        current_user = await auth_service.get_user_by_refresh_token(raw_refresh)
+        from_refresh = True
+
     permissions = await auth_service.get_all_user_permissions(current_user)
 
     api_logger.log_request(
@@ -214,7 +234,7 @@ async def get_current_user_info(
         response_time=0.0,
     )
 
-    return {
+    result: dict[str, object] = {
         "id": current_user.id,
         "email": current_user.email,
         "first_name": current_user.first_name,
@@ -222,6 +242,14 @@ async def get_current_user_info(
         "last_name": current_user.last_name,
         "permissions": permissions,
     }
+
+    if from_refresh:
+        access_token = auth_service.create_access_token(
+            data={"sub": current_user.email, "user_id": current_user.id}
+        )
+        result["access_token"] = access_token
+
+    return result
 
 
 # ───────── password reset ─────────

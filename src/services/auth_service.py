@@ -337,6 +337,29 @@ class AuthService:
             max_age,
         )
 
+    async def get_user_by_refresh_token(self, raw_refresh_token: str) -> User:
+        """Получить пользователя по refresh-токену (без ротации)."""
+        exc = HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+        token_hash = self._hash_token(raw_refresh_token)
+        session = await self._session_service.get_session_by_refresh_hash(token_hash)
+
+        if not session or not session.is_active:
+            raise exc
+
+        if session.expires_at and session.expires_at < datetime.now(UTC):
+            raise exc
+
+        user = await self._user_repository.get_by_id(session.user_id)
+        if not user:
+            raise exc
+
+        return user
+
     async def get_user_by_token(self, token: str) -> User:
         return await self.get_current_user(token)
 
