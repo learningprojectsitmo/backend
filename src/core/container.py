@@ -164,8 +164,17 @@ async def get_fixtures_service(
     role_service: RoleService = Depends(get_role_service),
     user_service: UserService = Depends(get_user_service),
     workspace_service: WorkSpaceService = Depends(get_workspace_service),
+    project_service: ProjectService = Depends(get_project_service),
+    project_repository: ProjectRepository = Depends(get_project_repository),
 ) -> FixtureService:
-    return FixtureService(permission_service, role_service, user_service, workspace_service)
+    return FixtureService(
+        permission_service,
+        role_service,
+        user_service,
+        workspace_service,
+        project_service,
+        project_repository,
+    )
 
 
 async def get_audit_service(

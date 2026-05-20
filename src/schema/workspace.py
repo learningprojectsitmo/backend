@@ -8,8 +8,8 @@ class WorkSpaceCreate(BaseModel):
 
     name: str
     author_id: int | None = None
-    status: int | None = None
-    category: int | None = None
+    status_id: int | None = None
+    category_id: int | None = None
     color: str | None = None
     description: str | None = None
 

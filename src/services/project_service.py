@@ -30,6 +30,14 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         """Получить проекты по автору"""
         return await self._project_repository.get_by_author_id(author_id)
 
+    async def get_projects_by_workspace(
+        self, workspace_id: int, page: int = 1, limit: int = 10
+    ) -> tuple[list[Project], int]:
+        skip = (page - 1) * limit
+        projects = await self._project_repository.get_projects_by_workspace(workspace_id, skip=skip, limit=limit)
+        total = await self._project_repository.count_by_workspace(workspace_id)
+        return projects, total
+
     async def get_projects_paginated(self, page: int = 1, limit: int = 10) -> tuple[list[Project], int]:
         """Получить проекты с пагинацией"""
         skip = (page - 1) * limit
@@ -71,6 +79,7 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
             name=project.name,
             status=status_data,
             deadline=project.deadline,
+            description=project.description,
             participants_count=len(participants),
             progress=project.progress or 0,
             tags=tags,

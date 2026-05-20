@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 import secrets
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -58,6 +59,97 @@ class AuthService:
         """Сгенерировать opaque refresh-токен. Возвращает (raw, hash)"""
         raw = secrets.token_urlsafe(32)
         return raw, AuthService._hash_token(raw)
+
+    # ───────── user-agent helpers ─────────
+
+    @staticmethod
+    def _parse_user_agent(user_agent: str) -> tuple[str | None, str | None]:
+        if not user_agent:
+            return None, None
+
+        user_agent = user_agent.lower()
+
+        if "chrome" in user_agent:
+            if "edg" in user_agent and (version := AuthService._extract_version(user_agent, "edg/")):
+                return "Edge", version
+            elif version := AuthService._extract_version(user_agent, "chrome/"):
+                return "Chrome", version
+        elif "firefox" in user_agent and (version := AuthService._extract_version(user_agent, "firefox/")):
+            return "Firefox", version
+        elif ("opera" in user_agent or "opr" in user_agent) and (
+            version := AuthService._extract_version(user_agent, "opr/")
+        ):
+            return "Opera", version
+        elif (
+            "safari" in user_agent
+            and "chrome" not in user_agent
+            and (version := AuthService._extract_version(user_agent, "version/"))
+        ):
+            return "Safari", version
+
+        return "Unknown Browser", None
+
+    @staticmethod
+    def _extract_version(user_agent: str, pattern: str) -> str | None:
+        try:
+            index = user_agent.find(pattern)
+            if index == -1:
+                return None
+            version_start = index + len(pattern)
+            version_end = user_agent.find(" ", version_start)
+            if version_end == -1:
+                version_end = len(user_agent)
+            return user_agent[version_start:version_end]
+        except Exception:
+            return None
+
+    @staticmethod
+    def _get_device_name(user_agent: str) -> str | None:
+        if not user_agent:
+            return None
+
+        user_agent = user_agent.lower()
+
+        if "iphone" in user_agent:
+            return "iPhone"
+        elif "ipad" in user_agent:
+            return "iPad"
+        elif "android" in user_agent:
+            return "Android Phone" if "mobile" in user_agent else "Android Device"
+        elif "mobile" in user_agent or "tablet" in user_agent:
+            return "Mobile Device" if "mobile" in user_agent else "Tablet"
+        return "Desktop"
+
+    @staticmethod
+    def _get_os_name(user_agent: str) -> str | None:
+        if not user_agent:
+            return None
+
+        user_agent = user_agent.lower()
+
+        if "windows nt" in user_agent or ("mac os x" in user_agent or "macintosh" in user_agent):
+            return "Windows" if "windows nt" in user_agent else "macOS"
+        elif "android" in user_agent:
+            return "Android"
+        elif "iphone" in user_agent or "ipad" in user_agent or "ios" in user_agent:
+            return "iOS"
+        elif "linux" in user_agent or "cros" in user_agent:
+            return "Linux" if "linux" in user_agent else "Chrome OS"
+        return "Unknown OS"
+
+    @staticmethod
+    def _get_device_type(user_agent: str) -> str | None:
+        if not user_agent:
+            return None
+
+        user_agent = user_agent.lower()
+
+        if "mobile" in user_agent or "android" in user_agent or "iphone" in user_agent:
+            return "mobile"
+        elif "tablet" in user_agent or "ipad" in user_agent:
+            return "tablet"
+        else:
+            return "desktop"
 
     # ───────── password ─────────
 
@@ -180,6 +272,7 @@ class AuthService:
 
             except Exception:
                 self._logger.exception("Failed to create session for user %s", user.id)
+                raise
 
         if request:
             ip_address = request.client.host if request.client else "unknown"

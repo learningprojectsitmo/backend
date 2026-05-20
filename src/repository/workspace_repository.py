@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from sqlalchemy import func, literal, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from src.core.uow import IUnitOfWork
+from src.model.project import Project
 from src.model.workspace import WorkSpace, WorkSpaceCategories, WorkSpaceParticipation
 from src.repository.base_repository import BaseRepository
 from src.schema.workspace import WorkSpaceCreate, WorkSpaceUpdate
@@ -53,12 +54,23 @@ class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUp
             .subquery()
         )
 
+        # Подзапрос для подсчёта проектов по каждому workspace
+        projects_count = (
+            select(
+                Project.workspace_id,
+                func.count(Project.id).label("projects_count"),
+            )
+            .where(Project.workspace_id.isnot(None))
+            .group_by(Project.workspace_id)
+            .subquery()
+        )
+
         # Основной запрос: сразу возвращаем поля, соответствующие schema.Space.
         query = (
             select(
                 WorkSpace.id.label("id"),
                 WorkSpace.name.label("title"),
-                literal(0).label("projectsCount"),
+                func.coalesce(projects_count.c.projects_count, 0).label("projectsCount"),
                 func.coalesce(participants_count.c.participants_count, 0).label("membersCount"),
                 func.coalesce(WorkSpace.color, WorkSpaceCategories.color, "#6366f1").label("color"),
                 func.coalesce(WorkSpaceCategories.name, "General").label("category"),
@@ -66,6 +78,7 @@ class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUp
                 WorkSpace.description.label("description"),
             )
             .outerjoin(participants_count, WorkSpace.id == participants_count.c.workspace_id)
+            .outerjoin(projects_count, WorkSpace.id == projects_count.c.workspace_id)
             .outerjoin(WorkSpaceCategories, WorkSpace.category_id == WorkSpaceCategories.id)
             .order_by(WorkSpace.id)
             .offset(skip)

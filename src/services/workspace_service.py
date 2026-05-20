@@ -41,6 +41,8 @@ class WorkSpaceService(BaseService[WorkSpace, WorkSpaceCreate, WorkSpaceUpdate])
         """Создать новый workspace"""
         if not workspace_data.author_id:
             workspace_data.author_id = author_id
+        if not workspace_data.status_id:
+            workspace_data.status_id = 1
         return await self._workspace_repository.create(workspace_data)
 
     async def update_workspace(

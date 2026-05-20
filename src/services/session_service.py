@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from src.core.exceptions import NotFoundError
@@ -239,7 +239,7 @@ class SessionService:
                 return False
 
             # Проверяем, не истекла ли сессия
-            if session.expires_at and session.expires_at < datetime.utcnow():
+            if session.expires_at and session.expires_at < datetime.now(UTC):
                 # Автоматически завершаем истекшую сессию
                 await self._repository.terminate_session(session_id)
                 return False

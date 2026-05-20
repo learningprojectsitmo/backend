@@ -153,7 +153,7 @@ class SessionRepository:
             self._logger.exception(f"Error updating last activity for session {session_id}")
             raise
         else:
-            db_session.last_activity = datetime.utcnow()
+            db_session.last_activity = datetime.now(UTC)
             self._logger.debug(f"Updated last activity for session {session_id}")
             return db_session
 
@@ -173,7 +173,7 @@ class SessionRepository:
             current_session = await self.get_by_id(session_id)
             if current_session and current_session.user_id == user_id:
                 current_session.is_current = True
-                current_session.last_activity = datetime.utcnow()
+                current_session.last_activity = datetime.now(UTC)
                 self._logger.info(f"Set session {session_id} as current for user {user_id}")
                 return True
             else:
@@ -248,7 +248,7 @@ class SessionRepository:
 
         try:
             result = await self.uow.session.execute(
-                select(Session).where(and_(Session.expires_at < datetime.utcnow(), Session.is_active))
+                select(Session).where(and_(Session.expires_at < datetime.now(UTC), Session.is_active))
             )
             expired_sessions = result.scalars().all()
 
@@ -299,7 +299,7 @@ class SessionRepository:
         result = await self.uow.session.execute(
             select(Session).where(
                 and_(
-                    Session.refresh_token_hash == token_hash, Session.is_active, Session.expires_at > datetime.utcnow()
+                    Session.refresh_token_hash == token_hash, Session.is_active, Session.expires_at > datetime.now(UTC)
                 )
             )
         )
@@ -317,7 +317,7 @@ class SessionRepository:
         result = await self.uow.session.execute(
             update(Session)
             .where(and_(Session.id == session_id, Session.refresh_token_hash == old_hash, Session.is_active))
-            .values(refresh_token_hash=new_hash, last_activity=datetime.utcnow())
+            .values(refresh_token_hash=new_hash, last_activity=datetime.now(UTC))
         )
         return result.rowcount > 0
 
