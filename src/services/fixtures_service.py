@@ -7,7 +7,7 @@ from src.model.settings import SettingsType, SpaceSettings
 from src.model.workspace import WorkSpace, WorkSpaceCategories, WorkSpaceParticipation, WorkSpaceStatus
 from src.repository.project_repository import ProjectRepository
 from src.schema.permission import PermissionMatrix
-from src.schema.project import ProjectCreate
+from src.schema.project import ProjectCreate, VacancyCreate
 from src.schema.settings import SpaceSettingsUpdate
 from src.schema.user import UserCreate
 from src.schema.workspace import WorkSpaceCreate
@@ -263,6 +263,26 @@ class FixtureService:
                 "status_id": 2,
                 "progress": 75,
                 "tags": ["Frontend", "AI/ML", "Design"],
+                "vacancies": [
+                    VacancyCreate(
+                        title="Backend Developer",
+                        tasks=[
+                            "Проектирование и реализация серверной логики",
+                            "Разработка API и интеграция с БД",
+                            "Написание тестов и документации",
+                        ],
+                        required_count=2,
+                    ),
+                    VacancyCreate(
+                        title="Frontend Developer",
+                        tasks=[
+                            "Разработка пользовательского интерфейса",
+                            "Интеграция с REST API",
+                            "Оптимизация производительности",
+                        ],
+                        required_count=3,
+                    ),
+                ],
             },
             {
                 "name": "Веб-сервис для студентов",
@@ -271,6 +291,24 @@ class FixtureService:
                 "status_id": 4,
                 "progress": 45,
                 "tags": ["Mobile", "iOS", "Android"],
+                "vacancies": [
+                    VacancyCreate(
+                        title="Mobile Developer",
+                        tasks=[
+                            "Разработка мобильного приложения под iOS/Android",
+                            "Работа с push-уведомлениями",
+                        ],
+                        required_count=2,
+                    ),
+                    VacancyCreate(
+                        title="UI/UX Designer",
+                        tasks=[
+                            "Проектирование пользовательских сценариев",
+                            "Создание прототипов и макетов",
+                        ],
+                        required_count=1,
+                    ),
+                ],
             },
             {
                 "name": "AI Learning Platform",
@@ -279,6 +317,16 @@ class FixtureService:
                 "status_id": 2,
                 "progress": 30,
                 "tags": ["Design", "UI/UX"],
+                "vacancies": [
+                    VacancyCreate(
+                        title="ML Engineer",
+                        tasks=[
+                            "Разработка и обучение моделей ML",
+                            "Подготовка данных и фич-инжиниринг",
+                        ],
+                        required_count=2,
+                    ),
+                ],
             },
             {
                 "name": "Мобильное приложение",
@@ -287,6 +335,24 @@ class FixtureService:
                 "status_id": 1,
                 "progress": 10,
                 "tags": ["Mobile", "Frontend"],
+                "vacancies": [
+                    VacancyCreate(
+                        title="iOS Developer",
+                        tasks=[
+                            "Разработка на Swift и SwiftUI",
+                            "Интеграция с бэкендом",
+                        ],
+                        required_count=1,
+                    ),
+                    VacancyCreate(
+                        title="Android Developer",
+                        tasks=[
+                            "Разработка на Kotlin",
+                            "Интеграция с бэкендом",
+                        ],
+                        required_count=1,
+                    ),
+                ],
             },
         ]
 
@@ -307,6 +373,7 @@ class FixtureService:
                 tags=data["tags"],
                 author_id=admin.id,
                 workspace_id=ws.id,
+                vacancies=data.get("vacancies"),
             )
 
             # Используем сервис — он сам разберётся с тегами и связями

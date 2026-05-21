@@ -4,7 +4,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from src.core.uow import IUnitOfWork
-from src.model.project import Project, ProjectParticipation, Response, Tag
+from src.model.project import Project, ProjectParticipation, ProjectVacancy, Response, Tag
 from src.repository.base_repository import BaseRepository
 from src.schema.project import ProjectCreate, ProjectUpdate
 
@@ -22,6 +22,7 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
                 selectinload(Project.participants).selectinload(ProjectParticipation.participant),
                 selectinload(Project.tags),
                 selectinload(Project.status),
+                selectinload(Project.vacancies),
                 selectinload(Project.responses).selectinload(Response.respondent),
                 selectinload(Project.workspace),
             )

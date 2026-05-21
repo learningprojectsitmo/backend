@@ -45,6 +45,21 @@ class ProjectStatusItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class VacancyItem(BaseModel):
+    id: int
+    title: str
+    tasks: list[str]
+    required_count: int
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class VacancyCreate(BaseModel):
+    title: str
+    tasks: list[str] = []
+    required_count: int = 1
+
+
 class ProjectCreate(BaseModel):
     """Схема для создания проекта"""
 
@@ -57,6 +72,7 @@ class ProjectCreate(BaseModel):
     progress: int | None = None
     tags: list[str] | None = None
     workspace_id: int | None = None
+    vacancies: list[VacancyCreate] | None = None
 
 
 class ProjectUpdate(BaseModel):
@@ -71,6 +87,7 @@ class ProjectUpdate(BaseModel):
     progress: int | None = None
     tags: list[str] | None = None
     workspace_id: int | None = None
+    vacancies: list[VacancyCreate] | None = None
 
 
 class ProjectFull(ProjectCreate):
@@ -85,6 +102,7 @@ class ProjectFull(ProjectCreate):
     participants_preview: list[ParticipantPreview] = []
     members: list[ParticipantFull] = []
     replycants: list[ResponseItem] = []
+    vacancies: list[VacancyItem] = []
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -146,6 +164,21 @@ class ProjectFull(ProjectCreate):
             if r.respondent
         ]
 
+        try:
+            vacancies_list = project.vacancies or []
+        except Exception:
+            vacancies_list = []
+
+        vacancies = [
+            VacancyItem(
+                id=v.id,
+                title=v.title,
+                tasks=v.tasks or [],
+                required_count=v.required_count,
+            )
+            for v in vacancies_list
+        ]
+
         return ProjectFull(
             id=project.id,
             name=project.name,
@@ -163,6 +196,7 @@ class ProjectFull(ProjectCreate):
             participants_preview=participants_preview,
             members=members,
             replycants=replycants,
+            vacancies=vacancies,
         )
 
 

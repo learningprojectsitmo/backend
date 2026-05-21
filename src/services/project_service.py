@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from src.core.exceptions import PermissionError
-from src.model.project import Project
+from src.model.project import Project, ProjectVacancy
 from src.schema.project import (
     ParticipantPreview,
     ProjectCreate,
@@ -91,9 +91,10 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         if not project_data.author_id:
             project_data.author_id = author_id
 
-        # Преобразуем в dict и вырезаем теги
+        # Преобразуем в dict и вырезаем теги и вакансии
         payload = project_data.model_dump(exclude_none=True)
         tags_names = payload.pop("tags", None)
+        vacancies_data = payload.pop("vacancies", None)
 
         # 1. Создаем основной объект проекта
         project = await self._project_repository.create(payload)
@@ -106,8 +107,19 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
             project.tags = await self._project_repository.get_or_create_tags(tags_names)
             await self._project_repository.uow.session.flush()
 
+        if vacancies_data:
+            for v in vacancies_data:
+                vacancy = ProjectVacancy(
+                    project_id=project.id,
+                    title=v["title"],
+                    tasks=v.get("tasks", []),
+                    required_count=v.get("required_count", 1),
+                )
+                self._project_repository.uow.session.add(vacancy)
+            await self._project_repository.uow.session.flush()
+
         # Чтобы Pydantic увидел обновленные связи после flush
-        await self._project_repository.uow.session.refresh(project, ["tags", "status"])
+        await self._project_repository.uow.session.refresh(project, ["tags", "status", "vacancies"])
 
         return project
 
@@ -127,17 +139,35 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
 
         payload = project_data.model_dump(exclude_none=True)
         tags_names = payload.pop("tags", None)
+        vacancies_data = payload.pop("vacancies", None)
 
         project = await self._project_repository.update(project_id, payload)
 
         if project is not None:
             # Важно подгрузить текущие теги перед обновлением
-            await self._project_repository.uow.session.refresh(project, ["tags", "status"])
+            await self._project_repository.uow.session.refresh(project, ["tags", "status", "vacancies"])
+
             if tags_names is not None:
                 project.tags = await self._project_repository.get_or_create_tags(tags_names)
                 await self._project_repository.uow.session.flush()
 
-            await self._project_repository.uow.session.refresh(project, ["tags", "status", "participants"])
+            if vacancies_data is not None:
+                # Удаляем старые вакансии и создаём новые
+                for old_v in project.vacancies:
+                    await self._project_repository.uow.session.delete(old_v)
+                await self._project_repository.uow.session.flush()
+
+                for v in vacancies_data:
+                    vacancy = ProjectVacancy(
+                        project_id=project.id,
+                        title=v["title"],
+                        tasks=v.get("tasks", []),
+                        required_count=v.get("required_count", 1),
+                    )
+                    self._project_repository.uow.session.add(vacancy)
+                await self._project_repository.uow.session.flush()
+
+            await self._project_repository.uow.session.refresh(project, ["tags", "status", "participants", "vacancies"])
 
         return project
 

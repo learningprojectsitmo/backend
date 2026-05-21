@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Column as SAColumn
+from sqlalchemy import JSON, Column as SAColumn
 from sqlalchemy import DateTime, ForeignKey, Integer, String, Table, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -50,6 +50,10 @@ class Project(Base):
         cascade="all, delete-orphan",
     )
     participants: Mapped[list[ProjectParticipation]] = relationship(
+        back_populates="project",
+        cascade="all, delete-orphan",
+    )
+    vacancies: Mapped[list[ProjectVacancy]] = relationship(
         back_populates="project",
         cascade="all, delete-orphan",
     )
@@ -157,3 +161,21 @@ class Resume(Base):
 
     def __repr__(self) -> str:
         return f"Resume(id={self.id!r}, author_id={self.author_id!r}, header={self.header!r})"
+
+
+class ProjectVacancy(Base):
+    __tablename__ = "project_vacancy"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("project.id"), nullable=False)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    tasks: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    required_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    project: Mapped[Project] = relationship(back_populates="vacancies")
+
+    def __repr__(self) -> str:
+        return (
+            f"ProjectVacancy(id={self.id!r}, project_id={self.project_id!r}, "
+            f"title={self.title!r}, required_count={self.required_count!r})"
+        )
