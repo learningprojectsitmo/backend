@@ -177,8 +177,8 @@ class FixtureService:
     ) -> dict[str, WorkSpace]:
         repo = self._workspace_service._repository
         workspaces_data = [
-            ("Admin Workspace 1", "Общеуниверситетские проекты", "#6366f1"),
-            ("Admin Workspace 2", "Дисциплины", "#10b981"),
+            ("Admin Workspace 1", "Общеуниверситетские проекты", "bg-blue-500"),
+            ("Admin Workspace 2", "Дисциплины", "bg-green-500"),
         ]
 
         workspaces_by_name = {}
