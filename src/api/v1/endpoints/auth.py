@@ -244,9 +244,7 @@ async def get_current_user_info(
     }
 
     if from_refresh:
-        access_token = auth_service.create_access_token(
-            data={"sub": current_user.email, "user_id": current_user.id}
-        )
+        access_token = auth_service.create_access_token(data={"sub": current_user.email, "user_id": current_user.id})
         result["access_token"] = access_token
 
     return result

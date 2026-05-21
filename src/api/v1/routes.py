@@ -9,6 +9,8 @@ from src.api.v1.endpoints.resume import resume_router
 from src.api.v1.endpoints.role import role_permission_router, role_router
 from src.api.v1.endpoints.sessions import sessions_router
 from src.api.v1.endpoints.user import user_permission_router, user_router
+from src.api.v1.endpoints.invitation import invitation_router
+from src.api.v1.endpoints.settings import settings_router
 from src.api.v1.endpoints.workspace import workspace_router
 
 routers = APIRouter(prefix="/v1")
@@ -23,6 +25,8 @@ router_list = [
     role_permission_router,
     user_permission_router,
     workspace_router,
+    settings_router,
+    invitation_router,
 ]
 
 for router in router_list:

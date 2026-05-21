@@ -6,6 +6,7 @@ from src.model.kanban_models import Column, Subtask, Task, TaskAssignee, TaskHis
 from src.model.project import Project, ProjectParticipation, ProjectStatus, Response, Resume, Tag
 from src.model.user import Permission, Role, RolePermission, User, UserPermission
 from src.model.workspace import WorkSpace, WorkSpaceCategories, WorkSpaceParticipation, WorkSpaceStatus
+from src.model.workspace_invitation import WorkspaceInvitation
 
 __all__ = [
     "AuditLog",
@@ -31,4 +32,5 @@ __all__ = [
     "WorkSpaceCategories",
     "WorkSpaceParticipation",
     "WorkSpaceStatus",
+    "WorkspaceInvitation",
 ]

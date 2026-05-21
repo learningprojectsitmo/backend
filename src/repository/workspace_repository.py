@@ -5,6 +5,7 @@ from sqlalchemy.orm import selectinload
 
 from src.core.uow import IUnitOfWork
 from src.model.project import Project
+from src.model.settings import SpaceSettings
 from src.model.workspace import WorkSpace, WorkSpaceCategories, WorkSpaceParticipation
 from src.repository.base_repository import BaseRepository
 from src.schema.workspace import WorkSpaceCreate, WorkSpaceUpdate
@@ -76,10 +77,12 @@ class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUp
                 func.coalesce(WorkSpaceCategories.name, "General").label("category"),
                 WorkSpace.category_id.label("category_id"),
                 WorkSpace.description.label("description"),
+                SpaceSettings.icon_url.label("icon_url"),
             )
             .outerjoin(participants_count, WorkSpace.id == participants_count.c.workspace_id)
             .outerjoin(projects_count, WorkSpace.id == projects_count.c.workspace_id)
             .outerjoin(WorkSpaceCategories, WorkSpace.category_id == WorkSpaceCategories.id)
+            .outerjoin(SpaceSettings, WorkSpace.id == SpaceSettings.space_id)
             .order_by(WorkSpace.id)
             .offset(skip)
             .limit(limit)

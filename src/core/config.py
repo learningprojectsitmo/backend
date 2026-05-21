@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS_SHORT: int = 1
 
     # CORS - исправленные настройки для Docker
+    FRONTEND_URL: str = "http://localhost:3000"
+
     CORS_ORIGINS: list = [
         "http://localhost:3000",
         "http://localhost:5173",

@@ -3,6 +3,7 @@ from __future__ import annotations
 from sqlalchemy import select
 
 from src.model.project import Project, ProjectStatus
+from src.model.settings import SettingsType
 from src.model.workspace import WorkSpace, WorkSpaceCategories, WorkSpaceStatus
 from src.repository.project_repository import ProjectRepository
 from src.schema.permission import PermissionMatrix
@@ -45,6 +46,7 @@ class FixtureService:
         categories_by_name = await self._seed_workspace_categories()
         workspaces_by_name = await self._seed_workspaces(admin, categories_by_name)
         await self._seed_projects(admin, workspaces_by_name)
+        await self._seed_settings_types()
 
     # ─── permissions ───────────────────────────────────────────────────────
 
@@ -133,6 +135,23 @@ class FixtureService:
 
         return existing_admin, existing_member
 
+    # ─── settings types ────────────────────────────────────────────────────
+
+    async def _seed_settings_types(self) -> None:
+        repo = self._workspace_service._repository
+        types = [
+            {"name": "space", "description": "Настройки пространства"},
+        ]
+
+        for st_data in types:
+            result = await repo.uow.session.execute(
+                select(SettingsType).where(SettingsType.name == st_data["name"])
+            )
+            if not result.scalar_one_or_none():
+                repo.uow.session.add(SettingsType(**st_data))
+
+        await repo.uow.commit()
+
     # ─── workspace statuses ────────────────────────────────────────────────
 
     async def _seed_workspace_statuses(self) -> None:
@@ -183,9 +202,7 @@ class FixtureService:
 
         workspaces_by_name = {}
         for ws_name, category_name, ws_color in workspaces_data:
-            result = await repo.uow.session.execute(
-                select(WorkSpace).where(WorkSpace.name == ws_name)
-            )
+            result = await repo.uow.session.execute(select(WorkSpace).where(WorkSpace.name == ws_name))
             existing = result.scalar_one_or_none()
 
             if not existing:

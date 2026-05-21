@@ -14,15 +14,19 @@ from src.repository.resume_repository import ResumeRepository
 from src.repository.role_repository import RolePermissionRepository, RoleRepository
 from src.repository.session_repository import SessionRepository
 from src.repository.user_repository import UserPermissionRepository, UserRepository
+from src.repository.invitation_repository import InvitationRepository
+from src.repository.settings_repository import SpaceSettingsRepository
 from src.repository.workspace_repository import WorkSpaceRepository
 from src.services.audit_service import AuditService
 from src.services.auth_service import AuthService
 from src.services.fixtures_service import FixtureService
+from src.services.invitation_service import InvitationService
 from src.services.kanban_service import KanbanService
 from src.services.permission_service import PermissionService
 from src.services.project_service import ProjectService
 from src.services.resume_service import ResumeService
 from src.services.role_service import RoleService
+from src.services.settings_service import SpaceSettingsService
 from src.services.session_service import SessionService
 from src.services.user_service import UserService
 from src.services.workspace_service import WorkSpaceService
@@ -78,6 +82,14 @@ async def get_password_reset_repository(uow: IUnitOfWork = Depends(get_uow)) -> 
 
 async def get_workspace_repository(uow: IUnitOfWork = Depends(get_uow)) -> WorkSpaceRepository:
     return WorkSpaceRepository(uow)
+
+
+async def get_space_settings_repository(uow: IUnitOfWork = Depends(get_uow)) -> SpaceSettingsRepository:
+    return SpaceSettingsRepository(uow)
+
+
+async def get_invitation_repository(uow: IUnitOfWork = Depends(get_uow)) -> InvitationRepository:
+    return InvitationRepository(uow)
 
 
 # Service
@@ -157,6 +169,18 @@ async def get_workspace_service(
     workspace_repository: WorkSpaceRepository = Depends(get_workspace_repository),
 ) -> WorkSpaceService:
     return WorkSpaceService(workspace_repository)
+
+
+async def get_settings_service(
+    settings_repository: SpaceSettingsRepository = Depends(get_space_settings_repository),
+) -> SpaceSettingsService:
+    return SpaceSettingsService(settings_repository)
+
+
+async def get_invitation_service(
+    invitation_repository: InvitationRepository = Depends(get_invitation_repository),
+) -> InvitationService:
+    return InvitationService(invitation_repository)
 
 
 async def get_fixtures_service(

@@ -33,9 +33,7 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         result = await self.uow.session.execute(select(Project).where(Project.author_id == author_id))
         return list(result.scalars().all())
 
-    async def get_projects_by_workspace(
-        self, workspace_id: int, skip: int = 0, limit: int = 100
-    ) -> list[Project]:
+    async def get_projects_by_workspace(self, workspace_id: int, skip: int = 0, limit: int = 100) -> list[Project]:
         query = (
             select(Project)
             .where(Project.workspace_id == workspace_id)
