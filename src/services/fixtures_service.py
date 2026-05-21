@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from sqlalchemy import select
 
-from src.model.project import Project, ProjectStatus
-from src.model.settings import SettingsType, SpaceSettings
+from src.model.project import Project
+from src.model.settings import SettingsType
 from src.model.workspace import WorkSpace, WorkSpaceCategories, WorkSpaceParticipation, WorkSpaceStatus
 from src.repository.project_repository import ProjectRepository
 from src.schema.permission import PermissionMatrix
@@ -45,7 +45,7 @@ class FixtureService:
     async def create_fixtures(self) -> None:
         await self._seed_permissions()
         await self._seed_roles()
-        admin, member = await self._seed_users()
+        admin, _ = await self._seed_users()
         await self._seed_workspace_statuses()
         categories_by_name = await self._seed_workspace_categories()
         workspaces_by_name = await self._seed_workspaces(admin, categories_by_name)

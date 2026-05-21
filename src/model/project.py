@@ -3,8 +3,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import JSON, Column as SAColumn
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Table, Text, func
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Table, Text, func
+from sqlalchemy import Column as SAColumn
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.core.database import Base

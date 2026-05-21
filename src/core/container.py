@@ -6,6 +6,7 @@ from fastapi import Depends
 
 from src.core.uow import IUnitOfWork, SqlAlchemyUoW
 from src.repository.audit_repository import AuditRepository
+from src.repository.invitation_repository import InvitationRepository
 from src.repository.kanban_repository import KanbanColumnRepository, KanbanSubtaskRepository, KanbanTaskRepository
 from src.repository.password_reset_repository import PasswordResetRepository
 from src.repository.permission_repository import PermissionRepository
@@ -13,9 +14,8 @@ from src.repository.project_repository import ProjectRepository
 from src.repository.resume_repository import ResumeRepository
 from src.repository.role_repository import RolePermissionRepository, RoleRepository
 from src.repository.session_repository import SessionRepository
-from src.repository.user_repository import UserPermissionRepository, UserRepository
-from src.repository.invitation_repository import InvitationRepository
 from src.repository.settings_repository import SpaceSettingsRepository
+from src.repository.user_repository import UserPermissionRepository, UserRepository
 from src.repository.workspace_repository import WorkSpaceRepository
 from src.services.audit_service import AuditService
 from src.services.auth_service import AuthService
@@ -26,8 +26,8 @@ from src.services.permission_service import PermissionService
 from src.services.project_service import ProjectService
 from src.services.resume_service import ResumeService
 from src.services.role_service import RoleService
-from src.services.settings_service import SpaceSettingsService
 from src.services.session_service import SessionService
+from src.services.settings_service import SpaceSettingsService
 from src.services.user_service import UserService
 from src.services.workspace_service import WorkSpaceService
 

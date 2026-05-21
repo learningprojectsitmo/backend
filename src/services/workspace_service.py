@@ -10,7 +10,6 @@ from src.schema.workspace import WorkSpaceCreate, WorkSpaceUpdate
 from src.services.base_service import BaseService
 
 if TYPE_CHECKING:
-    from src.model.user import User
     from src.repository.workspace_repository import WorkSpaceRepository
 
 
