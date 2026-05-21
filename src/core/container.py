@@ -6,6 +6,7 @@ from fastapi import Depends
 
 from src.core.uow import IUnitOfWork, SqlAlchemyUoW
 from src.repository.audit_repository import AuditRepository
+from src.repository.invitation_repository import InvitationRepository
 from src.repository.kanban_repository import KanbanColumnRepository, KanbanSubtaskRepository, KanbanTaskRepository
 from src.repository.password_reset_repository import PasswordResetRepository
 from src.repository.permission_repository import PermissionRepository
@@ -13,20 +14,25 @@ from src.repository.project_repository import ProjectRepository
 from src.repository.resume_repository import ResumeRepository
 from src.repository.role_repository import RolePermissionRepository, RoleRepository
 from src.repository.session_repository import SessionRepository
+from src.repository.settings_repository import SpaceSettingsRepository
 from src.repository.user_repository import UserPermissionRepository, UserRepository
+from src.repository.workspace_repository import WorkSpaceRepository
 from src.services.audit_service import AuditService
 from src.services.auth_service import AuthService
 from src.services.fixtures_service import FixtureService
+from src.services.invitation_service import InvitationService
 from src.services.kanban_service import KanbanService
 from src.services.permission_service import PermissionService
 from src.services.project_service import ProjectService
 from src.services.resume_service import ResumeService
 from src.services.role_service import RoleService
 from src.services.session_service import SessionService
+from src.services.settings_service import SpaceSettingsService
 from src.services.user_service import UserService
+from src.services.workspace_service import WorkSpaceService
 
 
-async def get_uow() -> AsyncGenerator[IUnitOfWork, None]:
+async def get_uow() -> AsyncGenerator[IUnitOfWork]:
     async with SqlAlchemyUoW() as uow:
         yield uow
 
@@ -74,6 +80,19 @@ async def get_password_reset_repository(uow: IUnitOfWork = Depends(get_uow)) -> 
     return PasswordResetRepository(uow)
 
 
+async def get_workspace_repository(uow: IUnitOfWork = Depends(get_uow)) -> WorkSpaceRepository:
+    return WorkSpaceRepository(uow)
+
+
+async def get_space_settings_repository(uow: IUnitOfWork = Depends(get_uow)) -> SpaceSettingsRepository:
+    return SpaceSettingsRepository(uow)
+
+
+async def get_invitation_repository(uow: IUnitOfWork = Depends(get_uow)) -> InvitationRepository:
+    return InvitationRepository(uow)
+
+
+# Service
 async def get_kanban_column_repository(uow: IUnitOfWork = Depends(get_uow)) -> KanbanColumnRepository:
     return KanbanColumnRepository(uow)
 
@@ -146,13 +165,42 @@ async def get_permission_service(
     return PermissionService(permission_repository)
 
 
+async def get_workspace_service(
+    workspace_repository: WorkSpaceRepository = Depends(get_workspace_repository),
+) -> WorkSpaceService:
+    return WorkSpaceService(workspace_repository)
+
+
+async def get_settings_service(
+    settings_repository: SpaceSettingsRepository = Depends(get_space_settings_repository),
+) -> SpaceSettingsService:
+    return SpaceSettingsService(settings_repository)
+
+
+async def get_invitation_service(
+    invitation_repository: InvitationRepository = Depends(get_invitation_repository),
+) -> InvitationService:
+    return InvitationService(invitation_repository)
+
+
 async def get_fixtures_service(
     permission_service: PermissionService = Depends(get_permission_service),
     role_service: RoleService = Depends(get_role_service),
-    permission_repository: PermissionRepository = Depends(get_permission_repository),
     user_service: UserService = Depends(get_user_service),
+    workspace_service: WorkSpaceService = Depends(get_workspace_service),
+    project_service: ProjectService = Depends(get_project_service),
+    project_repository: ProjectRepository = Depends(get_project_repository),
+    settings_service: SpaceSettingsService = Depends(get_settings_service),
 ) -> FixtureService:
-    return FixtureService(permission_service, role_service, permission_repository, user_service)
+    return FixtureService(
+        permission_service,
+        role_service,
+        user_service,
+        workspace_service,
+        project_service,
+        project_repository,
+        settings_service,
+    )
 
 
 async def get_audit_service(

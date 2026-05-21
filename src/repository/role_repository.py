@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from sqlalchemy import delete, select
 
 from src.core.uow import IUnitOfWork
-from src.model.models import Permission, Role, RolePermission
+from src.model.user import Permission, Role, RolePermission
 from src.repository.base_repository import BaseRepository
 from src.schema.role import RoleCreate, RolePermissionCreate, RoleUpdate
 
@@ -13,6 +13,12 @@ class RoleRepository(BaseRepository[Role, RoleCreate, RoleUpdate]):
     def __init__(self, uow: IUnitOfWork) -> None:
         super().__init__(uow)
         self._model = Role
+
+    async def get_by_name(self, role_name: str) -> Role | None:
+        result = await self.uow.session.execute(
+            select(Role).where(Role.name == role_name),
+        )
+        return result.scalar_one_or_none()
 
 
 class RolePermissionRepository(BaseRepository[RolePermission, RolePermissionCreate, BaseModel]):
@@ -29,6 +35,12 @@ class RolePermissionRepository(BaseRepository[RolePermission, RolePermissionCrea
     async def get_by_name_and_role(self, perm_id: int, role_id: int) -> int | None:
         result = await self.uow.session.execute(
             select(RolePermission.id).where(RolePermission.role_id == role_id, RolePermission.permission_id == perm_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def get_by_name(self, role_name: str) -> Role | None:
+        result = await self.uow.session.execute(
+            select(Role).where(Role.name == role_name),
         )
         return result.scalar_one_or_none()
 

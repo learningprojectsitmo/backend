@@ -3,7 +3,7 @@ from __future__ import annotations
 from sqlalchemy import Sequence, desc, select
 
 from src.core.uow import IUnitOfWork
-from src.model.models import AuditLog
+from src.model.audit import AuditLog
 
 
 class AuditRepository:

@@ -3,7 +3,7 @@ from __future__ import annotations
 from sqlalchemy import select
 
 from src.core.uow import IUnitOfWork
-from src.model.models import Resume
+from src.model.project import Resume
 from src.repository.base_repository import BaseRepository
 from src.schema.resume import ResumeCreate, ResumeUpdate
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from src.core.exceptions import PermissionError
-from src.model.models import Resume
+from src.model.project import Resume
 from src.schema.resume import ResumeCreate, ResumeUpdate
 from src.services.base_service import BaseService
 

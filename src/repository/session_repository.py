@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, select, update
 
 from src.core.logging_config import get_logger
 from src.core.uow import IUnitOfWork
-from src.model.models import Session
+from src.model.auth import Session
 from src.schema.session import SessionCreate, SessionUpdate
 
 
@@ -102,7 +102,7 @@ class SessionRepository:
 
             # Если не указано время истечения, устанавливаем на 30 дней
             if not session_dict.get("expires_at"):
-                session_dict["expires_at"] = datetime.utcnow() + timedelta(days=30)
+                session_dict["expires_at"] = datetime.now(UTC) + timedelta(days=30)
 
             db_session = Session(**session_dict)
             self.uow.session.add(db_session)
@@ -153,7 +153,7 @@ class SessionRepository:
             self._logger.exception(f"Error updating last activity for session {session_id}")
             raise
         else:
-            db_session.last_activity = datetime.utcnow()
+            db_session.last_activity = datetime.now(UTC)
             self._logger.debug(f"Updated last activity for session {session_id}")
             return db_session
 
@@ -173,7 +173,7 @@ class SessionRepository:
             current_session = await self.get_by_id(session_id)
             if current_session and current_session.user_id == user_id:
                 current_session.is_current = True
-                current_session.last_activity = datetime.utcnow()
+                current_session.last_activity = datetime.now(UTC)
                 self._logger.info(f"Set session {session_id} as current for user {user_id}")
                 return True
             else:
@@ -248,7 +248,7 @@ class SessionRepository:
 
         try:
             result = await self.uow.session.execute(
-                select(Session).where(and_(Session.expires_at < datetime.utcnow(), Session.is_active))
+                select(Session).where(and_(Session.expires_at < datetime.now(UTC), Session.is_active))
             )
             expired_sessions = result.scalars().all()
 
@@ -293,3 +293,41 @@ class SessionRepository:
         else:
             self._logger.info(f"User {user_id} has {count} active sessions")
             return count
+
+    async def get_by_refresh_token_hash(self, token_hash: str) -> Session | None:
+        """Найти сессию по хешу refresh-токена"""
+        result = await self.uow.session.execute(
+            select(Session).where(
+                and_(
+                    Session.refresh_token_hash == token_hash, Session.is_active, Session.expires_at > datetime.now(UTC)
+                )
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def set_refresh_token(self, session_id: str, token_hash: str, token_family: str) -> None:
+        """Установить refresh_token_hash и token_family для сессии"""
+        session = await self.get_by_id(session_id)
+        if session:
+            session.refresh_token_hash = token_hash
+            session.token_family = token_family
+
+    async def rotate_refresh_token(self, session_id: str, old_hash: str, new_hash: str) -> bool:
+        """Ротация refresh-токена: атомарный UPDATE с защитой от race condition"""
+        result = await self.uow.session.execute(
+            update(Session)
+            .where(and_(Session.id == session_id, Session.refresh_token_hash == old_hash, Session.is_active))
+            .values(refresh_token_hash=new_hash, last_activity=datetime.now(UTC))
+        )
+        return result.rowcount > 0
+
+    async def revoke_token_family(self, token_family: str) -> int:
+        """Отозвать все сессии в token_family (reuse detection)"""
+        result = await self.uow.session.execute(
+            select(Session).where(and_(Session.token_family == token_family, Session.is_active))
+        )
+        sessions = result.scalars().all()
+        for session in sessions:
+            session.is_active = False
+            session.is_current = False
+        return len(sessions)

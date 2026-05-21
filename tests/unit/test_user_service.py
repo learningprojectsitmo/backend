@@ -4,7 +4,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from src.model.models import User
+from src.model.user import User
 from src.repository.user_repository import UserRepository
 from src.schema import UserCreate, UserListResponse, UserUpdate
 from src.services.user_service import UserService

@@ -5,7 +5,7 @@ from unittest.mock import Mock
 import pytest
 
 from src.core.exceptions import PermissionError
-from src.model.models import Resume
+from src.model.project import Resume
 from src.repository.resume_repository import ResumeRepository
 from src.schema.resume import ResumeCreate, ResumeUpdate
 from src.services.resume_service import ResumeService
