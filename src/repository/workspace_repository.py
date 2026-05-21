@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import selectinload
 
 from src.core.uow import IUnitOfWork
@@ -39,12 +39,8 @@ class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUp
 
         return workspaces, total
 
-    async def get_workspaces_menu_data(self, skip: int = 0, limit: int = 10) -> tuple[list[dict], int]:
-        """Получить workspace с подсчётом участников одним запросом (для меню)"""
-        # Подсчёт общего количества
-        total_result = await self.uow.session.execute(select(func.count()).select_from(WorkSpace))
-        total = total_result.scalar()
-
+    async def get_workspaces_menu_data(self, user_id: int, skip: int = 0, limit: int = 10) -> tuple[list[dict], int]:
+        """Получить workspace с подсчётом участников (только видимые пользователю)"""
         # Подзапрос для подсчёта участников по каждому workspace
         participants_count = (
             select(
@@ -66,6 +62,29 @@ class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUp
             .subquery()
         )
 
+        # Подзапрос для списка workspace, где пользователь — участник
+        user_workspace_ids = select(WorkSpaceParticipation.workspace_id).where(
+            WorkSpaceParticipation.participant_id == user_id
+        )
+
+        # Фильтр: публичные ИЛИ автор ИЛИ участник
+        visible_filter = or_(
+            SpaceSettings.visibility.is_(None),
+            SpaceSettings.visibility == "public",
+            WorkSpace.author_id == user_id,
+            WorkSpace.id.in_(user_workspace_ids),
+        )
+
+        # Подсчёт видимых workspace
+        count_query = (
+            select(func.count())
+            .select_from(WorkSpace)
+            .outerjoin(SpaceSettings, WorkSpace.id == SpaceSettings.space_id)
+            .where(visible_filter)
+        )
+        total_result = await self.uow.session.execute(count_query)
+        total = total_result.scalar()
+
         # Основной запрос: сразу возвращаем поля, соответствующие schema.Space.
         query = (
             select(
@@ -83,6 +102,7 @@ class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUp
             .outerjoin(projects_count, WorkSpace.id == projects_count.c.workspace_id)
             .outerjoin(WorkSpaceCategories, WorkSpace.category_id == WorkSpaceCategories.id)
             .outerjoin(SpaceSettings, WorkSpace.id == SpaceSettings.space_id)
+            .where(visible_filter)
             .order_by(WorkSpace.id)
             .offset(skip)
             .limit(limit)

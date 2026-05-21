@@ -190,6 +190,7 @@ async def get_fixtures_service(
     workspace_service: WorkSpaceService = Depends(get_workspace_service),
     project_service: ProjectService = Depends(get_project_service),
     project_repository: ProjectRepository = Depends(get_project_repository),
+    settings_service: SpaceSettingsService = Depends(get_settings_service),
 ) -> FixtureService:
     return FixtureService(
         permission_service,
@@ -198,6 +199,7 @@ async def get_fixtures_service(
         workspace_service,
         project_service,
         project_repository,
+        settings_service,
     )
 
 

@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from src.core.container import get_invitation_service, get_workspace_service
 from src.core.dependencies import get_current_user
 from src.model.user import User
-from src.schema.workspace_invitation import InviteLinkCreate, InviteLinkResponse, JoinByLinkInput
+from src.schema.workspace_invitation import InviteLinkCreate, InviteLinkResponse, JoinByLinkInput, JoinByLinkResponse
 from src.services.invitation_service import InvitationService
 from src.services.workspace_service import WorkSpaceService
 
@@ -85,15 +85,15 @@ async def revoke_invite_link(
     return {"message": "Invite link revoked successfully"}
 
 
-@invitation_router.post("/workspaces/join-by-link")
+@invitation_router.post("/workspaces/join-by-link", response_model=JoinByLinkResponse)
 async def join_by_link(
     join_data: JoinByLinkInput,
     invitation_service: InvitationService = Depends(get_invitation_service),
     current_user: User = Depends(get_current_user),
-) -> dict[str, str]:
+) -> JoinByLinkResponse:
     """Присоединиться к пространству по ссылке-приглашению"""
     invitation = await invitation_service.join_by_link(join_data.token, current_user.id)
     if not invitation:
         raise HTTPException(status_code=404, detail="Invalid or expired invite link")
 
-    return {"message": "Successfully joined the workspace"}
+    return JoinByLinkResponse(message="Successfully joined the workspace", workspace_id=invitation.workspace_id)

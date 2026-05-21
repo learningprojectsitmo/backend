@@ -27,11 +27,11 @@ async def get_workspace_menu(
     page: int = Query(1, ge=1, description="Номер страницы"),
     limit: int = Query(10, ge=1, le=100, description="Количество workspace на странице"),
     workspace_service: WorkSpaceService = Depends(get_workspace_service),
-    _current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> SpacesListResponse:
-    """Получить меню workspace (упрощённый вид для навигации)"""
+    """Получить меню workspace (только видимые пользователю)"""
     skip = (page - 1) * limit
-    spaces_data, total = await workspace_service.get_workspaces_menu_data(skip, limit)
+    spaces_data, total = await workspace_service.get_workspaces_menu_data(current_user.id, skip, limit)
 
     # Получаем реальные категории из БД
     categories = await workspace_service.get_all_categories()

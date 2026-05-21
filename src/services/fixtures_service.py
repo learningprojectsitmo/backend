@@ -3,16 +3,18 @@ from __future__ import annotations
 from sqlalchemy import select
 
 from src.model.project import Project, ProjectStatus
-from src.model.settings import SettingsType
-from src.model.workspace import WorkSpace, WorkSpaceCategories, WorkSpaceStatus
+from src.model.settings import SettingsType, SpaceSettings
+from src.model.workspace import WorkSpace, WorkSpaceCategories, WorkSpaceParticipation, WorkSpaceStatus
 from src.repository.project_repository import ProjectRepository
 from src.schema.permission import PermissionMatrix
 from src.schema.project import ProjectCreate
+from src.schema.settings import SpaceSettingsUpdate
 from src.schema.user import UserCreate
 from src.schema.workspace import WorkSpaceCreate
 from src.services.permission_service import PermissionService
 from src.services.project_service import ProjectService
 from src.services.role_service import RoleService
+from src.services.settings_service import SpaceSettingsService
 from src.services.user_service import UserService
 from src.services.workspace_service import WorkSpaceService
 
@@ -28,6 +30,7 @@ class FixtureService:
         workspace_service: WorkSpaceService,
         project_service: ProjectService,
         project_repository: ProjectRepository,
+        settings_service: SpaceSettingsService,
     ) -> None:
         self._permission_service = permission_service
         self._role_service = role_service
@@ -35,6 +38,7 @@ class FixtureService:
         self._workspace_service = workspace_service
         self._project_service = project_service
         self._project_repository = project_repository
+        self._settings_service = settings_service
 
     # ─── main entry ────────────────────────────────────────────────────────
 
@@ -144,9 +148,7 @@ class FixtureService:
         ]
 
         for st_data in types:
-            result = await repo.uow.session.execute(
-                select(SettingsType).where(SettingsType.name == st_data["name"])
-            )
+            result = await repo.uow.session.execute(select(SettingsType).where(SettingsType.name == st_data["name"]))
             if not result.scalar_one_or_none():
                 repo.uow.session.add(SettingsType(**st_data))
 
@@ -196,12 +198,12 @@ class FixtureService:
     ) -> dict[str, WorkSpace]:
         repo = self._workspace_service._repository
         workspaces_data = [
-            ("Admin Workspace 1", "Общеуниверситетские проекты", "bg-blue-500"),
-            ("Admin Workspace 2", "Дисциплины", "bg-green-500"),
+            ("Admin Workspace 1", "Общеуниверситетские проекты", "bg-blue-500", False),
+            ("Admin Workspace 2", "Дисциплины", "bg-green-500", True),
         ]
 
         workspaces_by_name = {}
-        for ws_name, category_name, ws_color in workspaces_data:
+        for ws_name, category_name, ws_color, is_private in workspaces_data:
             result = await repo.uow.session.execute(select(WorkSpace).where(WorkSpace.name == ws_name))
             existing = result.scalar_one_or_none()
 
@@ -214,8 +216,24 @@ class FixtureService:
                     category_id=category.id if category else None,
                     color=ws_color,
                 )
-                # Используем репозиторий напрямую (простое создание без бизнес-логики)
                 existing = await repo.create(workspace_data)
+
+                # Добавить автора в участники
+                participation = WorkSpaceParticipation(
+                    workspace_id=existing.id,
+                    participant_id=admin.id,
+                )
+                repo.uow.session.add(participation)
+
+                # Создать настройки
+                await self._settings_service.create_defaults(existing.id)
+
+                # Если приватное — выставить visibility
+                if is_private:
+                    await self._settings_service.create_or_update(
+                        existing.id,
+                        SpaceSettingsUpdate(visibility="private"),
+                    )
 
             workspaces_by_name[ws_name] = existing
 

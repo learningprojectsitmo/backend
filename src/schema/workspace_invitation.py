@@ -22,3 +22,10 @@ class InviteLinkResponse(BaseModel):
 
 class JoinByLinkInput(BaseModel):
     token: str
+
+
+class JoinByLinkResponse(BaseModel):
+    message: str
+    workspace_id: int
+
+    model_config = ConfigDict(from_attributes=True)

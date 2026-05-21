@@ -10,6 +10,7 @@ from src.schema.workspace import WorkSpaceCreate, WorkSpaceUpdate
 from src.services.base_service import BaseService
 
 if TYPE_CHECKING:
+    from src.model.user import User
     from src.repository.workspace_repository import WorkSpaceRepository
 
 
@@ -38,12 +39,20 @@ class WorkSpaceService(BaseService[WorkSpace, WorkSpaceCreate, WorkSpaceUpdate])
         return workspaces, total
 
     async def create_workspace(self, workspace_data: WorkSpaceCreate, author_id: int) -> WorkSpace:
-        """Создать новый workspace"""
+        """Создать новый workspace и добавить автора в участники"""
         if not workspace_data.author_id:
             workspace_data.author_id = author_id
         if not workspace_data.status_id:
             workspace_data.status_id = 1
-        return await self._workspace_repository.create(workspace_data)
+        workspace = await self._workspace_repository.create(workspace_data)
+
+        participation = WorkSpaceParticipation(
+            workspace_id=workspace.id,
+            participant_id=author_id,
+        )
+        self._workspace_repository.uow.session.add(participation)
+
+        return workspace
 
     async def update_workspace(
         self,
@@ -76,9 +85,9 @@ class WorkSpaceService(BaseService[WorkSpace, WorkSpaceCreate, WorkSpaceUpdate])
         """Получить workspace с подсчетом статистики"""
         return await self._workspace_repository.get_workspaces_with_stats(skip, limit)
 
-    async def get_workspaces_menu_data(self, skip: int = 0, limit: int = 10) -> tuple[list[dict], int]:
-        """Получить данные для меню workspace (оптимизированный запрос)"""
-        return await self._workspace_repository.get_workspaces_menu_data(skip, limit)
+    async def get_workspaces_menu_data(self, user_id: int, skip: int = 0, limit: int = 10) -> tuple[list[dict], int]:
+        """Получить данные для меню workspace (только видимые пользователю)"""
+        return await self._workspace_repository.get_workspaces_menu_data(user_id, skip, limit)
 
     async def get_workspace_participants_count(self, workspace_id: int) -> int:
         """Получить количество участников workspace"""
