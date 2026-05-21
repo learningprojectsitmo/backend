@@ -39,6 +39,43 @@ class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUp
 
         return workspaces, total
 
+    async def add_participation(self, workspace_id: int, participant_id: int) -> None:
+        participation = WorkSpaceParticipation(
+            workspace_id=workspace_id,
+            participant_id=participant_id,
+        )
+        self.uow.session.add(participation)
+
+    async def get_participants_count(self, workspace_id: int) -> int:
+        result = await self.uow.session.execute(
+            select(func.count()).where(WorkSpaceParticipation.workspace_id == workspace_id)
+        )
+        return result.scalar()
+
+    async def get_all_categories(self) -> list[WorkSpaceCategories]:
+        result = await self.uow.session.execute(
+            select(WorkSpaceCategories).order_by(WorkSpaceCategories.id)
+        )
+        return list(result.scalars().all())
+
+    async def get_category_name(self, category_id: int) -> str | None:
+        result = await self.uow.session.execute(
+            select(WorkSpaceCategories).where(WorkSpaceCategories.id == category_id)
+        )
+        category = result.scalar_one_or_none()
+        return category.name if category else None
+
+    async def get_or_create_category(self, category_data: dict) -> WorkSpaceCategories:
+        result = await self.uow.session.execute(
+            select(WorkSpaceCategories).where(WorkSpaceCategories.name == category_data["name"])
+        )
+        existing = result.scalar_one_or_none()
+        if existing:
+            return existing
+        category = WorkSpaceCategories(**category_data)
+        self.uow.session.add(category)
+        return category
+
     async def get_workspaces_menu_data(self, user_id: int, skip: int = 0, limit: int = 10) -> tuple[list[dict], int]:
         """Получить workspace с подсчётом участников (только видимые пользователю)"""
         # Подзапрос для подсчёта участников по каждому workspace
