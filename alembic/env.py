@@ -10,6 +10,7 @@ from alembic import context
 from src.core.database import Base
 
 # Import all models to ensure metadata is populated
+# When will have production
 from src.model import (  # noqa: F401
     AuditLog,
     Column,

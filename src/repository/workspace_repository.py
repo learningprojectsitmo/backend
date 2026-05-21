@@ -53,9 +53,7 @@ class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUp
         return result.scalar()
 
     async def get_all_categories(self) -> list[WorkSpaceCategories]:
-        result = await self.uow.session.execute(
-            select(WorkSpaceCategories).order_by(WorkSpaceCategories.id)
-        )
+        result = await self.uow.session.execute(select(WorkSpaceCategories).order_by(WorkSpaceCategories.id))
         return list(result.scalars().all())
 
     async def get_category_name(self, category_id: int) -> str | None:
