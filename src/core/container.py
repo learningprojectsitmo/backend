@@ -183,32 +183,6 @@ async def get_invitation_service(
     return InvitationService(invitation_repository)
 
 
-async def get_fixtures_service(
-    permission_service: PermissionService = Depends(get_permission_service),
-    role_service: RoleService = Depends(get_role_service),
-    user_service: UserService = Depends(get_user_service),
-    workspace_service: WorkSpaceService = Depends(get_workspace_service),
-    project_service: ProjectService = Depends(get_project_service),
-    project_repository: ProjectRepository = Depends(get_project_repository),
-    settings_service: SpaceSettingsService = Depends(get_settings_service),
-) -> FixtureService:
-    return FixtureService(
-        permission_service,
-        role_service,
-        user_service,
-        workspace_service,
-        project_service,
-        project_repository,
-        settings_service,
-    )
-
-
-async def get_audit_service(
-    audit_repository: AuditRepository = Depends(get_audit_repository),
-) -> AuditService:
-    return AuditService(audit_repository)
-
-
 async def get_kanban_service(
     kanban_column_repository: KanbanColumnRepository = Depends(get_kanban_column_repository),
     kanban_task_repository: KanbanTaskRepository = Depends(get_kanban_task_repository),
@@ -219,3 +193,31 @@ async def get_kanban_service(
     return KanbanService(
         kanban_column_repository, kanban_task_repository, kanban_subtask_repository, user_repository, project_repository
     )
+
+
+async def get_fixtures_service(
+    permission_service: PermissionService = Depends(get_permission_service),
+    role_service: RoleService = Depends(get_role_service),
+    user_service: UserService = Depends(get_user_service),
+    workspace_service: WorkSpaceService = Depends(get_workspace_service),
+    project_service: ProjectService = Depends(get_project_service),
+    project_repository: ProjectRepository = Depends(get_project_repository),
+    settings_service: SpaceSettingsService = Depends(get_settings_service),
+    kanban_service: KanbanService = Depends(get_kanban_service),
+) -> FixtureService:
+    return FixtureService(
+        permission_service,
+        role_service,
+        user_service,
+        workspace_service,
+        project_service,
+        project_repository,
+        settings_service,
+        kanban_service,
+    )
+
+
+async def get_audit_service(
+    audit_repository: AuditRepository = Depends(get_audit_repository),
+) -> AuditService:
+    return AuditService(audit_repository)

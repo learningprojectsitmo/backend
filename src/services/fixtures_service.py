@@ -11,6 +11,8 @@ from src.schema.project import ProjectCreate, VacancyCreate
 from src.schema.settings import SpaceSettingsUpdate
 from src.schema.user import UserCreate
 from src.schema.workspace import WorkSpaceCreate
+from src.schema.kanban import TaskCreate
+from src.services.kanban_service import KanbanService
 from src.services.permission_service import PermissionService
 from src.services.project_service import ProjectService
 from src.services.role_service import RoleService
@@ -31,6 +33,7 @@ class FixtureService:
         project_service: ProjectService,
         project_repository: ProjectRepository,
         settings_service: SpaceSettingsService,
+        kanban_service: KanbanService,
     ) -> None:
         self._permission_service = permission_service
         self._role_service = role_service
@@ -39,6 +42,7 @@ class FixtureService:
         self._project_service = project_service
         self._project_repository = project_repository
         self._settings_service = settings_service
+        self._kanban_service = kanban_service
 
     # ─── main entry ────────────────────────────────────────────────────────
 
@@ -356,7 +360,35 @@ class FixtureService:
             },
         ]
 
-        for data in projects_data:
+        # Демо-задачи для каждого проекта (по имени колонки)
+        demo_tasks: list[list[dict[str, list[str]]]] = [
+            # Project 0: Tasker
+            [
+                {"Нужно сделать": ["Настроить CI/CD", "Добавить тесты для API"]},
+                {"В процессе": ["Реализовать аутентификацию", "Сверстать главную страницу"]},
+                {"Готово": ["Спроектировать БД", "Настроить Docker"]},
+            ],
+            # Project 1: Веб-сервис для студентов
+            [
+                {"Нужно сделать": ["Добавить чат между студентами"]},
+                {"В процессе": ["Разработать REST API", "Интеграция с порталом"]},
+                {"Готово": ["Дизайн-макеты экранов"]},
+            ],
+            # Project 2: AI Learning Platform
+            [
+                {"Нужно сделать": ["Собрать датасет", "Написать пайплайн обучения"]},
+                {"В процессе": ["Разработать архитектуру ML", "Подготовить фичи"]},
+                {"Готово": []},
+            ],
+            # Project 3: Мобильное приложение
+            [
+                {"Нужно сделать": ["Настроить навигацию", "Создать экран авторизации"]},
+                {"В процессе": []},
+                {"Готово": []},
+            ],
+        ]
+
+        for idx, data in enumerate(projects_data):
             # Проверяем существование проекта по имени через репозиторий
             result = await self._project_repository.uow.session.execute(
                 select(Project).where(Project.name == data["name"])
@@ -377,4 +409,21 @@ class FixtureService:
             )
 
             # Используем сервис — он сам разберётся с тегами и связями
-            await self._project_service.create_project(project_data, admin.id)
+            project = await self._project_service.create_project(project_data, admin.id)
+
+            # Создаём колонки канбан-доски
+            columns = await self._kanban_service.create_default_columns(project.id)
+            col_by_name = {col.name: col for col in columns}
+
+            # Создаём демо-задачи
+            if idx < len(demo_tasks):
+                for col_tasks in demo_tasks[idx]:
+                    for col_name, task_titles in col_tasks.items():
+                        column = col_by_name.get(col_name)
+                        if not column or not task_titles:
+                            continue
+                        for title in task_titles:
+                            await self._kanban_service.create_task(
+                                TaskCreate(column_id=column.id, title=title),
+                                admin.id,
+                            )

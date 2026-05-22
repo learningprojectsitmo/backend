@@ -84,6 +84,23 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
 
     #   === Методы для колонок ===
 
+    DEFAULT_COLUMNS: list[dict[str, str]] = [
+        {"name": "Нужно сделать", "color": "blue"},
+        {"name": "В процессе", "color": "yellow"},
+        {"name": "Готово", "color": "green"},
+    ]
+
+    async def create_default_columns(self, project_id: int) -> list[ColumnResponse]:
+        """Создать стандартные колонки для нового проекта."""
+        columns: list[ColumnResponse] = []
+        for col_data in self.DEFAULT_COLUMNS:
+            column = await self._kanban_column_repository.create(
+                ColumnCreate(project_id=project_id, name=col_data["name"], color=col_data["color"]),
+            )
+            columns.append(ColumnResponse.model_validate(column))
+        self._logger.info(f"Created {len(columns)} default columns for project {project_id}")
+        return columns
+
     async def create_column(self, column_data: ColumnCreate, current_user_id: int) -> ColumnResponse:
         """Создать новую колонку."""
         await self._check_project_access(column_data.project_id, current_user_id)

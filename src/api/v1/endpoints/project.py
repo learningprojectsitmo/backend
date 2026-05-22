@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from src.core.container import get_project_service
+from src.core.container import get_kanban_service, get_project_service
 from src.core.dependencies import get_current_user, setup_audit
 from src.model.user import User
 from src.schema.project import ProjectCreate, ProjectFull, ProjectListResponse, ProjectUpdate
+from src.services.kanban_service import KanbanService
 from src.services.project_service import ProjectService
 
 project_router = APIRouter(prefix="/projects", tags=["project"])
@@ -57,12 +58,14 @@ async def fetch_projects(
 async def create_project(
     project_data: ProjectCreate,
     project_service: ProjectService = Depends(get_project_service),
+    kanban_service: KanbanService = Depends(get_kanban_service),
     current_user: User = Depends(get_current_user),
     _audit=Depends(setup_audit),
 ) -> ProjectFull:
     """Создать новый проект"""
 
     project = await project_service.create_project(project_data, current_user.id)
+    await kanban_service.create_default_columns(project.id)
     return ProjectFull.from_orm(project)
 
 

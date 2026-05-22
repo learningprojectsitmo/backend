@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from src.core.container import get_kanban_service
 from src.core.dependencies import get_current_user, setup_audit
 from src.core.exceptions import PermissionError
-from src.model.models import User
+from src.model import User
 from src.schema.kanban import (
     ColumnCreate,
     ColumnListResponse,
