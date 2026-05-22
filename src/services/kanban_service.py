@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from src.core.exceptions import NotFoundError, PermissionError, ValidationError
 from src.core.logging_config import get_logger
@@ -84,7 +84,7 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
 
     #   === Методы для колонок ===
 
-    DEFAULT_COLUMNS: list[dict[str, str]] = [
+    DEFAULT_COLUMNS: ClassVar[list[dict[str, str]]] = [
         {"name": "Нужно сделать", "color": "blue"},
         {"name": "В процессе", "color": "yellow"},
         {"name": "Готово", "color": "green"},

@@ -6,12 +6,12 @@ from src.model.project import Project
 from src.model.settings import SettingsType
 from src.model.workspace import WorkSpace, WorkSpaceCategories, WorkSpaceParticipation, WorkSpaceStatus
 from src.repository.project_repository import ProjectRepository
+from src.schema.kanban import TaskCreate
 from src.schema.permission import PermissionMatrix
 from src.schema.project import ProjectCreate, VacancyCreate
 from src.schema.settings import SpaceSettingsUpdate
 from src.schema.user import UserCreate
 from src.schema.workspace import WorkSpaceCreate
-from src.schema.kanban import TaskCreate
 from src.services.kanban_service import KanbanService
 from src.services.permission_service import PermissionService
 from src.services.project_service import ProjectService
