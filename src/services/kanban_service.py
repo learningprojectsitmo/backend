@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from src.core.exceptions import NotFoundError, ValidationError
+from src.core.exceptions import NotFoundError, PermissionError, ValidationError
 from src.core.logging_config import get_logger
 from src.model.kanban_models import Subtask, Task
 from src.schema.kanban import (
@@ -31,6 +31,8 @@ if TYPE_CHECKING:
     from src.repository.project_repository import ProjectRepository
     from src.repository.user_repository import UserRepository
 
+MAX_SUBTASKS_PER_TASK = 5
+
 
 class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
     def __init__(
@@ -48,6 +50,21 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
         self._user_repository = user_repository
         self._project_repository = project_repository
         self._logger = get_logger(__name__)
+
+    #   === Внутренние помощники ===
+
+    async def _check_project_access(self, project_id: int, user_id: int) -> None:
+        """Убедиться, что пользователь — автор или участник проекта.
+
+        Бросает PermissionError, если у пользователя нет доступа,
+        или NotFoundError, если проект отсутствует.
+        """
+        project = await self._project_repository.get_by_id(project_id)
+        if not project:
+            raise NotFoundError(f"Project with id {project_id} not found")
+        has_access = await self._project_repository.is_user_in_project(project_id, user_id)
+        if not has_access:
+            raise PermissionError(f"User {user_id} has no access to project {project_id}")
 
     #   === Метод для проектов ===
 
@@ -67,20 +84,20 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
 
     #   === Методы для колонок ===
 
-    async def create_column(self, column_data: ColumnCreate) -> ColumnResponse:
+    async def create_column(self, column_data: ColumnCreate, current_user_id: int) -> ColumnResponse:
         """Создать новую колонку."""
-        project = await self._project_repository.get_by_id(column_data.project_id)
-        if not project:
-            raise NotFoundError(f"Project with id {column_data.project_id} not found")
+        await self._check_project_access(column_data.project_id, current_user_id)
 
         column = await self._kanban_column_repository.create(column_data)
         return ColumnResponse.model_validate(column)
 
-    async def update_column(self, column_id: int, column_data: ColumnUpdate) -> ColumnResponse:
+    async def update_column(self, column_id: int, column_data: ColumnUpdate, current_user_id: int) -> ColumnResponse:
         """Обновить колонку."""
         column = await self._kanban_column_repository.get_by_id(column_id)
         if not column:
             raise NotFoundError(f"Column with id {column_id} not found")
+
+        await self._check_project_access(column.project_id, current_user_id)
 
         updated_column = await self._kanban_column_repository.update(column_id, column_data)
         if not updated_column:
@@ -88,19 +105,22 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
 
         return ColumnResponse.model_validate(updated_column)
 
-    async def delete_column(self, column_id: int) -> bool:
+    async def delete_column(self, column_id: int, current_user_id: int) -> bool:
         """Удалить колонку."""
         column = await self._kanban_column_repository.get_by_id(column_id)
         if not column:
             raise NotFoundError(f"Column with id {column_id} not found")
 
-        # TODO: Решить, что делать с задачами в удаляемой колонке
-        # Варианты: удалить все задачи, переместить в первую колонку, запретить удаление если есть задачи
+        await self._check_project_access(column.project_id, current_user_id)
 
-        return await self._kanban_column_repository.delete(column_id)
+        result = await self._kanban_column_repository.delete(column_id)
 
-    async def reorder_columns(self, project_id: int, column_orders: list[dict[str, Any]]) -> bool:
+        return result
+
+    async def reorder_columns(self, project_id: int, column_orders: list[dict[str, Any]], current_user_id: int) -> bool:
         """Изменить порядок колонок."""
+        await self._check_project_access(project_id, current_user_id)
+
         columns = await self._kanban_column_repository.get_columns_by_project(project_id)
         column_ids = {col.id for col in columns}
 
@@ -123,27 +143,16 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
             raise NotFoundError(f"Task with id {task_id} not found")
         return TaskResponse.model_validate(task)
 
-    async def create_task(self, task_data: TaskCreate, created_by_id: int) -> TaskResponse:
+    async def create_task(self, task_data: TaskCreate, current_user_id: int) -> TaskResponse:
         """Создать новую задачу в указанной колонке"""
         column = await self._kanban_column_repository.get_by_id(task_data.column_id)
         if not column:
             raise NotFoundError(f"Column with id {task_data.column_id} not found")
 
-        if column.wip_limit:
-            tasks_in_column = await self._kanban_task_repository.get_tasks_by_column(column.id)
-            if len(tasks_in_column) >= column.wip_limit:
-                raise ValidationError(f"Column '{column.name}' has reached its WIP limit ({column.wip_limit})")
-
-        if task_data.assignee_ids:
-            for user_id in task_data.assignee_ids:
-                user = await self._user_repository.get_by_id(user_id)
-                if not user:
-                    raise NotFoundError(f"User with id {user_id} not found")
-
-        task = await self._kanban_task_repository.create(task_data, created_by_id)
+        task = await self._kanban_task_repository.create(task_data, current_user_id)
 
         # TODO: Отправить уведомления
-        await self._notify_task_created(task, created_by_id)
+        await self._notify_task_created(task, current_user_id)
 
         return TaskResponse.model_validate(task)
 
@@ -242,16 +251,23 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
 
         return SubtaskListResponse(items=[SubtaskResponse.model_validate(s) for s in subtasks], total=len(subtasks))
 
-    async def create_subtask(self, subtask_data: SubtaskCreate, created_by_id: int) -> SubtaskResponse:
+    async def create_subtask(self, subtask_data: SubtaskCreate, current_user_id: int) -> SubtaskResponse:
         """Создать новую подзадачу."""
         task = await self._kanban_task_repository.get_by_id(subtask_data.task_id)
         if not task:
             raise NotFoundError(f"Task with id {subtask_data.task_id} not found")
 
-        subtask = await self._kanban_subtask_repository.create(subtask_data, created_by_id)
+        current_subtasks = await self._kanban_subtask_repository.get_subtasks_by_task(subtask_data.task_id)
+        if len(current_subtasks) >= MAX_SUBTASKS_PER_TASK:
+            raise ValidationError(
+                f"Cannot add more subtasks. Task already has {len(current_subtasks)} subtasks "
+                f"(maximum {MAX_SUBTASKS_PER_TASK})"
+            )
+
+        subtask = await self._kanban_subtask_repository.create(subtask_data, current_user_id)
 
         # TODO: Отправить уведомление о создании подзадачи
-        await self._notify_subtask_created(subtask, created_by_id)
+        await self._notify_subtask_created(subtask, current_user_id)
 
         return SubtaskResponse.model_validate(subtask)
 
@@ -304,14 +320,23 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
 
         return result
 
-    async def reorder_subtasks(self, task_id: int, subtask_orders: list[dict[str, Any]]) -> bool:
+    async def reorder_subtasks(self, task_id: int, subtask_orders: list[dict[str, Any]], current_user_id: int) -> bool:
         """Изменить порядок подзадач."""
         task = await self._kanban_task_repository.get_by_id(task_id)
         if not task:
             raise NotFoundError(f"Task with id {task_id} not found")
 
+        # Проверка прав: получаем project_id через колонку, к которой привязана задача
+        column = await self._kanban_column_repository.get_by_id(task.column_id)
+        if not column:
+            raise NotFoundError(f"Column with id {task.column_id} not found")
+        await self._check_project_access(column.project_id, current_user_id)
+
         existing_subtasks = await self._kanban_subtask_repository.get_subtasks_by_task(task_id)
         existing_ids = {s.id for s in existing_subtasks}
+
+        if len(subtask_orders) != len(existing_subtasks):
+            raise ValidationError("Number of subtasks in reorder request does not match existing subtasks")
 
         for item in subtask_orders:
             if item["id"] not in existing_ids:
@@ -335,7 +360,7 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
         stats = {
             "total": len(tasks),
             "by_column": {},
-            "by_priority": {"low": 0, "medium": 0, "high": 0, "urgent": 0},
+            "by_priority": {"default": 0, "low": 0, "medium": 0, "high": 0, "urgent": 0},
             "overdue": 0,
             "without_assignee": 0,
         }

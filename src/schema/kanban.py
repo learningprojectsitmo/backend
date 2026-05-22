@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 
 from src.schema.user import UserResponse
 
@@ -12,6 +12,7 @@ from src.schema.user import UserResponse
 class TaskPriority(str):
     """Приоритет задачи (опционально)"""
 
+    DEFAULT = "default"
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
@@ -36,7 +37,7 @@ class ColumnBase(BaseModel):
     """Базовая схема колонки"""
 
     name: str = Field(..., min_length=1, max_length=50)
-    color: str = Field("gray", description="Цвет колонки (hex или имя)")
+    color: str = Field("white", description="Цвет колонки (hex или имя)")
     wip_limit: int | None = Field(None, ge=1, description="Лимит задач в колонке")
 
 
@@ -64,7 +65,8 @@ class ColumnResponse(ColumnBase):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    class Config:
+        from_attributes = True
 
 
 class ColumnWithTasksAndSubtasksResponse(ColumnResponse):
@@ -87,26 +89,27 @@ class ColumnListResponse(BaseModel):
 class TaskBase(BaseModel):
     """Базовая схема задачи"""
 
-    title: str = Field(..., min_length=1, max_length=200)
+    title: str = Field(..., min_length=1, max_length=100)
     description: str | None = None
-    priority: str | None = Field(None, pattern="^(low|medium|high|urgent)$")
+    priority: str | None = Field(None, pattern="^(default|low|medium|high|urgent)$")
     due_date: datetime | None = None
     tags: list[str] | None = None
 
 
-class TaskCreate(TaskBase):
-    """Схема создания задачи"""
+class TaskCreate(BaseModel):
+    """Схема создания задачи — только обязательный минимум"""
 
+    title: str = Field(..., min_length=1, max_length=100)
     column_id: int = Field(..., description="ID колонки, куда поместить задачу")
-    assignee_ids: list[int] | None = []
+    priority: str = Field("default", pattern="^(default|low|medium|high|urgent)$")
 
 
 class TaskUpdate(BaseModel):
     """Схема обновления задачи"""
 
-    title: str | None = Field(None, min_length=1, max_length=200)
-    description: str | None = None
-    priority: str | None = Field(None, pattern="^(low|medium|high|urgent)$")
+    title: str | None = Field(None, min_length=1, max_length=100)
+    description: str | None = Field(None, max_length=1000)
+    priority: str | None = Field(None, pattern="^(default|low|medium|high|urgent)$")
     column_id: int | None = Field(None, description="ID новой колонки (для перемещения)")
     position: int | None = Field(None, description="Новая позиция в колонке")
     due_date: datetime | None = None
@@ -127,7 +130,7 @@ class TaskReorder(BaseModel):
     tasks: list[dict] = Field(..., description='[{"id": 1, "position": 0}, ...]')
 
 
-class TaskResponse(TaskBase):
+class TaskResponse(BaseModel):
     """Схема ответа с задачей"""
 
     id: int
@@ -147,7 +150,8 @@ class TaskResponse(TaskBase):
     assignees: list[UserResponse] = []
     created_by: UserResponse | None = None
 
-    model_config = ConfigDict(from_attributes=True)
+    class Config:
+        from_attributes = True
 
 
 class TaskWithSubtasksResponse(TaskResponse):
@@ -176,7 +180,8 @@ class TaskHistoryResponse(BaseModel):
     change_data: dict | None = None
     created_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    class Config:
+        from_attributes = True
 
 
 # ========== Схемы для подзадач ==========
@@ -220,7 +225,8 @@ class SubtaskResponse(SubtaskBase):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    class Config:
+        from_attributes = True
 
 
 class SubtaskListResponse(BaseModel):
@@ -237,7 +243,7 @@ class TaskFilter(BaseModel):
     """Схема фильтрации задач"""
 
     column_id: int | None = None
-    priority: str | None = Field(None, pattern="^(low|medium|high|urgent)$")
+    priority: str | None = Field(None, pattern="^(default|low|medium|high|urgent)$")
     assignee_id: int | None = None
     created_by_id: int | None = None
     tag: str | None = None

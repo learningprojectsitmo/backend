@@ -58,6 +58,8 @@ class UserResponse(BaseModel):
     """Схема ответа с пользователем"""
 
     id: int
+    first_name: str
+    last_name: str | None = None
     email: EmailStr
 
     model_config = ConfigDict(from_attributes=True)

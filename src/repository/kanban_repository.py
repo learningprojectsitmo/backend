@@ -89,6 +89,27 @@ class KanbanColumnRepository(BaseRepository[Column, ColumnCreate, ColumnUpdate])
         else:
             return db_obj
 
+    async def delete(self, id: int) -> bool:
+        """Удалить колонку"""
+        start_time = time.time()
+        self._logger.info(f"Deleting Column with ID {id}")
+
+        try:
+            stmt = delete(self._model).where(self._model.id == id)
+            result = await self.uow.session.execute(stmt)
+
+            duration = time.time() - start_time
+            if result.rowcount > 0:
+                self._logger.info(f"Deleted Column with ID {id}")
+                return True
+            else:
+                self._logger.warning(f"Column with ID {id} not found for deletion")
+                return False
+        except Exception:
+            duration = time.time() - start_time
+            self._logger.exception(f"Error deleting Column with ID {id} in {duration:.3f}s")
+            raise
+
     async def reorder_columns(self, project_id: int, column_orders: list[dict[str, Any]]) -> bool:
         """Изменить порядок колонок."""
         start_time = time.time()
@@ -164,19 +185,11 @@ class KanbanTaskRepository(BaseRepository[Task, TaskCreate, TaskUpdate]):
         try:
             next_position = await self._get_next_position(obj_data.column_id)
             project_id = await self._get_project_id(obj_data.column_id)
-            data = obj_data.model_dump(exclude_unset=True, exclude={"assignee_ids"})
-
-            if "tags" in data and isinstance(data["tags"], list):
-                data["tags"] = ",".join(data["tags"])
+            data = obj_data.model_dump(exclude_unset=True)
 
             db_obj = self._model(**data, position=next_position, created_by_id=created_by_id, project_id=project_id)
             self.uow.session.add(db_obj)
             await self.uow.session.flush()
-
-            if obj_data.assignee_ids:
-                users = await self._get_users_by_ids(obj_data.assignee_ids)
-                db_obj.assignees = users
-                await self.uow.session.flush()
 
             duration = time.time() - start_time
             self._logger.info(f"Created Task with ID {db_obj.id} in {duration:.3f}s")
@@ -231,11 +244,6 @@ class KanbanTaskRepository(BaseRepository[Task, TaskCreate, TaskUpdate]):
         self._logger.info(f"Deleting Task with ID {id}")
 
         try:
-            # Сначала удаляем связанные записи
-            await self.uow.session.execute(delete(TaskAssignee).where(TaskAssignee.task_id == id))
-            await self.uow.session.execute(delete(TaskHistory).where(TaskHistory.task_id == id))
-
-            # Затем удаляем задачу
             stmt = delete(self._model).where(self._model.id == id)
             result = await self.uow.session.execute(stmt)
 
