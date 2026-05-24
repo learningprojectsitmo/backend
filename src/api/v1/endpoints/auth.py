@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 
-from src.core.container import get_auth_service
+from src.core.container import get_auth_service, get_user_service
 from src.core.dependencies import get_current_user
 from src.core.logging_config import api_logger
 from src.model.user import User
@@ -17,7 +17,9 @@ from src.schema.auth import (
     RefreshRequest,
     Token,
 )
+from src.schema.user import NewUserResponse, UserCreate, UserFull
 from src.services.auth_service import AuthService
+from src.services.user_service import UserService
 
 REFRESH_COOKIE_KEY = "refresh_token"
 REFRESH_COOKIE_PATH = "/v1/auth"
@@ -156,6 +158,44 @@ async def refresh_token(
             response_time=0.0,
         )
         return response
+
+
+# ───────── signup with email ─────────
+
+router = APIRouter(prefix="/signup", tags=["signup"])
+
+
+@router.post("/request", response_model=NewUserResponse, status_code=status.HTTP_201_CREATED)
+async def create_signup_request(
+    user_data: UserCreate,
+    user_service: UserService = Depends(get_user_service),
+) -> NewUserResponse:
+    """Создать запрос на регистрацию и отправить код подтверждения"""
+
+    newuser_id = await user_service.request_signup(user_data)
+    return NewUserResponse(id=newuser_id, email=user_data.email)
+
+
+@router.post("/{newuser_id}/resend-code", response_model=NewUserResponse)
+async def resend_signup_code(
+    newuser_id: int,
+    user_service: UserService = Depends(get_user_service),
+) -> NewUserResponse:
+    """Отправить новый код подтверждения"""
+
+    newuser_id = await user_service.resend_signup_code(newuser_id)
+    return NewUserResponse(id=newuser_id, email="")
+
+
+@router.post("/{newuser_id}/verify", response_model=UserFull)
+async def verify_signup_code(
+    newuser_id: int,
+    code: int,
+    user_service: UserService = Depends(get_user_service),
+) -> UserFull:
+    """Подтвердить регистрацию кодом"""
+
+    return await user_service.confirm_signup(newuser_id, code)
 
 
 # ───────── logout ─────────

@@ -59,7 +59,7 @@ async def get_user(
     _current_user: User = Depends(permission_required("users:read")),
 ) -> UserFull:
     """Получить пользователя по ID"""
-    user = await user_service.get_user_by_id(user_id)
+    user = await user_service.get_by_id(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -86,7 +86,7 @@ async def update_user(
             raise HTTPException(status_code=404, detail="User not found")
 
     try:
-        user = await user_service.update_user(user_id, user_data)
+        user = await user_service.update(user_id, user_data)
         _check_user_exists_or_raise_not_found()
     except Exception as e:
         raise HTTPException(
@@ -110,7 +110,7 @@ async def delete_user(
             detail="Not enough permissions",
         )
 
-    success = await user_service.delete_user(user_id)
+    success = await user_service.delete(user_id)
     if not success:
         raise HTTPException(status_code=404, detail="User not found")
 

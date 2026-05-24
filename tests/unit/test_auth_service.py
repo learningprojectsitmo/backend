@@ -16,6 +16,7 @@ ACCESS_TOKEN_EXPIRE_SECONDS = 1800
 
 class TestAuthService:
     async def test_should_authenticate_user_with_valid_credentials(self):
+        # given
         mock_repository = Mock(spec=UserRepository)
         mock_user = User(
             id=1,
@@ -27,40 +28,50 @@ class TestAuthService:
         mock_repository.get_by_email.return_value = mock_user
         auth_service = AuthService(mock_repository, Mock(), Mock(), Mock(), Mock())
 
+        # when
         with patch.object(auth_service, "verify_password", return_value=True):
             result = await auth_service.authenticate_user("test@example.com", "password")
 
+        # then
         assert result.id == mock_user.id
         assert result.email == mock_user.email
         mock_repository.get_by_email.assert_called_once_with("test@example.com")
 
     async def test_should_return_none_for_invalid_credentials(self):
+        # given
         mock_repository = Mock(spec=UserRepository)
         mock_repository.get_by_email.return_value = None
         auth_service = AuthService(mock_repository, Mock(), Mock(), Mock(), Mock())
 
+        # when
         result = await auth_service.authenticate_user("test@example.com", "wrong_password")
 
+        # then
         assert result is None
         mock_repository.get_by_email.assert_called_once_with("test@example.com")
 
     async def test_should_get_current_user_by_valid_access_token(self):
+        # given
         mock_repository = Mock(spec=UserRepository)
         mock_user = User(id=1, email="test@example.com")
         mock_repository.get_by_email.return_value = mock_user
         auth_service = AuthService(mock_repository, Mock(), Mock(), Mock(), Mock())
 
+        # when
         with patch("src.services.auth_service.jwt.decode") as mock_decode:
             mock_decode.return_value = {"sub": "test@example.com", "type": "access"}
             result = await auth_service.get_current_user("valid_token")
 
+        # then
         assert result == mock_user
         mock_repository.get_by_email.assert_called_once_with("test@example.com")
 
     async def test_should_reject_refresh_token_in_get_current_user(self):
+        # given
         mock_repository = Mock(spec=UserRepository)
         auth_service = AuthService(mock_repository, Mock(), Mock(), Mock(), Mock())
 
+        # when / then
         with patch("src.services.auth_service.jwt.decode") as mock_decode:
             mock_decode.return_value = {"sub": "test@example.com", "type": "refresh"}
             with pytest.raises(HTTPException) as exc:
@@ -68,6 +79,7 @@ class TestAuthService:
             assert exc.value.status_code == status.HTTP_401_UNAUTHORIZED
 
     async def test_should_login_and_return_token_with_raw_refresh(self):
+        # given
         mock_repository = Mock(spec=UserRepository)
         mock_user = User(
             id=1,
@@ -84,6 +96,7 @@ class TestAuthService:
 
         auth_service = AuthService(mock_repository, mock_session_svc, Mock(), Mock(), Mock())
 
+        # when
         with (
             patch.object(auth_service, "verify_password", return_value=True),
             patch.object(auth_service, "_generate_refresh_token", return_value=("raw_refresh", "hash")),
@@ -95,6 +108,7 @@ class TestAuthService:
                 remember_me=True,
             )
 
+        # then
         assert isinstance(token, Token)
         assert token.access_token == "fake_access_token"
         assert token.token_type == "bearer"
@@ -102,6 +116,7 @@ class TestAuthService:
         assert raw_refresh == "raw_refresh"
 
     async def test_should_refresh_token_successfully(self):
+        # given
         mock_repository = Mock(spec=UserRepository)
         mock_user = User(id=1, email="test@example.com")
         mock_repository.get_by_id.return_value = mock_user
@@ -117,6 +132,7 @@ class TestAuthService:
 
         auth_service = AuthService(mock_repository, mock_session_svc, Mock(), Mock(), Mock())
 
+        # when
         with (
             patch.object(auth_service, "_hash_token", return_value="some_hash"),
             patch.object(auth_service, "_generate_refresh_token", return_value=("new_raw", "new_hash")),
@@ -124,6 +140,7 @@ class TestAuthService:
         ):
             token, new_raw, max_age = await auth_service.refresh_access_token("some_raw_token")
 
+        # then
         assert token.access_token == "new_access_token"
         assert token.expires_in == ACCESS_TOKEN_EXPIRE_SECONDS
         assert new_raw == "new_raw"
@@ -131,6 +148,7 @@ class TestAuthService:
         mock_session_svc.rotate_refresh_token_in_session.assert_called_once_with("session-1", "some_hash", "new_hash")
 
     async def test_should_detect_refresh_token_reuse(self):
+        # given
         mock_repository = Mock(spec=UserRepository)
         mock_session_svc = Mock()
         mock_session = Mock()
@@ -143,6 +161,7 @@ class TestAuthService:
 
         auth_service = AuthService(mock_repository, mock_session_svc, Mock(), Mock(), Mock())
 
+        # when / then
         with (
             patch.object(auth_service, "_hash_token", return_value="stale_hash"),
             patch.object(auth_service, "_generate_refresh_token", return_value=("new_raw", "new_hash")),
