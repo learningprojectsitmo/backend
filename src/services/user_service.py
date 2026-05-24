@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-import secrets
-from src.core.logging_config import get_logger, security_logger
-from datetime import UTC, datetime, timedelta
 import random
+from datetime import UTC, datetime, timedelta
 
-from src.model.models import NewUser
+from src.core.exceptions import BusinessLogicError, DuplicatedError, NotFoundError, ValidationError
+from src.core.logging_config import get_logger
 from src.model.user import User
 from src.repository.permission_repository import PermissionRepository
-from src.repository.user_repository import UserPermissionRepository, UserRepository, NewUserRepository
+from src.repository.user_repository import NewUserRepository, UserPermissionRepository, UserRepository
 from src.schema.permission import PermissionMatrix, PermissionMatrixElement
 from src.schema.user import (
     NewUserCreate,
@@ -39,6 +38,12 @@ class UserService(BaseService[User, UserCreate, UserUpdate]):
         self._permission_repository = permission_repository
         self._auth_service = auth_service
         self._logger = get_logger(self.__class__.__name__)
+
+    @staticmethod
+    def _generate_code() -> tuple[int, datetime]:
+        code = random.randint(10000, 99999)
+        expires_at = datetime.now(UTC) + timedelta(minutes=5)
+        return code, expires_at
 
     async def create(self, obj_data: UserCreate) -> User:
         """Создать нового пользователя с хешированием пароля"""
@@ -130,12 +135,18 @@ class UserService(BaseService[User, UserCreate, UserUpdate]):
         return permission_matrix
 
     async def request_signup(self, user_data: UserCreate) -> int:
-        """Создать нового пользователя во временной таблице БД с проверкой email"""
-        hashed_password = self._auth_service.get_password_hash(user_data.password)
+        """Создать временного пользователя и отправить код подтверждения"""
 
-        code = random.randint(10000, 99999)
-        self._logger.info(f"Signup with email for newuser, sent code {code}")
-        expires_at = datetime.now(UTC) + timedelta(minutes=5)
+        existing_user = await self._user_repository.get_by_email(user_data.email)
+        if existing_user:
+            raise DuplicatedError("User with this email already exists")
+
+        existing_newuser = await self._newuser_repository.get_by_email(user_data.email)
+        if existing_newuser:
+            raise DuplicatedError("Signup already in progress for this email")
+
+        hashed_password = self._auth_service.get_password_hash(user_data.password)
+        code, expires_at = self._generate_code()
 
         newuser = NewUserCreate(
             **user_data.model_dump(), password_hashed=hashed_password, code=code, expires_at=expires_at
@@ -143,18 +154,19 @@ class UserService(BaseService[User, UserCreate, UserUpdate]):
 
         newuser = await self._newuser_repository.create(newuser)
 
-        # TODO: добавить отправку кода через email-клиент, сейчас токен доступен в БД
-        # Пример интерфейса:
-        # email_service.send(user.email, token)
+        # TODO: добавить отправку кода через email-клиент, сейчас код доступен в БД code
 
         self._logger.info(f"Signup attempt with email {newuser.email}")
         return newuser.id
 
-    async def resend_signup_code(self, newuser_id: int) -> bool:
-        """Создать нового пользователя во временной таблице БД с проверкой email"""
-        code = random.randint(10000, 99999)
-        self._logger.info(f"Signup with email for newuser with {newuser_id}, sent code {code}")
-        expires_at = datetime.now(UTC) + timedelta(minutes=5)
+    async def resend_signup_code(self, newuser_id: int) -> int:
+        """Сгенерировать новый код подтверждения для временного пользователя"""
+
+        newuser = await self._newuser_repository.get_by_id(newuser_id)
+        if not newuser:
+            raise NotFoundError("Signup request not found")
+
+        code, expires_at = self._generate_code()
 
         newuser_update = NewUserUpdate(
             code=code,
@@ -163,39 +175,31 @@ class UserService(BaseService[User, UserCreate, UserUpdate]):
 
         await self._newuser_repository.update(newuser_id, newuser_update)
 
-        # TODO: добавить генерацию и отправку кода через email-клиент, сейчас токен доступен в БД
-        # Пример интерфейса:
-        # email_service.send(user.email, token)
+        # TODO: добавить отправку кода через email-клиент, сейчас код доступен в БД
 
-        self._logger.info(f"Code resend attempt for newuser with id {newuser_id}")
-        return True
+        self._logger.info(f"Code resent for newuser with id {newuser_id}")
+        return newuser.id
 
-    async def confirm_signup(self, newuser_id: int, code: int) -> bool | UserFull:
-        """Проверить введённый код и переместить пользователя из временной таблицы БД в постоянную"""
+    async def confirm_signup(self, newuser_id: int, code: int) -> UserFull:
+        """Проверить код и переместить пользователя из временной таблицы в постоянную"""
 
         newuser = await self._newuser_repository.get_by_id(newuser_id)
 
         if not newuser:
-            self._logger.warning(f"User signup attempted with invalid newuser_id {newuser_id}")
-            return False
+            raise NotFoundError("Signup request not found")
 
         if newuser.code != code:
-            self._logger.warning(f"User signup attempted with invalid code for newuser with id {newuser_id}")
-            # TODO: inform frontend that the code is invalid
-            return False
+            raise ValidationError("Invalid confirmation code")
 
         if datetime.now(UTC) > newuser.expires_at:
-            self._logger.warning(f"User signup attempted with expired token for user with email {newuser.email}")
-            # TODO: inform frontend that the time has expired
-            return False
+            raise BusinessLogicError("Confirmation code has expired")
 
-        newuser_data = {
-            k: v for k, v in newuser.__dict__.items() if k not in {"_sa_instance_state", "code", "expires_at"}
-        }
+        _EXCLUDED_FIELDS = {"_sa_instance_state", "code", "expires_at", "created_at", "updated_at"}
+        newuser_data = newuser.model_dump(exclude=_EXCLUDED_FIELDS)
         user_create = UserCreateHashedPwd(**newuser_data)
 
         user_full = await self._user_repository.create(user_create)
         await self._newuser_repository.delete(newuser_id)
 
-        self._logger.info(f"Signup with email verification successful for user with email {newuser.email}")
+        self._logger.info(f"Signup confirmed for user with email {newuser.email}")
         return user_full

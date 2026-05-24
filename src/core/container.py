@@ -15,7 +15,7 @@ from src.repository.resume_repository import ResumeRepository
 from src.repository.role_repository import RolePermissionRepository, RoleRepository
 from src.repository.session_repository import SessionRepository
 from src.repository.settings_repository import SpaceSettingsRepository
-from src.repository.user_repository import UserPermissionRepository, UserRepository, NewUserRepository
+from src.repository.user_repository import NewUserRepository, UserPermissionRepository, UserRepository
 from src.repository.workspace_repository import WorkSpaceRepository
 from src.services.audit_service import AuditService
 from src.services.auth_service import AuthService

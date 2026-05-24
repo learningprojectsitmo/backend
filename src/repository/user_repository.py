@@ -4,14 +4,13 @@ from pydantic import BaseModel
 from sqlalchemy import delete, select
 
 from src.core.uow import IUnitOfWork
-from src.model.models import NewUser
+from src.model.auth import NewUser
 from src.model.user import Permission, User, UserPermission
 from src.repository.base_repository import BaseRepository
 from src.schema.user import (
     NewUserCreate,
-    UserCreateHashedPwd,
     NewUserUpdate,
-    UserCreate,
+    UserCreateHashedPwd,
     UserPermissionCreate,
     UserUpdate,
 )
@@ -33,6 +32,12 @@ class NewUserRepository(BaseRepository[NewUser, NewUserCreate, NewUserUpdate]):
     def __init__(self, uow: IUnitOfWork) -> None:
         super().__init__(uow)
         self._model = NewUser
+
+    async def get_by_email(self, email: str) -> NewUser | None:
+        result = await self.uow.session.execute(
+            select(NewUser).where(NewUser.email == email),
+        )
+        return result.scalar_one_or_none()
 
 
 class UserPermissionRepository(BaseRepository[UserPermission, UserPermissionCreate, BaseModel]):

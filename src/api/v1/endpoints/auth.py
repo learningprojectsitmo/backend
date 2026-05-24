@@ -17,7 +17,7 @@ from src.schema.auth import (
     RefreshRequest,
     Token,
 )
-from src.schema.user import UserCreate, UserFull
+from src.schema.user import NewUserResponse, UserCreate, UserFull
 from src.services.auth_service import AuthService
 from src.services.user_service import UserService
 
@@ -162,34 +162,38 @@ async def refresh_token(
 
 # ───────── signup with email ─────────
 
+router = APIRouter(prefix="/signup", tags=["signup"])
 
-@auth_router.post("/signup_with_email")
-async def create_user_with_email(
+
+@router.post("/request", response_model=NewUserResponse, status_code=status.HTTP_201_CREATED)
+async def create_signup_request(
     user_data: UserCreate,
     user_service: UserService = Depends(get_user_service),
-) -> int:
-    """Создать нового пользователя и вернуть временный Id"""
+) -> NewUserResponse:
+    """Создать запрос на регистрацию и отправить код подтверждения"""
 
-    return await user_service.request_signup(user_data)
+    newuser_id = await user_service.request_signup(user_data)
+    return NewUserResponse(id=newuser_id, email=user_data.email)
 
 
-@auth_router.post("/resend_signup_code")
+@router.post("/{newuser_id}/resend-code", response_model=NewUserResponse)
 async def resend_signup_code(
     newuser_id: int,
     user_service: UserService = Depends(get_user_service),
-) -> bool:
-    """Отправить заново код подтверждения"""
+) -> NewUserResponse:
+    """Отправить новый код подтверждения"""
 
-    return await user_service.resend_signup_code(newuser_id)
+    newuser_id = await user_service.resend_signup_code(newuser_id)
+    return NewUserResponse(id=newuser_id, email="")
 
 
-@auth_router.post("/verify_signup_code")
+@router.post("/{newuser_id}/verify", response_model=UserFull)
 async def verify_signup_code(
     newuser_id: int,
     code: int,
     user_service: UserService = Depends(get_user_service),
-) -> UserFull | bool:
-    """Подтвердить код"""
+) -> UserFull:
+    """Подтвердить регистрацию кодом"""
 
     return await user_service.confirm_signup(newuser_id, code)
 

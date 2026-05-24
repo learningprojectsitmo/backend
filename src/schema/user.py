@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
 from datetime import datetime
+
+from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
 
 from src.util.validator import TelegramValidator
 
@@ -122,3 +123,12 @@ class NewUserUpdate(BaseModel):
 
     code: int
     expires_at: datetime
+
+
+class NewUserResponse(BaseModel):
+    """Схема ответа для временного пользователя"""
+
+    id: int
+    email: str
+
+    model_config = ConfigDict(from_attributes=True)
