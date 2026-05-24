@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from .auth import Token
 from .base import Blank, DeleteResponse, FindBase, FindDateRange, FindResult, PaginatedResponse
+from .education import EducationCreate, EducationFull, EducationUpdate
 from .kanban import (
     ColumnBase,
     ColumnCreate,
@@ -28,6 +29,9 @@ from .kanban import (
     TaskResponse,
     TaskUpdate,
 )
+from .language import LanguageCreate, LanguageFull, LanguageUpdate
+from .portfolio import PortfolioCreate, PortfolioFull, PortfolioUpdate
+from .profile import ProfileResponse
 from .project import ProjectCreate, ProjectFull, ProjectListItem, ProjectListResponse, ProjectResponse, ProjectUpdate
 from .resume import ResumeCreate, ResumeFull, ResumeListResponse, ResumeResponse, ResumeUpdate
 from .user import UserBase, UserCreate, UserFull, UserListItem, UserListResponse, UserResponse, UserUpdate
@@ -41,10 +45,20 @@ __all__ = [
     "ColumnUpdate",
     "ColumnWithTasksAndSubtasksResponse",
     "DeleteResponse",
+    "EducationCreate",
+    "EducationFull",
+    "EducationUpdate",
     "FindBase",
     "FindDateRange",
     "FindResult",
+    "LanguageCreate",
+    "LanguageFull",
+    "LanguageUpdate",
     "PaginatedResponse",
+    "PortfolioCreate",
+    "PortfolioFull",
+    "PortfolioUpdate",
+    "ProfileResponse",
     "ProjectBoardResponse",
     "ProjectCreate",
     "ProjectFull",

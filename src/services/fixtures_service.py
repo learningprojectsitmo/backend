@@ -6,15 +6,23 @@ from src.model.project import Project
 from src.model.settings import SettingsType
 from src.model.workspace import WorkSpace, WorkSpaceCategories, WorkSpaceParticipation, WorkSpaceStatus
 from src.repository.project_repository import ProjectRepository
+from src.schema.education import EducationCreate
 from src.schema.kanban import TaskCreate
+from src.schema.language import LanguageCreate
 from src.schema.permission import PermissionMatrix
+from src.schema.portfolio import PortfolioCreate
 from src.schema.project import ProjectCreate, VacancyCreate
+from src.schema.resume import ResumeCreate
 from src.schema.settings import SpaceSettingsUpdate
 from src.schema.user import UserCreate
 from src.schema.workspace import WorkSpaceCreate
+from src.services.education_service import EducationService
 from src.services.kanban_service import KanbanService
+from src.services.language_service import LanguageService
 from src.services.permission_service import PermissionService
+from src.services.portfolio_service import PortfolioService
 from src.services.project_service import ProjectService
+from src.services.resume_service import ResumeService
 from src.services.role_service import RoleService
 from src.services.settings_service import SpaceSettingsService
 from src.services.user_service import UserService
@@ -34,6 +42,10 @@ class FixtureService:
         project_repository: ProjectRepository,
         settings_service: SpaceSettingsService,
         kanban_service: KanbanService,
+        resume_service: ResumeService,
+        portfolio_service: PortfolioService,
+        education_service: EducationService,
+        language_service: LanguageService,
     ) -> None:
         self._permission_service = permission_service
         self._role_service = role_service
@@ -43,6 +55,10 @@ class FixtureService:
         self._project_repository = project_repository
         self._settings_service = settings_service
         self._kanban_service = kanban_service
+        self._resume_service = resume_service
+        self._portfolio_service = portfolio_service
+        self._education_service = education_service
+        self._language_service = language_service
 
     # ─── main entry ────────────────────────────────────────────────────────
 
@@ -55,6 +71,10 @@ class FixtureService:
         workspaces_by_name = await self._seed_workspaces(admin, categories_by_name)
         await self._seed_projects(admin, workspaces_by_name)
         await self._seed_settings_types()
+        await self._seed_resumes(admin)
+        await self._seed_portfolio(admin)
+        await self._seed_education(admin)
+        await self._seed_languages(admin)
 
     # ─── permissions ───────────────────────────────────────────────────────
 
@@ -126,6 +146,9 @@ class FixtureService:
                     last_name="User",
                     password="admin_password",
                     role_id=role_admin.id,
+                    tg_nickname="@admin_tg",
+                    vk_nickname="@admin_vk",
+                    phone="+7 (999) 123-45-67",
                 )
             )
 
@@ -138,6 +161,8 @@ class FixtureService:
                     last_name="User",
                     password="member_password",
                     role_id=role_member.id,
+                    tg_nickname="@member_tg",
+                    phone="+7 (999) 987-65-43",
                 )
             )
 
@@ -157,6 +182,80 @@ class FixtureService:
                 repo.uow.session.add(SettingsType(**st_data))
 
         await repo.uow.commit()
+
+    # ─── resumes ───────────────────────────────────────────────────────────
+
+    async def _seed_resumes(self, admin: object) -> None:
+        existing = await self._resume_service.get_resumes_by_author(admin.id)
+        if existing:
+            return
+
+        await self._resume_service.create_resume(
+            ResumeCreate(header="UX/UI-дизайнер", resume_text="Опыт работы в продуктовом дизайне 3 года. Работал над образовательными платформами."),
+            admin.id,
+        )
+        await self._resume_service.create_resume(
+            ResumeCreate(header="Frontend-разработчик", resume_text="React, TypeScript, Tailwind. Разрабатывал интерфейсы для веб-приложений."),
+            admin.id,
+        )
+
+    # ─── portfolio ─────────────────────────────────────────────────────────
+
+    async def _seed_portfolio(self, admin: object) -> None:
+        existing = await self._portfolio_service.get_by_user_id(admin.id)
+        if existing:
+            return
+
+        await self._portfolio_service.create_portfolio(
+            PortfolioCreate(title="ezhidze.figma.site", url="https://ezhidze.figma.site"),
+            admin.id,
+        )
+        await self._portfolio_service.create_portfolio(
+            PortfolioCreate(title="dribbble.com/ezhidze", url="https://dribbble.com/ezhidze"),
+            admin.id,
+        )
+
+    # ─── education ─────────────────────────────────────────────────────────
+
+    async def _seed_education(self, admin: object) -> None:
+        existing = await self._education_service.get_by_user_id(admin.id)
+        if existing:
+            return
+
+        await self._education_service.create_education(
+            EducationCreate(
+                institution="ИТМО, Санкт-Петербург",
+                faculty="Мобильные и облачные технологии",
+                degree="Магистр",
+                years="2026",
+            ),
+            admin.id,
+        )
+        await self._education_service.create_education(
+            EducationCreate(
+                institution="ИТМО, Санкт-Петербург",
+                faculty="Мобильные и сетевые технологии",
+                degree="Бакалавр",
+                years="2024",
+            ),
+            admin.id,
+        )
+
+    # ─── languages ─────────────────────────────────────────────────────────
+
+    async def _seed_languages(self, admin: object) -> None:
+        existing = await self._language_service.get_by_user_id(admin.id)
+        if existing:
+            return
+
+        await self._language_service.create_language(
+            LanguageCreate(name="Русский", level="Родной", flag="🇷🇺"),
+            admin.id,
+        )
+        await self._language_service.create_language(
+            LanguageCreate(name="English", level="B2", flag="🇬🇧"),
+            admin.id,
+        )
 
     # ─── workspace statuses ────────────────────────────────────────────────
 

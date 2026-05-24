@@ -14,8 +14,11 @@ from src.core.database import Base
 from src.model import (  # noqa: F401
     AuditLog,
     Column,
+    Education,
+    Language,
     PasswordReset,
     Permission,
+    Portfolio,
     Project,
     ProjectParticipation,
     ProjectStatus,

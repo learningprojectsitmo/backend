@@ -11,9 +11,9 @@ from src.core.container import (
 )
 from src.core.logging_config import get_logger
 from src.core.security import oauth2_scheme
+from src.core.uow import SqlAlchemyUoW
 from src.repository.resume_repository import ResumeRepository
 from src.services.resume_service import ResumeService
-from src.core.uow import SqlAlchemyUoW
 
 if TYPE_CHECKING:
     from src.model.user import User

@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 from sqlalchemy import delete, select
+from sqlalchemy.orm import selectinload
 
 from src.core.uow import IUnitOfWork
 from src.model.auth import NewUser
-from src.model.user import Permission, User, UserPermission
+from src.model.user import Permission, Role, User, UserPermission
 from src.repository.base_repository import BaseRepository
 from src.schema.user import (
     NewUserCreate,
@@ -20,6 +21,12 @@ class UserRepository(BaseRepository[User, UserCreateHashedPwd, UserUpdate]):
     def __init__(self, uow: IUnitOfWork) -> None:
         super().__init__(uow)
         self._model = User
+
+    async def get_by_id_with_role(self, id: int) -> User | None:
+        result = await self.uow.session.execute(
+            select(User).where(User.id == id).options(selectinload(User.role)),
+        )
+        return result.scalar_one_or_none()
 
     async def get_by_email(self, email: str) -> User | None:
         result = await self.uow.session.execute(

@@ -16,6 +16,9 @@ class UserBase(BaseModel):
     last_name: str | None = None
     role_id: int
     isu_number: int | None = None
+    tg_nickname: str | None = None
+    phone: str | None = None
+    vk_nickname: str | None = None
 
 
 class UserCreate(UserBase):
@@ -34,7 +37,6 @@ class UserFull(UserBase):
     """Полная схема пользователя"""
 
     id: int
-    tg_nickname: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -53,6 +55,8 @@ class UserUpdate(BaseModel):
     last_name: str | None = None
     isu_number: int | None = None
     tg_nickname: str | None = None
+    phone: str | None = None
+    vk_nickname: str | None = None
     role_id: int | None = None
 
     @field_validator("tg_nickname")
