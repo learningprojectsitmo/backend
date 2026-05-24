@@ -191,11 +191,17 @@ class FixtureService:
             return
 
         await self._resume_service.create_resume(
-            ResumeCreate(header="UX/UI-дизайнер", resume_text="Опыт работы в продуктовом дизайне 3 года. Работал над образовательными платформами."),
+            ResumeCreate(
+                header="UX/UI-дизайнер",
+                resume_text="Опыт работы в продуктовом дизайне 3 года. Работал над образовательными платформами.",
+            ),
             admin.id,
         )
         await self._resume_service.create_resume(
-            ResumeCreate(header="Frontend-разработчик", resume_text="React, TypeScript, Tailwind. Разрабатывал интерфейсы для веб-приложений."),
+            ResumeCreate(
+                header="Frontend-разработчик",
+                resume_text="React, TypeScript, Tailwind. Разрабатывал интерфейсы для веб-приложений.",
+            ),
             admin.id,
         )
 

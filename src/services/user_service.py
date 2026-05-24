@@ -126,11 +126,10 @@ class UserService(BaseService[User, UserCreate, UserUpdate]):
                     else:
                         to_remove.append(perm_str)
 
-        async with self._user_permission_repository.uow:
-            if to_add:
-                await self._user_permission_repository.add_permissions(user_id, to_add)
-            if to_remove:
-                await self._user_permission_repository.remove_permissions(user_id, to_remove)
+        if to_add:
+            await self._user_permission_repository.add_permissions(user_id, to_add)
+        if to_remove:
+            await self._user_permission_repository.remove_permissions(user_id, to_remove)
 
         return permission_matrix
 

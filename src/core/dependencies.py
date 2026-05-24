@@ -11,9 +11,6 @@ from src.core.container import (
 )
 from src.core.logging_config import get_logger
 from src.core.security import oauth2_scheme
-from src.core.uow import SqlAlchemyUoW
-from src.repository.resume_repository import ResumeRepository
-from src.services.resume_service import ResumeService
 
 if TYPE_CHECKING:
     from src.model.user import User
@@ -105,12 +102,5 @@ async def setup_audit(
 
     set_audit_context(user_id=user_id, ip_address=ip_address, user_agent=user_agent)
 
-async def get_resume_repository() -> ResumeRepository:
-    """Получить репозиторий для дальнейшей работой с резюме"""
-    uow = SqlAlchemyUoW()
-    return ResumeRepository(uow)
-async def get_resume_service(
-        repository: ResumeRepository = Depends(get_resume_repository),
-) -> ResumeService:
-    """Получить сервис для работы с резюме"""
-    return ResumeService(repository)
+
+

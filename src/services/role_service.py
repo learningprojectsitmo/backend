@@ -74,11 +74,10 @@ class RoleService(BaseService[Role, RoleCreate, RoleUpdate]):
                     else:
                         to_remove.append(perm_str)
 
-        async with self._role_permission_repository.uow:
-            if to_add:
-                await self._role_permission_repository.add_permissions(role_id, to_add)
-            if to_remove:
-                await self._role_permission_repository.remove_permissions(role_id, to_remove)
+        if to_add:
+            await self._role_permission_repository.add_permissions(role_id, to_add)
+        if to_remove:
+            await self._role_permission_repository.remove_permissions(role_id, to_remove)
 
         return permission_matrix
 

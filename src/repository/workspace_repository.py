@@ -18,12 +18,14 @@ class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUp
 
     async def get_by_author_id(self, author_id: int) -> list[WorkSpace]:
         """Получить все workspace по author_id"""
-        result = await self.uow.session.execute(select(WorkSpace).where(WorkSpace.author_id == author_id))
+        query = select(WorkSpace).where(WorkSpace.author_id == author_id).options(selectinload(WorkSpace.category))
+        result = await self.uow.session.execute(query)
         return list(result.scalars().all())
 
     async def get_by_status_id(self, status_id: int) -> list[WorkSpace]:
         """Получить все workspace по status_id"""
-        result = await self.uow.session.execute(select(WorkSpace).where(WorkSpace.status_id == status_id))
+        query = select(WorkSpace).where(WorkSpace.status_id == status_id).options(selectinload(WorkSpace.category))
+        result = await self.uow.session.execute(query)
         return list(result.scalars().all())
 
     async def get_workspaces_with_stats(self, skip: int = 0, limit: int = 10) -> tuple[list[WorkSpace], int]:

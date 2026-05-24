@@ -185,10 +185,11 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
                 raise NotFoundError(f"Column with id {task_data.column_id} not found")
 
         if task_data.assignee_ids:
-            for user_id in task_data.assignee_ids:
-                user = await self._user_repository.get_by_id(user_id)
-                if not user:
-                    raise NotFoundError(f"User with id {user_id} not found")
+            users = await self._user_repository.get_multi_by_ids(task_data.assignee_ids)
+            found_ids = {u.id for u in users}
+            missing = [uid for uid in task_data.assignee_ids if uid not in found_ids]
+            if missing:
+                raise NotFoundError(f"Users with ids {missing} not found")
 
         updated_task = await self._kanban_task_repository.update(task_id, task_data)
         if not updated_task:
@@ -205,7 +206,7 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
         if not task:
             raise NotFoundError(f"Task with id {task_id} not found")
 
-        target_column = await self._kanban_column_repository.get_by_id(move_data.column_id)
+        target_column = await self._kanban_column_repository.get_by_id_with_for_update(move_data.column_id)
         if not target_column:
             raise NotFoundError(f"Column with id {move_data.column_id} not found")
 
@@ -270,7 +271,7 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
 
     async def create_subtask(self, subtask_data: SubtaskCreate, current_user_id: int) -> SubtaskResponse:
         """Создать новую подзадачу."""
-        task = await self._kanban_task_repository.get_by_id(subtask_data.task_id)
+        task = await self._kanban_task_repository.get_by_id_with_for_update(subtask_data.task_id)
         if not task:
             raise NotFoundError(f"Task with id {subtask_data.task_id} not found")
 

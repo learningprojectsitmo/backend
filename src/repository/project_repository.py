@@ -30,8 +30,22 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         result = await self.uow.session.execute(query)
         return result.scalar_one_or_none()
 
+    async def is_user_in_project(self, project_id: int, user_id: int) -> bool:
+        result = await self.uow.session.execute(
+            select(ProjectParticipation).where(
+                ProjectParticipation.project_id == project_id,
+                ProjectParticipation.user_id == user_id,
+            ),
+        )
+        return result.scalar_one_or_none() is not None
+
     async def get_by_author_id(self, author_id: int) -> list[Project]:
-        result = await self.uow.session.execute(select(Project).where(Project.author_id == author_id))
+        query = select(Project).where(Project.author_id == author_id).options(
+            selectinload(Project.participants).selectinload(ProjectParticipation.participant),
+            selectinload(Project.tags),
+            selectinload(Project.status),
+        )
+        result = await self.uow.session.execute(query)
         return list(result.scalars().all())
 
     async def get_projects_by_workspace(self, workspace_id: int, skip: int = 0, limit: int = 100) -> list[Project]:

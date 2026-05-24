@@ -31,11 +31,13 @@ class ResumeService(BaseService[Resume, ResumeCreate, ResumeUpdate]):
         total = await self._resume_repository.count()
         return resumes, total
 
-    async def get_user_resumes_paginated(self, user_id: int, page: int = 1, limit: int = 10) -> tuple[list[Resume], int]:
+    async def get_user_resumes_paginated(
+        self, user_id: int, page: int = 1, limit: int = 10
+    ) -> tuple[list[Resume], int]:
         """Получить резюме пользователя с пагинацией"""
         skip = (page - 1) * limit
         resumes = await self._resume_repository.get_by_author_paginated(user_id, skip=skip, limit=limit)
-        total = len(await self._resume_repository.get_by_author_id(user_id))
+        total = await self._resume_repository.count_by_author_id(user_id)
         return resumes, total
 
     async def create_resume(self, resume_data: ResumeCreate, author_id: int) -> Resume:

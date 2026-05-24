@@ -24,16 +24,11 @@ class SqlAlchemyUoW:
         self.session = self.session_factory()
         return self
 
-    async def __aexit__(self, _exc_type: object, exc: object, tb: object) -> None:  # type: ignore[override]
+    async def __aexit__(self, _exc_type: object, exc: object, _tb: object) -> None:  # type: ignore[override]
         if exc:
             await self.session.rollback()
         else:
-            try:
-                await self.session.commit()
-            except Exception:
-                # TODO: for some reason this code does not work, I don't get errors on IntegrityError
-                await self.session.rollback()
-                raise
+            await self.session.commit()
 
         await self.session.close()
 

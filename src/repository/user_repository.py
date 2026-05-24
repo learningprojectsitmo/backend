@@ -28,6 +28,12 @@ class UserRepository(BaseRepository[User, UserCreateHashedPwd, UserUpdate]):
         )
         return result.scalar_one_or_none()
 
+    async def get_multi_by_ids(self, ids: list[int]) -> list[User]:
+        result = await self.uow.session.execute(
+            select(User).where(User.id.in_(ids)),
+        )
+        return list(result.scalars().all())
+
     async def get_by_email(self, email: str) -> User | None:
         result = await self.uow.session.execute(
             select(User).where(User.email == email),

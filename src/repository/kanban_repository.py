@@ -31,6 +31,11 @@ class KanbanColumnRepository(BaseRepository[Column, ColumnCreate, ColumnUpdate])
         self._model = Column
         self._logger = get_logger(__name__)
 
+    async def get_by_id_with_for_update(self, id: int) -> Column | None:
+        query = select(self._model).where(self._model.id == id).with_for_update()
+        result = await self.uow.session.execute(query)
+        return result.scalar_one_or_none()
+
     async def get_columns_by_project(self, project_id: int) -> list[Column]:
         """Получить все колонки проекта с задачами и связанными данными."""
         start_time = time.time()
@@ -147,6 +152,13 @@ class KanbanTaskRepository(BaseRepository[Task, TaskCreate, TaskUpdate]):
 
     async def get_by_id(self, id: int) -> Task | None:
         """Получить задачу по ID с загрузкой связанных данных."""
+        return await self._get_by_id(id, for_update=False)
+
+    async def get_by_id_with_for_update(self, id: int) -> Task | None:
+        """Получить задачу по ID с блокировкой FOR UPDATE."""
+        return await self._get_by_id(id, for_update=True)
+
+    async def _get_by_id(self, id: int, for_update: bool = False) -> Task | None:
         start_time = time.time()
         self._logger.debug(f"Getting Task by ID: {id} with relations")
 
@@ -161,6 +173,8 @@ class KanbanTaskRepository(BaseRepository[Task, TaskCreate, TaskUpdate]):
                     selectinload(self._model.project),
                 )
             )
+            if for_update:
+                query = query.with_for_update()
             result = await self.uow.session.execute(query)
             task = result.scalar_one_or_none()
 
@@ -336,7 +350,12 @@ class KanbanTaskRepository(BaseRepository[Task, TaskCreate, TaskUpdate]):
         self._logger.debug(f"Getting tasks for column {column_id}")
 
         try:
-            query = select(self._model).where(self._model.column_id == column_id).order_by(self._model.position)
+            query = (
+                select(self._model)
+                .where(self._model.column_id == column_id)
+                .options(selectinload(self._model.assignees))
+                .order_by(self._model.position)
+            )
             result = await self.uow.session.execute(query)
             tasks = list(result.scalars().all())
 

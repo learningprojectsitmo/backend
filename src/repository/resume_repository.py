@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from src.core.uow import IUnitOfWork
 from src.model.project import Resume
@@ -21,14 +21,15 @@ class ResumeRepository(BaseRepository[Resume, ResumeCreate, ResumeUpdate]):
         )
         return list(result.scalars().all())
 
-    async def get_by_author_paginated(
-            self, author_id: int, skip: int = 0, limit: int = 10
-    ) -> list[Resume]:
+    async def count_by_author_id(self, author_id: int) -> int:
+        result = await self.uow.session.execute(
+            select(func.count()).select_from(Resume).where(Resume.author_id == author_id),
+        )
+        return result.scalar()
+
+    async def get_by_author_paginated(self, author_id: int, skip: int = 0, limit: int = 10) -> list[Resume]:
         """Получить резюме автора с пагинацией."""
         result = await self.uow.session.execute(
-            select(Resume)
-            .where(Resume.author_id == author_id)
-            .offset(skip)
-            .limit(limit)
+            select(Resume).where(Resume.author_id == author_id).offset(skip).limit(limit)
         )
         return list(result.scalars().all())

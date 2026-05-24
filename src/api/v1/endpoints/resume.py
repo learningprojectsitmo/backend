@@ -105,6 +105,7 @@ async def delete_resume(
     else:
         return {"message": "Resume deleted successfully"}
 
+
 @resume_router.get("/me", response_model=ResumeListResponse)
 async def fetch_my_resumes(
     page: int = Query(1, ge=1),
@@ -123,4 +124,3 @@ async def fetch_my_resumes(
         limit=limit,
         total_pages=total_pages,
     )
-
