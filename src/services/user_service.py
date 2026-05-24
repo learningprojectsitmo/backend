@@ -5,12 +5,20 @@ from src.core.logging_config import get_logger, security_logger
 from datetime import UTC, datetime, timedelta
 import random
 
-from src.model.models import NewUser, User
+from src.model.models import NewUser
+from src.model.user import User
 from src.repository.permission_repository import PermissionRepository
-from src.repository.user_repository import (UserPermissionRepository,
-                                            UserRepository, NewUserRepository)
+from src.repository.user_repository import UserPermissionRepository, UserRepository, NewUserRepository
 from src.schema.permission import PermissionMatrix, PermissionMatrixElement
-from src.schema.user import NewUserCreate, NewUserUpdate, UserCreate, UserCreateHashedPwd, UserFull, UserListResponse, UserUpdate
+from src.schema.user import (
+    NewUserCreate,
+    NewUserUpdate,
+    UserCreate,
+    UserCreateHashedPwd,
+    UserFull,
+    UserListResponse,
+    UserUpdate,
+)
 from src.services.auth_service import AuthService
 from src.services.base_service import BaseService
 
@@ -35,16 +43,14 @@ class UserService(BaseService[User, UserCreate, UserUpdate]):
     async def create(self, obj_data: UserCreate) -> User:
         """Создать нового пользователя с хешированием пароля"""
         user_data = obj_data.model_dump()
-        user_data['hashed_password'] = self._auth_service.get_password_hash(user_data.pop('password'))
+        user_data["password_hashed"] = self._auth_service.get_password_hash(user_data.pop("password"))
 
         user_create = UserCreateHashedPwd(**user_data)
         return await self._user_repository.create(user_create)
 
-
     async def get_user_by_email(self, email: str) -> User | None:
         """Получить пользователя по email"""
         return await self._user_repository.get_by_email(email)
-
 
     async def get_users_paginated(self, page: int = 1, limit: int = 10) -> UserListResponse:
         """Получить пользователей с пагинацией"""
@@ -123,7 +129,6 @@ class UserService(BaseService[User, UserCreate, UserUpdate]):
 
         return permission_matrix
 
-
     async def request_signup(self, user_data: UserCreate) -> int:
         """Создать нового пользователя во временной таблице БД с проверкой email"""
         hashed_password = self._auth_service.get_password_hash(user_data.password)
@@ -133,10 +138,7 @@ class UserService(BaseService[User, UserCreate, UserUpdate]):
         expires_at = datetime.now(UTC) + timedelta(minutes=5)
 
         newuser = NewUserCreate(
-            **user_data.model_dump(),
-            hashed_password=hashed_password,
-            code=code,
-            expires_at=expires_at
+            **user_data.model_dump(), password_hashed=hashed_password, code=code, expires_at=expires_at
         )
 
         newuser = await self._newuser_repository.create(newuser)
@@ -148,7 +150,6 @@ class UserService(BaseService[User, UserCreate, UserUpdate]):
         self._logger.info(f"Signup attempt with email {newuser.email}")
         return newuser.id
 
-
     async def resend_signup_code(self, newuser_id: int) -> bool:
         """Создать нового пользователя во временной таблице БД с проверкой email"""
         code = random.randint(10000, 99999)
@@ -156,8 +157,8 @@ class UserService(BaseService[User, UserCreate, UserUpdate]):
         expires_at = datetime.now(UTC) + timedelta(minutes=5)
 
         newuser_update = NewUserUpdate(
-            code = code,
-            expires_at = expires_at,
+            code=code,
+            expires_at=expires_at,
         )
 
         await self._newuser_repository.update(newuser_id, newuser_update)
@@ -168,7 +169,6 @@ class UserService(BaseService[User, UserCreate, UserUpdate]):
 
         self._logger.info(f"Code resend attempt for newuser with id {newuser_id}")
         return True
-
 
     async def confirm_signup(self, newuser_id: int, code: int) -> bool | UserFull:
         """Проверить введённый код и переместить пользователя из временной таблицы БД в постоянную"""
@@ -190,8 +190,7 @@ class UserService(BaseService[User, UserCreate, UserUpdate]):
             return False
 
         newuser_data = {
-            k: v for k, v in newuser.__dict__.items()
-            if k not in {"_sa_instance_state", "code", "expires_at"}
+            k: v for k, v in newuser.__dict__.items() if k not in {"_sa_instance_state", "code", "expires_at"}
         }
         user_create = UserCreateHashedPwd(**newuser_data)
 
@@ -200,4 +199,3 @@ class UserService(BaseService[User, UserCreate, UserUpdate]):
 
         self._logger.info(f"Signup with email verification successful for user with email {newuser.email}")
         return user_full
-

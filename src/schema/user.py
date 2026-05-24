@@ -19,12 +19,14 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     """Схема для создания пользователя"""
+
     password: str
 
 
 class UserCreateHashedPwd(UserBase):
     """Схема для создания пользователя"""
-    hashed_password: str
+
+    password_hashed: str
 
 
 class UserFull(UserBase):
@@ -62,6 +64,8 @@ class UserResponse(BaseModel):
     """Схема ответа с пользователем"""
 
     id: int
+    first_name: str
+    last_name: str | None = None
     email: EmailStr
 
     model_config = ConfigDict(from_attributes=True)
@@ -108,14 +112,13 @@ class UserPermissionFull(UserPermissionCreate):
 
 class NewUserCreate(UserCreateHashedPwd):
     """Схема для создания пользователя"""
+
     code: int
     expires_at: datetime
 
 
 class NewUserUpdate(BaseModel):
     """Схема для обновления пользователя"""
+
     code: int
     expires_at: datetime
-
-
-

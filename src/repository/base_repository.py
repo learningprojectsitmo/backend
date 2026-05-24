@@ -76,10 +76,13 @@ class BaseRepository(RepositoryProtocol[ModelType_co, CreateType_contra, UpdateT
         self._logger.debug(f"Getting {self._model.__name__} by ID: {id}")
 
         try:
-            result = await self.uow.session.get(self._model, id)
+            result = await self.uow.session.execute(
+                select(self._model).where(self._model.id == id)  # type: ignore[attr-defined]
+            )
+            db_obj = result.scalar_one_or_none()
             duration = time.time() - start_time
 
-            if result:
+            if db_obj:
                 self._logger.info(f"Successfully retrieved {self._model.__name__} with ID {id} in {duration:.3f}s")
             else:
                 self._logger.warning(f"{self._model.__name__} with ID {id} not found in {duration:.3f}s")
@@ -88,7 +91,7 @@ class BaseRepository(RepositoryProtocol[ModelType_co, CreateType_contra, UpdateT
             self._logger.exception(f"Error getting {self._model.__name__} by ID {id} in {duration:.3f}s")
             raise
         else:
-            return result
+            return db_obj
 
     async def get_multi(self, skip: int = 0, limit: int = 100) -> list[ModelType_co]:
         """Получить список объектов с пагинацией.
@@ -163,9 +166,6 @@ class BaseRepository(RepositoryProtocol[ModelType_co, CreateType_contra, UpdateT
     async def create(self, obj_data: CreateType_contra) -> ModelType_co:
         """Создать новый объект в базе данных.
 
-        Добавляет новый объект в сессию базы данных и выполняет flush
-        для получения сгенерированного ID.
-
         Args:
             obj_data: Данные для создания объекта. Может быть Pydantic моделью
                      или словарем с атрибутами объекта
@@ -184,18 +184,16 @@ class BaseRepository(RepositoryProtocol[ModelType_co, CreateType_contra, UpdateT
 
         try:
             data = obj_data.model_dump(exclude_unset=True) if hasattr(obj_data, "model_dump") else obj_data
-            db_obj = self._model(**data)  # type: ignore[arg-type]
+            db_obj = self._model(**data)  # type: ignore[call-arg]
             self.uow.session.add(db_obj)
             await self.uow.session.flush()
 
             duration = time.time() - start_time
             self._logger.info(f"Created {self._model.__name__} with ID {db_obj.id} in {duration:.3f}s")
         except IntegrityError as e:
-            # Crucial: Rollback the poisoned transaction so the session can be reused
             await self.uow.session.rollback()
             duration = time.time() - start_time
             self._logger.info(f"Integrity error for {self._model.__name__} in {duration:.3f}s: {e.orig}")
-            # Re-raise so the service layer knows it existed and can handle/ignore it
             raise
         except Exception:
             duration = time.time() - start_time
@@ -206,8 +204,6 @@ class BaseRepository(RepositoryProtocol[ModelType_co, CreateType_contra, UpdateT
 
     async def update(self, id: int, obj_data: UpdateType_contra) -> ModelType_co | None:
         """Обновить существующий объект в базе данных.
-
-        Находит объект по ID и обновляет его поля переданными данными.
 
         Args:
             id: Идентификатор объекта для обновления
@@ -255,8 +251,6 @@ class BaseRepository(RepositoryProtocol[ModelType_co, CreateType_contra, UpdateT
 
     async def delete(self, id: int) -> bool:
         """Удалить объект из базы данных.
-
-        Находит объект по ID и удаляет его из сессии базы данных.
 
         Args:
             id: Идентификатор объекта для удаления

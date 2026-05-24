@@ -1,26 +1,20 @@
 from __future__ import annotations
 
-from fastapi import Form
-from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr
-
-
-class LoginForm(OAuth2PasswordRequestForm):
-    def __init__(
-        self,
-        email: str = Form(...),
-        password: str = Form(...),
-        remember_me: bool = Form(default=False),
-    ):
-        super().__init__(username=email, password=password)
-        self.remember_me = remember_me
 
 
 class Token(BaseModel):
     """Схема токена для аутентификации"""
 
     access_token: str
-    token_type: str
+    token_type: str = "bearer"
+    expires_in: int
+
+
+class RefreshRequest(BaseModel):
+    """Схема для запроса обновления токена (JSON body)"""
+
+    refresh_token: str
 
 
 class PasswordResetRequest(BaseModel):

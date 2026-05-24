@@ -3,13 +3,14 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.core.database import Base
 
 if TYPE_CHECKING:
-    from src.model.models import Project, User
+    from src.model.project import Project
+    from src.model.user import User
 
 
 class Column(Base):
@@ -22,7 +23,7 @@ class Column(Base):
 
     # Настройки колонки
     name: Mapped[str] = mapped_column(String(50), nullable=False)  # Название колонки
-    color: Mapped[str] = mapped_column(String(20), nullable=False, default="gray")  # Цвет (hex или имя)
+    color: Mapped[str] = mapped_column(String(20), nullable=False, default="white")  # Цвет (hex или имя)
     position: Mapped[int] = mapped_column(Integer, default=0, nullable=False)  # Порядок колонки
     wip_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Лимит задач (опционально)
 
@@ -50,28 +51,22 @@ class Task(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
     # Привязка к колонке (обязательно!)
-    column_id: Mapped[int] = mapped_column(ForeignKey("column.id"), nullable=False)
+    column_id: Mapped[int] = mapped_column(ForeignKey("column.id", ondelete="CASCADE"), nullable=False)
     project_id: Mapped[int] = mapped_column(
         ForeignKey("project.id"), nullable=False
     )  # Денормализация для быстрых запросов
 
     # Основные поля
-    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    title: Mapped[str] = mapped_column(String(100), nullable=False)
     created_by_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)  # id того, кто создал задачу
 
     # Дополнительные поля
-    description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    priority: Mapped[str | None] = mapped_column(String(20), nullable=True)  # "low", "medium", "high", "urgent"
+    description: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    priority: Mapped[str | None] = mapped_column(
+        String(20), nullable=True
+    )  # "default", "low", "medium", "high", "urgent"
     position: Mapped[int] = mapped_column(Integer, default=0, nullable=False)  # Порядок сортировки внутри колонки
     tags: Mapped[str | None] = mapped_column(String(500), nullable=True)  # "backend,frontend,bug"
-
-    # Множество ответственных
-    assignees: Mapped[list[User]] = relationship(secondary="task_assignee", back_populates="tasks")
-
-    # Множество подзадач
-    subtasks: Mapped[list[Subtask]] = relationship(
-        back_populates="task", cascade="all, delete-orphan", order_by="Subtask.position"
-    )
 
     # Временные метки
     due_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -85,6 +80,16 @@ class Task(Base):
     project: Mapped[Project] = relationship()
     created_by: Mapped[User] = relationship(foreign_keys=[created_by_id])
 
+    # Множество ответственных
+    assignees: Mapped[list[User]] = relationship(secondary="task_assignee", back_populates="tasks")
+
+    # Множество подзадач
+    subtasks: Mapped[list[Subtask]] = relationship(
+        back_populates="task", cascade="all, delete-orphan", order_by="Subtask.position"
+    )
+
+    history: Mapped[list[TaskHistory]] = relationship(back_populates="task", cascade="all, delete-orphan")
+
     def __repr__(self) -> str:
         return f"Task(id={self.id!r}, title={self.title!r}, column_id={self.column_id!r})"
 
@@ -95,7 +100,7 @@ class TaskAssignee(Base):
     __tablename__ = "task_assignee"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    task_id: Mapped[int] = mapped_column(ForeignKey("task.id"), primary_key=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("task.id", ondelete="CASCADE"), primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), primary_key=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -109,12 +114,12 @@ class TaskHistory(Base):
     __tablename__ = "task_history"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    task_id: Mapped[int] = mapped_column(ForeignKey("task.id"), nullable=False)
+    task_id: Mapped[int] = mapped_column(ForeignKey("task.id", ondelete="CASCADE"), nullable=False)
 
     # Что изменилось
     changed_by_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
-    old_column_id: Mapped[int | None] = mapped_column(ForeignKey("column.id"), nullable=True)
-    new_column_id: Mapped[int | None] = mapped_column(ForeignKey("column.id"), nullable=True)
+    old_column_id: Mapped[int | None] = mapped_column(ForeignKey("column.id", ondelete="SET NULL"), nullable=True)
+    new_column_id: Mapped[int | None] = mapped_column(ForeignKey("column.id", ondelete="SET NULL"), nullable=True)
 
     # Дополнительная информация
     change_type: Mapped[str] = mapped_column(String(20), nullable=False)  # "move", "title", "description", "assignees"

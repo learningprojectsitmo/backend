@@ -4,10 +4,17 @@ from pydantic import BaseModel
 from sqlalchemy import delete, select
 
 from src.core.uow import IUnitOfWork
-from src.model.models import NewUser, Permission, User, UserPermission
+from src.model.models import NewUser
+from src.model.user import Permission, User, UserPermission
 from src.repository.base_repository import BaseRepository
-from src.schema.user import (NewUserCreate, UserCreateHashedPwd, NewUserUpdate, UserCreate,
-                             UserPermissionCreate, UserUpdate)
+from src.schema.user import (
+    NewUserCreate,
+    UserCreateHashedPwd,
+    NewUserUpdate,
+    UserCreate,
+    UserPermissionCreate,
+    UserUpdate,
+)
 
 
 class UserRepository(BaseRepository[User, UserCreateHashedPwd, UserUpdate]):

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from src.model.models import Role  # , RolePermission
+from src.model.user import Role  # , RolePermission
 from src.schema.permission import PermissionMatrix, PermissionMatrixElement
 from src.schema.role import (
     RoleCreate,
@@ -64,7 +64,8 @@ class RoleService(BaseService[Role, RoleCreate, RoleUpdate]):
 
             for action in ["create", "read", "update", "delete"]:
                 new_val = getattr(new_elements, action)
-                curr_val = getattr(curr_elements, action)
+                # Если entity нет в текущей матрице, считаем все права как False
+                curr_val = getattr(curr_elements, action) if curr_elements else False
 
                 if new_val != curr_val:
                     perm_str = f"{entity}:{action}"

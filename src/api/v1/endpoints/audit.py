@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from src.core.container import get_audit_service
 from src.core.dependencies import get_current_user
-from src.model.models import User
+from src.model.user import User
 from src.schema.audit import AuditLogResponse
 from src.services.audit_service import AuditService
 

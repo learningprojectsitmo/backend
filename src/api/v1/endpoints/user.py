@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from src.core.container import get_user_service
 from src.core.dependencies import get_current_user, permission_required, setup_audit
-from src.model.models import User
+from src.model.user import User
 from src.schema.permission import PermissionMatrix
 from src.schema.user import UserCreate, UserFull, UserListResponse, UserUpdate
 from src.services.user_service import UserService

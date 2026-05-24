@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from src.core.exceptions import NotFoundError
 from src.core.logging_config import get_logger
@@ -16,6 +17,9 @@ from src.schema.session import (
     SessionTerminateResponse,
     SessionUpdate,
 )
+
+if TYPE_CHECKING:
+    from src.model.auth import Session
 
 
 class SessionService:
@@ -191,6 +195,22 @@ class SessionService:
             self._logger.exception(f"Error getting session stats for user {user_id}")
             raise
 
+    async def create_session_with_refresh_token(
+        self, session_data: SessionCreate, refresh_hash: str, token_family: str
+    ) -> SessionResponse:
+        session = await self._repository.create(session_data)
+        await self._repository.set_refresh_token(session.id, refresh_hash, token_family)
+        return SessionResponse.model_validate(session)
+
+    async def get_session_by_refresh_hash(self, token_hash: str) -> Session | None:
+        return await self._repository.get_by_refresh_token_hash(token_hash)
+
+    async def rotate_refresh_token_in_session(self, session_id: str, old_hash: str, new_hash: str) -> bool:
+        return await self._repository.rotate_refresh_token(session_id, old_hash, new_hash)
+
+    async def revoke_token_family(self, token_family: str) -> int:
+        return await self._repository.revoke_token_family(token_family)
+
     async def cleanup_expired_sessions(self) -> int:
         """Очистить истекшие сессии"""
         self._logger.info("Cleaning up expired sessions")
@@ -219,7 +239,7 @@ class SessionService:
                 return False
 
             # Проверяем, не истекла ли сессия
-            if session.expires_at and session.expires_at < datetime.utcnow():
+            if session.expires_at and session.expires_at < datetime.now(UTC):
                 # Автоматически завершаем истекшую сессию
                 await self._repository.terminate_session(session_id)
                 return False
