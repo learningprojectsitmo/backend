@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from src.core.container import get_session_service
 from src.core.dependencies import get_current_user
 from src.core.logging_config import api_logger
-from src.model.models import User
+from src.model.user import User
 from src.schema.session import (
     SessionListResponse,
     SessionResponse,

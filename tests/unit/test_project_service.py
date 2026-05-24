@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, Mock  # Добавили AsyncMock
 
 import pytest
 
-from src.model.models import Project
+from src.model.project import Project
 from src.repository.project_repository import ProjectRepository
 from src.schema.project import ProjectCreate, ProjectUpdate
 from src.services.project_service import ProjectService

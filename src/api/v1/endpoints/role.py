@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from src.core.container import get_role_service
 from src.core.dependencies import get_current_user
-from src.model.models import User
+from src.model.user import User
 from src.schema.permission import PermissionMatrix
 from src.schema.role import RoleCreate, RoleFull, RoleListResponse
 from src.services.role_service import RoleService

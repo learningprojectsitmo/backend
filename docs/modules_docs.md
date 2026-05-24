@@ -41,9 +41,19 @@ Some of the services functions:
 
 Similarly to repositories, there is a base class, that helps avoid rewriting the same services which are just wrappers over the corresponding repositories.
 
-## model/models.py
+## model
 
-All the SQLAlchemy are now models in one module.
+SQLAlchemy models organized by domain:
+
+- `user.py` — пользователи, роли, права доступа (User, Role, Permission, UserPermission, RolePermission)
+- `project.py` — проекты, статусы, теги, отклики, резюме (Project, ProjectStatus, Tag, Response, Resume, ProjectParticipation)
+- `kanban_models.py` — канбан-доски (Column, Task, Subtask, TaskAssignee, TaskHistory)
+- `workspace.py` — рабочие пространства (WorkSpace, WorkSpaceCategories, WorkSpaceStatus, WorkSpaceParticipation)
+- `auth.py` — аутентификация (Session, PasswordReset)
+- `audit.py` — аудит-логи (AuditLog)
+
+**Backward compatibility:** старые импорты из `models.py` продолжают работать через ре-экспорт.
+
 TODO: consider splitting models into seperate modules.  
 
 ## schema

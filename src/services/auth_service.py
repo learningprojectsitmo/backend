@@ -1,17 +1,18 @@
 from __future__ import annotations
 
+import hashlib
 import secrets
+import uuid
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from fastapi import HTTPException, Request, status
-from fastapi.security import OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from pwdlib import PasswordHash
 
 from src.core.config import settings
 from src.core.logging_config import get_logger, security_logger
-from src.model.models import User
+from src.model.user import User
 from src.repository.password_reset_repository import PasswordResetRepository
 
 if TYPE_CHECKING:
@@ -32,11 +33,6 @@ class AuthService:
         user_permission_repository: UserPermissionRepository,
         role_permission_repository: RolePermissionRepository,
     ):
-        """
-        TODO:
-        Аттрибуты других сервисов и репозиториев в ините нужны для того, чтобы избежать циклического импорта (auth_service.py <-> container.py).
-        Лучшее ли это решение?
-        """
         self._user_repository = user_repository
         self._session_service = session_service
         self._user_permission_repository = user_permission_repository
@@ -46,18 +42,123 @@ class AuthService:
         self._secret_key = settings.SECRET_KEY
         self._algorithm = settings.ALGORITHM
         self._access_token_expire_minutes = settings.ACCESS_TOKEN_EXPIRE_MINUTES
+        self._refresh_token_expire_days = settings.REFRESH_TOKEN_EXPIRE_DAYS
+        self._refresh_token_expire_days_short = settings.REFRESH_TOKEN_EXPIRE_DAYS_SHORT
         self._logger = get_logger(self.__class__.__name__)
 
+    # ───────── helpers ─────────
+
+    @staticmethod
+    def _hash_token(raw: str) -> str:
+        """SHA-256 хеш refresh-токена (сырой токен никогда не хранится в БД)"""
+        return hashlib.sha256(raw.encode()).hexdigest()
+
+    @staticmethod
+    def _generate_refresh_token() -> tuple[str, str]:
+        """Сгенерировать opaque refresh-токен. Возвращает (raw, hash)"""
+        raw = secrets.token_urlsafe(32)
+        return raw, AuthService._hash_token(raw)
+
+    # ───────── user-agent helpers ─────────
+
+    @staticmethod
+    def _parse_user_agent(user_agent: str) -> tuple[str | None, str | None]:
+        if not user_agent:
+            return None, None
+
+        user_agent = user_agent.lower()
+
+        if "chrome" in user_agent:
+            if "edg" in user_agent and (version := AuthService._extract_version(user_agent, "edg/")):
+                return "Edge", version
+            elif version := AuthService._extract_version(user_agent, "chrome/"):
+                return "Chrome", version
+        elif "firefox" in user_agent and (version := AuthService._extract_version(user_agent, "firefox/")):
+            return "Firefox", version
+        elif ("opera" in user_agent or "opr" in user_agent) and (
+            version := AuthService._extract_version(user_agent, "opr/")
+        ):
+            return "Opera", version
+        elif (
+            "safari" in user_agent
+            and "chrome" not in user_agent
+            and (version := AuthService._extract_version(user_agent, "version/"))
+        ):
+            return "Safari", version
+
+        return "Unknown Browser", None
+
+    @staticmethod
+    def _extract_version(user_agent: str, pattern: str) -> str | None:
+        try:
+            index = user_agent.find(pattern)
+            if index == -1:
+                return None
+            version_start = index + len(pattern)
+            version_end = user_agent.find(" ", version_start)
+            if version_end == -1:
+                version_end = len(user_agent)
+            return user_agent[version_start:version_end]
+        except Exception:
+            return None
+
+    @staticmethod
+    def _get_device_name(user_agent: str) -> str | None:
+        if not user_agent:
+            return None
+
+        user_agent = user_agent.lower()
+
+        if "iphone" in user_agent:
+            return "iPhone"
+        elif "ipad" in user_agent:
+            return "iPad"
+        elif "android" in user_agent:
+            return "Android Phone" if "mobile" in user_agent else "Android Device"
+        elif "mobile" in user_agent or "tablet" in user_agent:
+            return "Mobile Device" if "mobile" in user_agent else "Tablet"
+        return "Desktop"
+
+    @staticmethod
+    def _get_os_name(user_agent: str) -> str | None:
+        if not user_agent:
+            return None
+
+        user_agent = user_agent.lower()
+
+        if "windows nt" in user_agent or ("mac os x" in user_agent or "macintosh" in user_agent):
+            return "Windows" if "windows nt" in user_agent else "macOS"
+        elif "android" in user_agent:
+            return "Android"
+        elif "iphone" in user_agent or "ipad" in user_agent or "ios" in user_agent:
+            return "iOS"
+        elif "linux" in user_agent or "cros" in user_agent:
+            return "Linux" if "linux" in user_agent else "Chrome OS"
+        return "Unknown OS"
+
+    @staticmethod
+    def _get_device_type(user_agent: str) -> str | None:
+        if not user_agent:
+            return None
+
+        user_agent = user_agent.lower()
+
+        if "mobile" in user_agent or "android" in user_agent or "iphone" in user_agent:
+            return "mobile"
+        elif "tablet" in user_agent or "ipad" in user_agent:
+            return "tablet"
+        else:
+            return "desktop"
+
+    # ───────── password ─────────
+
     def verify_password(self, plain_password: str, hashed_password: str) -> bool:
-        """Проверить пароль"""
         return self._pwd_context.verify(plain_password, hashed_password)
 
     def get_password_hash(self, password: str) -> str:
-        """Хешировать пароль"""
         return self._pwd_context.hash(password)
 
     async def authenticate_user(self, email: str, password: str) -> User | None:
-        """Аутентификация пользователя"""
         self._logger.debug(f"Authentication attempt for email: {email}")
 
         user = await self._user_repository.get_by_email(email)
@@ -72,9 +173,19 @@ class AuthService:
         self._logger.info(f"Successful authentication for user: {email} (ID: {user.id})")
         return user
 
-    # TODO: why email is used in token validation?
+    # ───────── access token (JWT) ─────────
+
+    def create_access_token(self, data: dict, expires_delta: timedelta | None = None) -> str:
+        to_encode = data.copy()
+        to_encode.update({"type": "access"})
+        if expires_delta:
+            expire = datetime.now(UTC) + expires_delta
+        else:
+            expire = datetime.now(UTC) + timedelta(minutes=self._access_token_expire_minutes)
+        to_encode.update({"exp": expire})
+        return jwt.encode(to_encode, self._secret_key, algorithm=self._algorithm)
+
     async def get_current_user(self, token: str) -> User:
-        """Получить текущего пользователя из токена"""
         credentials_exception = HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials",
@@ -83,6 +194,9 @@ class AuthService:
 
         try:
             payload = jwt.decode(token, self._secret_key, algorithms=[self._algorithm])
+            if payload.get("type") != "access":
+                self._logger.warning("Token validation failed: not an access token")
+                raise credentials_exception
             email: str = payload.get("sub")
             if email is None:
                 self._logger.warning("Token validation failed: no email in payload")
@@ -95,88 +209,70 @@ class AuthService:
         if user is None:
             self._logger.warning(f"Token validation failed: user not found for email {email}")
             raise credentials_exception
-
-        self._logger.debug(f"Successfully validated token for user: {email} (ID: {user.id})")
         return user
 
-    def create_access_token(self, data: dict, expires_delta: timedelta | None = None) -> str:
-        """Создать токен доступа"""
-        to_encode = data.copy()
-        if expires_delta:
-            expire = datetime.now(UTC) + expires_delta
-        else:
-            expire = datetime.now(UTC) + timedelta(minutes=self._access_token_expire_minutes)
-        to_encode.update({"exp": expire})
-        encoded_jwt = jwt.encode(to_encode, self._secret_key, algorithm=self._algorithm)
-
-        self._logger.debug(f"Access token created for user: {data.get('sub', 'unknown')}")
-        return encoded_jwt
+    # ───────── login ─────────
 
     async def login_for_access_token(
         self,
-        form_data: OAuth2PasswordRequestForm,
+        email: str,
+        password: str,
+        remember_me: bool = True,
         request: Request | None = None,
-    ) -> Token:
-        """Вход в систему и получение токена"""
-        email = form_data.username
+    ) -> tuple[Token, str]:
+        """Вход в систему. Возвращает (Token, raw_refresh_token)."""
         self._logger.info(f"Login attempt for email: {email}")
 
-        user = await self.authenticate_user(email, form_data.password)
+        user = await self.authenticate_user(email, password)
         if not user:
-            # Логируем неудачную попытку входа через security_logger
             ip_address = request.client.host if request and request.client else "unknown"
             user_agent = request.headers.get("user-agent", "unknown") if request else "unknown"
             security_logger.log_authentication_failure(email=email, reason="Invalid credentials", ip_address=ip_address)
-
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Incorrect username or password",
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
-        # Успешный вход
-        access_token_expires = timedelta(minutes=self._access_token_expire_minutes)
+        refresh_expire_days = self._refresh_token_expire_days if remember_me else self._refresh_token_expire_days_short
+        access_ttl = timedelta(minutes=self._access_token_expire_minutes)
+        refresh_ttl = timedelta(days=refresh_expire_days)
+
         access_token = self.create_access_token(
-            data={"sub": user.email},
-            expires_delta=access_token_expires,
+            data={"sub": user.email, "user_id": user.id},
+            expires_delta=access_ttl,
         )
 
-        # Создаем сессию при входе (если есть request)
+        raw_refresh, refresh_hash = self._generate_refresh_token()
+        token_family = str(uuid.uuid4())
+
         if request:
             try:
-                # Извлекаем информацию об устройстве и браузере
                 user_agent = request.headers.get("user-agent", "")
                 ip_address = request.client.host if request.client else "unknown"
 
-                # Парсим user_agent для получения информации о браузере и ОС
-                browser_name, browser_version = self._parse_user_agent(user_agent)
-                device_name = self._get_device_name(user_agent)
-                operating_system = self._get_os_name(user_agent)
-                device_type = self._get_device_type(user_agent)
-
-                # Создаем сессию
                 session_data = SessionCreate(
                     user_id=user.id,
-                    device_name=device_name,
-                    browser_name=browser_name,
-                    browser_version=browser_version,
-                    operating_system=operating_system,
-                    device_type=device_type,
+                    device_name=self._get_device_name(user_agent),
+                    browser_name=self._parse_user_agent(user_agent)[0],
+                    browser_version=self._parse_user_agent(user_agent)[1],
+                    operating_system=self._get_os_name(user_agent),
+                    device_type=self._get_device_type(user_agent),
                     ip_address=ip_address,
                     user_agent=user_agent,
-                    expires_at=datetime.now(UTC) + access_token_expires,
+                    expires_at=datetime.now(UTC) + refresh_ttl,
                 )
 
-                # Создаем сессию и устанавливаем как текущую
-                session = await self._session_service.create_session(session_data)
+                session = await self._session_service.create_session_with_refresh_token(
+                    session_data, refresh_hash, token_family
+                )
                 await self._session_service.set_current_session(user.id, session.id)
-
                 self._logger.info(f"Session created for user {user.id} with ID: {session.id}")
 
             except Exception:
                 self._logger.exception("Failed to create session for user %s", user.id)
+                raise
 
-        # Логируем успешный вход
         if request:
             ip_address = request.client.host if request.client else "unknown"
             user_agent = request.headers.get("user-agent", "unknown")
@@ -184,119 +280,102 @@ class AuthService:
 
         self._logger.info(f"Successful login for user: {email} (ID: {user.id})")
 
-        return Token(access_token=access_token, token_type="bearer")
+        return (
+            Token(access_token=access_token, expires_in=self._access_token_expire_minutes * 60),
+            raw_refresh,
+        )
+
+    # ───────── refresh (opaque token + rotation + reuse detection) ─────────
+
+    async def refresh_access_token(self, raw_refresh_token: str) -> tuple[Token, str, int]:
+        """Обновить access-токен. Возвращает (Token, новый_raw_refresh_token, max_age_секунд)."""
+        exc = HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+        token_hash = self._hash_token(raw_refresh_token)
+        session = await self._session_service.get_session_by_refresh_hash(token_hash)
+
+        if not session:
+            self._logger.warning("Refresh failed: session not found by token hash")
+            raise exc
+
+        new_raw, new_hash = self._generate_refresh_token()
+        rotated = await self._session_service.rotate_refresh_token_in_session(session.id, token_hash, new_hash)
+
+        if not rotated:
+            revoked = await self._session_service.revoke_token_family(session.token_family)
+            self._logger.warning(
+                "Refresh token reuse detected! Revoked %d sessions in family %s",
+                revoked,
+                session.token_family,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Refresh token reuse detected; all sessions in this family revoked",
+            )
+
+        user = await self._user_repository.get_by_id(session.user_id)
+        if not user:
+            raise exc
+
+        access_token = self.create_access_token(
+            data={"sub": user.email, "user_id": user.id},
+            expires_delta=timedelta(minutes=self._access_token_expire_minutes),
+        )
+
+        self._logger.info(f"Access token refreshed for user: {user.email} (ID: {user.id})")
+
+        max_age = max(0, int((session.expires_at - datetime.now(UTC)).total_seconds())) if session.expires_at else 0
+
+        return (
+            Token(access_token=access_token, expires_in=self._access_token_expire_minutes * 60),
+            new_raw,
+            max_age,
+        )
+
+    async def get_user_by_refresh_token(self, raw_refresh_token: str) -> User:
+        """Получить пользователя по refresh-токену (без ротации)."""
+        exc = HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+        token_hash = self._hash_token(raw_refresh_token)
+        session = await self._session_service.get_session_by_refresh_hash(token_hash)
+
+        if not session or not session.is_active:
+            raise exc
+
+        if session.expires_at and session.expires_at < datetime.now(UTC):
+            raise exc
+
+        user = await self._user_repository.get_by_id(session.user_id)
+        if not user:
+            raise exc
+
+        return user
 
     async def get_user_by_token(self, token: str) -> User:
-        """Получить пользователя по токену"""
         return await self.get_current_user(token)
 
-    def _parse_user_agent(self, user_agent: str) -> tuple[str | None, str | None]:
-        """Парсить User-Agent для получения информации о браузере"""
-        if not user_agent:
-            return None, None
-
-        user_agent = user_agent.lower()
-
-        # Определяем браузер с максимальной оптимизацией
-        if "chrome" in user_agent:
-            if "edg" in user_agent and (version := self._extract_version(user_agent, "edg/")):
-                return "Edge", version
-            elif version := self._extract_version(user_agent, "chrome/"):
-                return "Chrome", version
-        elif "firefox" in user_agent and (version := self._extract_version(user_agent, "firefox/")):
-            return "Firefox", version
-        elif ("opera" in user_agent or "opr" in user_agent) and (version := self._extract_version(user_agent, "opr/")):
-            return "Opera", version
-        elif (
-            "safari" in user_agent
-            and "chrome" not in user_agent
-            and (version := self._extract_version(user_agent, "version/"))
-        ):
-            return "Safari", version
-
-        return "Unknown Browser", None
-
-    def _extract_version(self, user_agent: str, pattern: str) -> str | None:
-        """Извлечь версию из User-Agent"""
-        try:
-            index = user_agent.find(pattern)
-            if index == -1:
-                return None
-            version_start = index + len(pattern)
-            version_end = user_agent.find(" ", version_start)
-            if version_end == -1:
-                version_end = len(user_agent)
-            return user_agent[version_start:version_end]
-        except Exception:
-            return None
-
-    def _get_device_name(self, user_agent: str) -> str | None:
-        """Определить имя устройства из User-Agent"""
-        if not user_agent:
-            return None
-
-        user_agent = user_agent.lower()
-
-        # Определяем устройство в порядке приоритета
-        if "iphone" in user_agent:
-            return "iPhone"
-        elif "ipad" in user_agent:
-            return "iPad"
-        elif "android" in user_agent:
-            return "Android Phone" if "mobile" in user_agent else "Android Device"
-        elif "mobile" in user_agent or "tablet" in user_agent:
-            return "Mobile Device" if "mobile" in user_agent else "Tablet"
-        return "Desktop"
-
-    def _get_os_name(self, user_agent: str) -> str | None:
-        """Определить операционную систему из User-Agent"""
-        if not user_agent:
-            return None
-
-        user_agent = user_agent.lower()
-
-        # Определяем ОС в порядке приоритета
-        if "windows nt" in user_agent or ("mac os x" in user_agent or "macintosh" in user_agent):
-            return "Windows" if "windows nt" in user_agent else "macOS"
-        elif "android" in user_agent:
-            return "Android"
-        elif "iphone" in user_agent or "ipad" in user_agent or "ios" in user_agent:
-            return "iOS"
-        elif "linux" in user_agent or "cros" in user_agent:
-            return "Linux" if "linux" in user_agent else "Chrome OS"
-        return "Unknown OS"
-
-    def _get_device_type(self, user_agent: str) -> str | None:
-        """Определить тип устройства из User-Agent"""
-        if not user_agent:
-            return None
-
-        user_agent = user_agent.lower()
-
-        if "mobile" in user_agent or "android" in user_agent or "iphone" in user_agent:
-            return "mobile"
-        elif "tablet" in user_agent or "ipad" in user_agent:
-            return "tablet"
-        else:
-            return "desktop"
+    # ───────── logout ─────────
 
     async def logout(self, token: str, request: Request | None = None) -> bool:
-        """Выход из системы - завершить текущую сессию"""
+        """Выход из системы — завершить сессию по access-токену"""
         try:
-            # Получаем пользователя по токену
             user = await self.get_current_user(token)
 
-            # Завершаем все сессии пользователя
             sessions = await self._session_service.get_user_sessions(user.id)
             if sessions.sessions:
                 session_ids = [session.id for session in sessions.sessions]
-
                 terminate_request = SessionTerminateRequest(session_ids=session_ids)
                 await self._session_service.terminate_sessions(terminate_request)
-
                 self._logger.info(f"Terminated {len(session_ids)} sessions for user {user.id}")
 
-            # Логируем выход
             if request:
                 ip_address = request.client.host if request.client else "unknown"
                 user_agent = request.headers.get("user-agent", "unknown")
@@ -307,6 +386,16 @@ class AuthService:
             return False
         else:
             return True
+
+    async def logout_by_refresh_token(self, raw_refresh_token: str) -> bool:
+        """Выход из системы — завершить сессию по refresh-токену (из cookie)"""
+        token_hash = self._hash_token(raw_refresh_token)
+        session = await self._session_service.get_session_by_refresh_hash(token_hash)
+        if not session:
+            return False
+        await self._session_service.terminate_session(session.id)
+        self._logger.info(f"Session {session.id} terminated via refresh token logout")
+        return True
 
     async def terminate_all_other_sessions(self, token: str, current_session_id: str | None = None) -> dict:
         """Завершить все сессии кроме текущей"""

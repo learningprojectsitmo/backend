@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
 
 from src.util.validator import TelegramValidator
@@ -13,20 +15,25 @@ class UserBase(BaseModel):
     middle_name: str
     last_name: str | None = None
     role_id: int
+    isu_number: int | None = None
 
 
 class UserCreate(UserBase):
     """Схема для создания пользователя"""
 
     password: str
-    isu_number: int | None = None
+
+
+class UserCreateHashedPwd(UserBase):
+    """Схема для создания пользователя"""
+
+    password_hashed: str
 
 
 class UserFull(UserBase):
     """Полная схема пользователя"""
 
     id: int
-    isu_number: int | None = None
     tg_nickname: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
@@ -58,6 +65,8 @@ class UserResponse(BaseModel):
     """Схема ответа с пользователем"""
 
     id: int
+    first_name: str
+    last_name: str | None = None
     email: EmailStr
 
     model_config = ConfigDict(from_attributes=True)
@@ -99,4 +108,27 @@ class UserPermissionCreate(BaseModel):
 
 class UserPermissionFull(UserPermissionCreate):
     id: int
+    model_config = ConfigDict(from_attributes=True)
+
+
+class NewUserCreate(UserCreateHashedPwd):
+    """Схема для создания пользователя"""
+
+    code: int
+    expires_at: datetime
+
+
+class NewUserUpdate(BaseModel):
+    """Схема для обновления пользователя"""
+
+    code: int
+    expires_at: datetime
+
+
+class NewUserResponse(BaseModel):
+    """Схема ответа для временного пользователя"""
+
+    id: int
+    email: str
+
     model_config = ConfigDict(from_attributes=True)

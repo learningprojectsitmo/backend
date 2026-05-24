@@ -16,7 +16,7 @@ from src.services.resume_service import ResumeService
 from src.core.uow import SqlAlchemyUoW
 
 if TYPE_CHECKING:
-    from src.model.models import User
+    from src.model.user import User
     from src.repository.permission_repository import PermissionRepository
     from src.services.auth_service import AuthService
 
