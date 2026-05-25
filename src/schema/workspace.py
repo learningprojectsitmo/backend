@@ -56,6 +56,7 @@ class Space(BaseModel):
     category_id: int | None = None
     description: str | None = None
     icon_url: str | None = None
+    author_id: int
 
 
 class Category(BaseModel):

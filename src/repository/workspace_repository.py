@@ -134,6 +134,7 @@ class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUp
                 WorkSpace.category_id.label("category_id"),
                 WorkSpace.description.label("description"),
                 SpaceSettings.icon_url.label("icon_url"),
+                WorkSpace.author_id.label("author_id"),
             )
             .outerjoin(participants_count, WorkSpace.id == participants_count.c.workspace_id)
             .outerjoin(projects_count, WorkSpace.id == projects_count.c.workspace_id)

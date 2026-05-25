@@ -17,12 +17,15 @@ async def get_space_settings(
     workspace_id: int,
     settings_service: SpaceSettingsService = Depends(get_settings_service),
     workspace_service: WorkSpaceService = Depends(get_workspace_service),
-    _current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> SpaceSettingsFull:
-    """Получить настройки пространства"""
+    """Получить настройки пространства (только автор)"""
     workspace = await workspace_service.get_workspace_by_id(workspace_id)
     if not workspace:
         raise HTTPException(status_code=404, detail="Workspace not found")
+
+    if workspace.author_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Only workspace author can view settings")
 
     settings = await settings_service.get_by_space_id(workspace_id)
     if not settings:
