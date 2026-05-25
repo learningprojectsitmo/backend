@@ -12,6 +12,7 @@ from src.api.v1.endpoints.role import role_permission_router, role_router
 from src.api.v1.endpoints.sessions import sessions_router
 from src.api.v1.endpoints.settings import settings_router
 from src.api.v1.endpoints.user import user_permission_router, user_router
+from src.api.v1.endpoints.kanban import kanban_router
 from src.api.v1.endpoints.workspace import workspace_router
 
 routers = APIRouter(prefix="/v1")
@@ -27,6 +28,7 @@ router_list = [
     workspace_router,
     invitation_router,
     settings_router,
+    kanban_router,
     role_permission_router,
     user_permission_router,
 ]
