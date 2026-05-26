@@ -10,6 +10,7 @@ from src.core.database import Base
 
 if TYPE_CHECKING:
     from src.model.education import Education
+    from src.model.ideas import Idea
     from src.model.kanban_models import Task
     from src.model.language import Language
     from src.model.portfolio import Portfolio
@@ -63,6 +64,10 @@ class User(Base):
     )
     languages: Mapped[list[Language]] = relationship(
         back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    ideas: Mapped[list[Idea]] = relationship(
+        back_populates="author",
         cascade="all, delete-orphan",
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

@@ -3,6 +3,7 @@ from __future__ import annotations
 from src.model.audit import AuditLog
 from src.model.auth import NewUser, PasswordReset, Session
 from src.model.education import Education
+from src.model.ideas import Idea, IdeaComment, IdeaTag, IdeaVote
 from src.model.kanban_models import Column, Subtask, Task, TaskAssignee, TaskHistory
 from src.model.language import Language
 from src.model.portfolio import Portfolio
@@ -16,6 +17,10 @@ __all__ = [
     "AuditLog",
     "Column",
     "Education",
+    "Idea",
+    "IdeaComment",
+    "IdeaTag",
+    "IdeaVote",
     "Language",
     "NewUser",
     "PasswordReset",

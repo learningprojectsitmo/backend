@@ -4,6 +4,7 @@ from fastapi import APIRouter
 
 from src.api.v1.endpoints.audit import audit_router
 from src.api.v1.endpoints.auth import auth_router
+from src.api.v1.endpoints.ideas import ideas_router
 from src.api.v1.endpoints.invitation import invitation_router
 from src.api.v1.endpoints.kanban import kanban_router
 from src.api.v1.endpoints.profile import profile_router
@@ -31,6 +32,7 @@ router_list = [
     kanban_router,
     role_permission_router,
     user_permission_router,
+    ideas_router,
 ]
 
 for router in router_list:

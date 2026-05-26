@@ -7,6 +7,7 @@ from fastapi import Depends
 from src.core.uow import IUnitOfWork, SqlAlchemyUoW
 from src.repository.audit_repository import AuditRepository
 from src.repository.education_repository import EducationRepository
+from src.repository.ideas_repository import IdeaCommentRepository, IdeaRepository, IdeaTagRepository
 from src.repository.invitation_repository import InvitationRepository
 from src.repository.kanban_repository import KanbanColumnRepository, KanbanSubtaskRepository, KanbanTaskRepository
 from src.repository.language_repository import LanguageRepository
@@ -24,6 +25,7 @@ from src.services.audit_service import AuditService
 from src.services.auth_service import AuthService
 from src.services.education_service import EducationService
 from src.services.fixtures_service import FixtureService
+from src.services.ideas_service import IdeaService, IdeaTagService
 from src.services.invitation_service import InvitationService
 from src.services.kanban_service import KanbanService
 from src.services.language_service import LanguageService
@@ -261,6 +263,35 @@ async def get_profile_service(
         education_repository,
         language_repository,
     )
+
+
+# ========== Ideas ==========
+
+
+async def get_idea_repository(uow: IUnitOfWork = Depends(get_uow)) -> IdeaRepository:
+    return IdeaRepository(uow)
+
+
+async def get_idea_tag_repository(uow: IUnitOfWork = Depends(get_uow)) -> IdeaTagRepository:
+    return IdeaTagRepository(uow)
+
+
+async def get_idea_comment_repository(uow: IUnitOfWork = Depends(get_uow)) -> IdeaCommentRepository:
+    return IdeaCommentRepository(uow)
+
+
+async def get_idea_service(
+    idea_repository: IdeaRepository = Depends(get_idea_repository),
+    tag_repository: IdeaTagRepository = Depends(get_idea_tag_repository),
+    comment_repository: IdeaCommentRepository = Depends(get_idea_comment_repository),
+) -> IdeaService:
+    return IdeaService(idea_repository, tag_repository, comment_repository)
+
+
+async def get_idea_tag_service(
+    tag_repository: IdeaTagRepository = Depends(get_idea_tag_repository),
+) -> IdeaTagService:
+    return IdeaTagService(tag_repository)
 
 
 async def get_fixtures_service(
