@@ -13,7 +13,8 @@ if TYPE_CHECKING:
     from src.model.kanban_models import Task
     from src.model.language import Language
     from src.model.portfolio import Portfolio
-    from src.model.project import Project, ProjectParticipation, Response, Resume
+    from src.model.project import Project, ProjectParticipation, Response
+    from src.model.resume import Resume
 
 
 class User(Base):

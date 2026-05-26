@@ -83,6 +83,20 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         result = await self.uow.session.execute(query)
         return list(result.scalars().all())
 
+    async def remove_participant(self, project_id: int, user_id: int) -> bool:
+        result = await self.uow.session.execute(
+            select(ProjectParticipation).where(
+                ProjectParticipation.project_id == project_id,
+                ProjectParticipation.participant_id == user_id,
+            ),
+        )
+        participation = result.scalar_one_or_none()
+        if not participation:
+            return False
+        await self.uow.session.delete(participation)
+        await self.uow.session.flush()
+        return True
+
     async def get_or_create_tags(self, tag_names: list[str]) -> list[Tag]:
         if not tag_names:
             return []

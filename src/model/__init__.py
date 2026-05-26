@@ -6,7 +6,8 @@ from src.model.education import Education
 from src.model.kanban_models import Column, Subtask, Task, TaskAssignee, TaskHistory
 from src.model.language import Language
 from src.model.portfolio import Portfolio
-from src.model.project import Project, ProjectParticipation, ProjectStatus, ProjectVacancy, Response, Resume, Tag
+from src.model.project import Project, ProjectParticipation, ProjectStatus, ProjectVacancy, Response, Tag
+from src.model.resume import Resume, ResumeEducation, ResumeExperience, ResumeInterest, ResumeLanguage, ResumeLink, ResumeSkill
 from src.model.user import Permission, Role, RolePermission, User, UserPermission
 from src.model.workspace import WorkSpace, WorkSpaceCategories, WorkSpaceParticipation, WorkSpaceStatus
 from src.model.workspace_invitation import WorkspaceInvitation
@@ -26,6 +27,12 @@ __all__ = [
     "ProjectVacancy",
     "Response",
     "Resume",
+    "ResumeEducation",
+    "ResumeExperience",
+    "ResumeInterest",
+    "ResumeLanguage",
+    "ResumeLink",
+    "ResumeSkill",
     "Role",
     "RolePermission",
     "Session",

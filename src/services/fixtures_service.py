@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from sqlalchemy import select
 
-from src.model.project import Project
+from src.model.project import Project, ProjectParticipation
 from src.model.settings import SettingsType
 from src.model.workspace import WorkSpace, WorkSpaceCategories, WorkSpaceParticipation, WorkSpaceStatus
 from src.repository.project_repository import ProjectRepository
@@ -65,11 +67,12 @@ class FixtureService:
     async def create_fixtures(self) -> None:
         await self._seed_permissions()
         await self._seed_roles()
-        admin, _ = await self._seed_users()
+        users = await self._seed_users()
+        admin = users[0]
         await self._seed_workspace_statuses()
         categories_by_name = await self._seed_workspace_categories()
         workspaces_by_name = await self._seed_workspaces(admin, categories_by_name)
-        await self._seed_projects(admin, workspaces_by_name)
+        await self._seed_projects(users, workspaces_by_name)
         await self._seed_settings_types()
         await self._seed_resumes(admin)
         await self._seed_portfolio(admin)
@@ -126,47 +129,70 @@ class FixtureService:
 
     # ─── users ─────────────────────────────────────────────────────────────
 
-    async def _seed_users(self) -> tuple:
-        admin_email = "admin@example.com"
-        member_email = "member@example.com"
-
+    async def _seed_users(self) -> list:
         role_repo = self._role_service._repository
         role_admin = await role_repo.get_by_name("admin")
         role_member = await role_repo.get_by_name("member")
 
-        existing_admin = await self._user_service.get_user_by_email(admin_email)
-        existing_member = await self._user_service.get_user_by_email(member_email)
+        users_data = [
+            {
+                "email": "admin@example.com",
+                "first_name": "Admin",
+                "middle_name": "",
+                "last_name": "User",
+                "password": "admin_password",
+                "role_id": role_admin.id,
+                "tg_nickname": "@admin_tg",
+                "vk_nickname": "@admin_vk",
+                "phone": "+7 (999) 123-45-67",
+            },
+            {
+                "email": "member@example.com",
+                "first_name": "Member",
+                "middle_name": "",
+                "last_name": "User",
+                "password": "member_password",
+                "role_id": role_member.id,
+                "tg_nickname": "@member_tg",
+                "phone": "+7 (999) 987-65-43",
+            },
+            {
+                "email": "kirill@example.com",
+                "first_name": "Кирилл",
+                "middle_name": "",
+                "last_name": "Сомов",
+                "password": "kirill_password",
+                "role_id": role_member.id,
+                "tg_nickname": "@kirillsomov",
+            },
+            {
+                "email": "anna@example.com",
+                "first_name": "Анна",
+                "middle_name": "",
+                "last_name": "Красина",
+                "password": "anna_password",
+                "role_id": role_member.id,
+                "tg_nickname": "@anutakrasina",
+            },
+            {
+                "email": "ilya@example.com",
+                "first_name": "Илья",
+                "middle_name": "",
+                "last_name": "Поперечный",
+                "password": "ilya_password",
+                "role_id": role_member.id,
+                "tg_nickname": "@ilya_poperechny",
+            },
+        ]
 
-        if not existing_admin:
-            existing_admin = await self._user_service.create(
-                UserCreate(
-                    email=admin_email,
-                    first_name="Admin",
-                    middle_name="",
-                    last_name="User",
-                    password="admin_password",
-                    role_id=role_admin.id,
-                    tg_nickname="@admin_tg",
-                    vk_nickname="@admin_vk",
-                    phone="+7 (999) 123-45-67",
-                )
-            )
+        created_users = []
+        for user_data in users_data:
+            existing = await self._user_service.get_user_by_email(user_data["email"])
+            if not existing:
+                existing = await self._user_service.create(UserCreate(**user_data))
+            created_users.append(existing)
 
-        if not existing_member:
-            existing_member = await self._user_service.create(
-                UserCreate(
-                    email=member_email,
-                    first_name="Member",
-                    middle_name="",
-                    last_name="User",
-                    password="member_password",
-                    role_id=role_member.id,
-                    tg_nickname="@member_tg",
-                    phone="+7 (999) 987-65-43",
-                )
-            )
-
-        return existing_admin, existing_member
+        return created_users
 
     # ─── settings types ────────────────────────────────────────────────────
 
@@ -186,24 +212,111 @@ class FixtureService:
     # ─── resumes ───────────────────────────────────────────────────────────
 
     async def _seed_resumes(self, admin: object) -> None:
-        existing = await self._resume_service.get_resumes_by_author(admin.id)
-        if existing:
+        from src.model.resume import (
+            Resume,
+            ResumeEducation,
+            ResumeExperience,
+            ResumeInterest,
+            ResumeLanguage,
+            ResumeLink,
+            ResumeSkill,
+        )
+
+        repo = self._resume_service._repository
+        session = repo.uow.session
+
+        result = await session.execute(
+            select(Resume).where(Resume.role.isnot(None)).limit(1)
+        )
+        if result.scalar_one_or_none():
             return
 
-        await self._resume_service.create_resume(
+        # удаляем старые резюме без role
+        old = await session.execute(select(Resume).where(Resume.author_id == admin.id))
+        for r in old.scalars().all():
+            await session.delete(r)
+        await session.flush()
+
+        resume = await self._resume_service.create_resume(
             ResumeCreate(
                 header="UX/UI-дизайнер",
                 resume_text="Опыт работы в продуктовом дизайне 3 года. Работал над образовательными платформами.",
+                role="UX/UI Designer",
+                about="Проектирую интуитивно понятные цифровые продукты. Специализируюсь на создании пользовательских интерфейсов для веб и мобильных приложений. Работаю в тесной связке с разработчиками и продакт-менеджерами, чтобы превращать сложные задачи в простые и эстетичные решения.",
+                cover_letter="Я — UX/UI дизайнер с опытом работы над образовательными платформами и мобильными приложениями. За время работы я провел более 10 исследований пользователей, спроектировал информационную архитектуру для трёх крупных проектов и создал дизайн-системы, которые используются командами до 15 человек. Моя цель — создавать продукты, которые не только выглядят современно, но и решают реальные проблемы пользователей. Уверенно владею Figma, Sketch и Adobe Creative Suite. Понимаю технические ограничения и умею находить компромиссы между дизайном и разработкой.",
             ),
             admin.id,
         )
-        await self._resume_service.create_resume(
-            ResumeCreate(
-                header="Frontend-разработчик",
-                resume_text="React, TypeScript, Tailwind. Разрабатывал интерфейсы для веб-приложений.",
+
+        session.add_all([
+            ResumeExperience(
+                resume_id=resume.id,
+                company="Мобильное приложение «Plan It»",
+                position="UX/UI-дизайнер",
+                period_from=datetime(2024, 8, 1),
+                period_to=datetime(2025, 8, 1),
+                duration="7 месяцев",
+                responsibilities=[
+                    "Провел детальный анализ конкурентов и определил ключевые UX-метрики",
+                    "Разработал информационную архитектуру и пользовательские сценарии",
+                    "Создал вайрфреймы и интерактивные прототипы в Figma",
+                    "Подготовил UI-kit и дизайн-систему для разработчиков",
+                ],
+                skills=["Figma", "UX Research", "Wireframing", "UI Design"],
+                sort_order=0,
             ),
-            admin.id,
-        )
+            ResumeExperience(
+                resume_id=resume.id,
+                company="Веб-сервис для студентов",
+                position="UI/UX Designer",
+                period_from=datetime(2023, 2, 1),
+                period_to=datetime(2024, 6, 1),
+                duration="1 год 4 месяца",
+                responsibilities=[
+                    "Проектировал интерфейс для платформы управления задачами",
+                    "Проводил юзабилити-тестирование и A/B тесты",
+                    "Разработал адаптивный дизайн для мобильной и десктопной версий",
+                ],
+                skills=["Figma", "Sketch", "Usability Testing"],
+                sort_order=1,
+            ),
+        ])
+
+        session.add_all([
+            ResumeSkill(resume_id=resume.id, name="Figma", sort_order=0),
+            ResumeSkill(resume_id=resume.id, name="Sketch", sort_order=1),
+            ResumeSkill(resume_id=resume.id, name="UX Research", sort_order=2),
+            ResumeSkill(resume_id=resume.id, name="Wireframing", sort_order=3),
+            ResumeSkill(resume_id=resume.id, name="UI Design", sort_order=4),
+            ResumeSkill(resume_id=resume.id, name="Adobe Illustrator", sort_order=5),
+        ])
+
+        session.add_all([
+            ResumeInterest(resume_id=resume.id, name="Веб-дизайн", sort_order=0),
+            ResumeInterest(resume_id=resume.id, name="Мобильный дизайн", sort_order=1),
+            ResumeInterest(resume_id=resume.id, name="UX-исследования", sort_order=2),
+            ResumeInterest(resume_id=resume.id, name="Адаптивный дизайн", sort_order=3),
+        ])
+
+        session.add_all([
+            ResumeLink(resume_id=resume.id, platform="Behance", url="https://behance.net/ezhidze", sort_order=0),
+            ResumeLink(resume_id=resume.id, platform="Dribbble", url="https://dribbble.com/ezhidze", sort_order=1),
+        ])
+
+        session.add_all([
+            ResumeEducation(
+                resume_id=resume.id, institution="ИТМО, Санкт-Петербург",
+                faculty="Мобильные и облачные технологии",
+                degree="Магистр", year=2026, sort_order=0,
+            ),
+        ])
+
+        session.add_all([
+            ResumeLanguage(resume_id=resume.id, name="Русский", level="Родной", sort_order=0),
+            ResumeLanguage(resume_id=resume.id, name="English", level="B2", sort_order=1),
+        ])
+
+        await session.flush()
 
     # ─── portfolio ─────────────────────────────────────────────────────────
 
@@ -352,9 +465,10 @@ class FixtureService:
 
     async def _seed_projects(
         self,
-        admin: object,
+        users: list,
         workspaces_by_name: dict[str, WorkSpace],
     ) -> None:
+        admin = users[0]
         ws1 = workspaces_by_name.get("Admin Workspace 1")
         ws2 = workspaces_by_name.get("Admin Workspace 2")
 
@@ -515,6 +629,26 @@ class FixtureService:
 
             # Используем сервис — он сам разберётся с тегами и связями
             project = await self._project_service.create_project(project_data, admin.id)
+
+            # Добавляем участников в проект (админ уже добавлен через create_project)
+            if idx == 0 and len(users) >= 4:
+                # Tasker: Kirill (PM), Anna (FE), Ilya (BE)
+                for participant in [users[2], users[3], users[4]]:
+                    participation = ProjectParticipation(
+                        project_id=project.id,
+                        participant_id=participant.id,
+                    )
+                    self._project_repository.uow.session.add(participation)
+                await self._project_repository.uow.session.flush()
+            elif idx == 1 and len(users) >= 3:
+                # Веб-сервис: Kirill, Anna
+                for participant in [users[2], users[3]]:
+                    participation = ProjectParticipation(
+                        project_id=project.id,
+                        participant_id=participant.id,
+                    )
+                    self._project_repository.uow.session.add(participation)
+                await self._project_repository.uow.session.flush()
 
             # Создаём колонки канбан-доски
             columns = await self._kanban_service.create_default_columns(project.id)

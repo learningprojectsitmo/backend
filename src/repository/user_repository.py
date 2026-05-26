@@ -6,7 +6,7 @@ from sqlalchemy.orm import selectinload
 
 from src.core.uow import IUnitOfWork
 from src.model.auth import NewUser
-from src.model.user import Permission, Role, User, UserPermission
+from src.model.user import Permission, User, UserPermission
 from src.repository.base_repository import BaseRepository
 from src.schema.user import (
     NewUserCreate,

@@ -145,24 +145,6 @@ class Response(Base):
         return f"Response(id={self.id!r}, respondent_id={self.respondent_id!r}, project_id={self.project_id!r})"
 
 
-class Resume(Base):
-    __tablename__ = "resume"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    author_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
-    header: Mapped[str] = mapped_column(Text, nullable=False)
-    resume_text: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
-    )
-
-    user: Mapped[User] = relationship(back_populates="resumes")
-
-    def __repr__(self) -> str:
-        return f"Resume(id={self.id!r}, author_id={self.author_id!r}, header={self.header!r})"
-
-
 class ProjectVacancy(Base):
     __tablename__ = "project_vacancy"
 

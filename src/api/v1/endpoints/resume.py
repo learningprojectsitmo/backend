@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from src.core.container import get_resume_service
 from src.core.dependencies import get_current_user, setup_audit
 from src.model.user import User
-from src.schema.resume import ResumeCreate, ResumeFull, ResumeListResponse, ResumeUpdate
+from src.schema.resume import ResumeCreate, ResumeDetail, ResumeFull, ResumeListResponse, ResumeUpdate
 from src.services.resume_service import ResumeService
 
 resume_router = APIRouter(prefix="/resumes", tags=["resume"])
@@ -23,6 +23,19 @@ async def fetch_resume(
         raise HTTPException(status_code=404, detail="There is no resume with that id!")
 
     return ResumeFull.model_validate(resume)
+
+
+@resume_router.get("/{resume_id}/detail", response_model=ResumeDetail)
+async def fetch_resume_detail(
+    resume_id: int,
+    resume_service: ResumeService = Depends(get_resume_service),
+    _current_user: User = Depends(get_current_user),
+) -> ResumeDetail:
+    """Получить полное резюме со всеми секциями"""
+    detail = await resume_service.get_resume_detail(resume_id)
+    if not detail:
+        raise HTTPException(status_code=404, detail="There is no resume with that id!")
+    return detail
 
 
 @resume_router.get("/", response_model=ResumeListResponse)

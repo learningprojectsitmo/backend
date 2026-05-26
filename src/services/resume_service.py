@@ -3,8 +3,20 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from src.core.exceptions import PermissionError
-from src.model.project import Resume
-from src.schema.resume import ResumeCreate, ResumeUpdate
+from src.model.resume import Resume
+from src.schema.resume import (
+    ResumeCreate,
+    ResumeDetail,
+    ResumeEducationFull,
+    ResumeExperienceFull,
+    ResumeFull,
+    ResumeInterestFull,
+    ResumeLanguageFull,
+    ResumeLinkFull,
+    ResumeSkillFull,
+    ResumeUpdate,
+    ResumeUserInfo,
+)
 from src.services.base_service import BaseService
 
 if TYPE_CHECKING:
@@ -19,6 +31,33 @@ class ResumeService(BaseService[Resume, ResumeCreate, ResumeUpdate]):
     async def get_resume_by_id(self, resume_id: int) -> Resume | None:
         """Получить резюме по ID"""
         return await self._resume_repository.get_by_id(resume_id)
+
+    async def get_resume_detail(self, resume_id: int) -> ResumeDetail | None:
+        resume = await self._resume_repository.get_by_id_with_all(resume_id)
+        if not resume:
+            return None
+
+        user = resume.user
+        return ResumeDetail(
+            resume=ResumeFull.model_validate(resume),
+            user=ResumeUserInfo(
+                id=user.id,
+                first_name=user.first_name,
+                last_name=user.last_name,
+                middle_name=user.middle_name,
+                email=user.email,
+                phone=user.phone,
+                tg_nickname=user.tg_nickname,
+                vk_nickname=user.vk_nickname,
+                role=user.role.name if user.role else None,
+            ),
+            experiences=[ResumeExperienceFull.model_validate(e) for e in (resume.experiences or [])],
+            skills=[ResumeSkillFull.model_validate(s) for s in (resume.skills or [])],
+            interests=[ResumeInterestFull.model_validate(i) for i in (resume.interests or [])],
+            links=[ResumeLinkFull.model_validate(l) for l in (resume.links or [])],
+            educations=[ResumeEducationFull.model_validate(e) for e in (resume.educations or [])],
+            languages=[ResumeLanguageFull.model_validate(l) for l in (resume.languages or [])],
+        )
 
     async def get_resumes_by_author(self, author_id: int) -> list[Resume]:
         """Получить резюме по автору"""

@@ -86,6 +86,21 @@ async def update_project(
     return ProjectFull.from_orm(project)
 
 
+@project_router.delete("/{project_id}/participants/{user_id}")
+async def remove_participant(
+    project_id: int,
+    user_id: int,
+    project_service: ProjectService = Depends(get_project_service),
+    current_user: User = Depends(get_current_user),
+    _audit=Depends(setup_audit),
+) -> dict[str, str]:
+    """Удалить участника из проекта (только автор)"""
+    success = await project_service.remove_participant(project_id, user_id, current_user.id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Participant not found")
+    return {"message": "Participant removed successfully"}
+
+
 @project_router.delete("/{project_id}")
 async def delete_project(
     project_id: int,

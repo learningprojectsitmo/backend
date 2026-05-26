@@ -5,6 +5,7 @@ from fastapi import APIRouter
 from src.api.v1.endpoints.audit import audit_router
 from src.api.v1.endpoints.auth import auth_router
 from src.api.v1.endpoints.invitation import invitation_router
+from src.api.v1.endpoints.kanban import kanban_router
 from src.api.v1.endpoints.profile import profile_router
 from src.api.v1.endpoints.project import project_router
 from src.api.v1.endpoints.resume import resume_router
@@ -12,7 +13,6 @@ from src.api.v1.endpoints.role import role_permission_router, role_router
 from src.api.v1.endpoints.sessions import sessions_router
 from src.api.v1.endpoints.settings import settings_router
 from src.api.v1.endpoints.user import user_permission_router, user_router
-from src.api.v1.endpoints.kanban import kanban_router
 from src.api.v1.endpoints.workspace import workspace_router
 
 routers = APIRouter(prefix="/v1")

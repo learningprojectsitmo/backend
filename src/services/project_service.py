@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from src.core.exceptions import PermissionError
-from src.model.project import Project, ProjectVacancy
+from src.model.project import Project, ProjectParticipation, ProjectVacancy
 from src.schema.project import (
     ParticipantPreview,
     ProjectCreate,
@@ -118,8 +118,16 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
                 self._project_repository.uow.session.add(vacancy)
             await self._project_repository.uow.session.flush()
 
+        # Добавляем автора как участника проекта
+        participation = ProjectParticipation(
+            project_id=project.id,
+            participant_id=author_id,
+        )
+        self._project_repository.uow.session.add(participation)
+        await self._project_repository.uow.session.flush()
+
         # Чтобы Pydantic увидел обновленные связи после flush
-        await self._project_repository.uow.session.refresh(project, ["tags", "status", "vacancies"])
+        await self._project_repository.uow.session.refresh(project, ["tags", "status", "vacancies", "participants"])
 
         return project
 
@@ -170,6 +178,14 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
             await self._project_repository.uow.session.refresh(project, ["tags", "status", "participants", "vacancies"])
 
         return project
+
+    async def remove_participant(self, project_id: int, participant_user_id: int, current_user_id: int) -> bool:
+        project = await self.get_project_by_id(project_id)
+        if not project:
+            return False
+        if project.author_id != current_user_id:
+            raise PermissionError("Only project author can remove participants")
+        return await self._project_repository.remove_participant(project_id, participant_user_id)
 
     async def delete_project(self, project_id: int, current_user_id: int) -> bool:
         """Удалить проект (только автор может удалять)"""
