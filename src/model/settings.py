@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.core.database import Base
@@ -32,6 +32,8 @@ class SpaceSettings(Base):
     join_policy: Mapped[str] = mapped_column(String(20), nullable=False, default="open")
     default_role_id: Mapped[int | None] = mapped_column(ForeignKey("role.id"), nullable=True)
     icon_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    allow_multi_project_participation: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    allow_multi_project_creation: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False

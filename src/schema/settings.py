@@ -24,6 +24,8 @@ class SpaceSettingsCreate(BaseModel):
     join_policy: str = "open"
     default_role_id: int | None = None
     icon_url: str | None = None
+    allow_multi_project_participation: bool = False
+    allow_multi_project_creation: bool = False
 
 
 class SpaceSettingsUpdate(BaseModel):
@@ -33,6 +35,8 @@ class SpaceSettingsUpdate(BaseModel):
     join_policy: str | None = None
     default_role_id: int | None = None
     icon_url: str | None = None
+    allow_multi_project_participation: bool | None = None
+    allow_multi_project_creation: bool | None = None
 
 
 class SpaceSettingsFull(BaseModel):
@@ -45,6 +49,8 @@ class SpaceSettingsFull(BaseModel):
     join_policy: str
     default_role_id: int | None = None
     icon_url: str | None = None
+    allow_multi_project_participation: bool = False
+    allow_multi_project_creation: bool = False
     created_at: datetime
     updated_at: datetime
 

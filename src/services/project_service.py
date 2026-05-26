@@ -2,8 +2,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from sqlalchemy import select
+
 from src.core.exceptions import PermissionError, ValidationError
 from src.model.project import Project, ProjectParticipation, ProjectVacancy
+from src.model.workspace import WorkSpaceParticipation
 from src.schema.project import (
     ParticipantPreview,
     ProjectCreate,
@@ -125,6 +128,22 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         )
         self._project_repository.uow.session.add(participation)
         await self._project_repository.uow.session.flush()
+
+        # Если проект принадлежит workspace — синхронизируем участие в workspace
+        if project.workspace_id:
+            existing = await self._project_repository.uow.session.execute(
+                select(WorkSpaceParticipation).where(
+                    WorkSpaceParticipation.workspace_id == project.workspace_id,
+                    WorkSpaceParticipation.participant_id == author_id,
+                )
+            )
+            if not existing.scalar_one_or_none():
+                ws_participation = WorkSpaceParticipation(
+                    workspace_id=project.workspace_id,
+                    participant_id=author_id,
+                )
+                self._project_repository.uow.session.add(ws_participation)
+                await self._project_repository.uow.session.flush()
 
         # Чтобы Pydantic увидел обновленные связи после flush
         await self._project_repository.uow.session.refresh(project, ["tags", "status", "vacancies", "participants"])

@@ -84,6 +84,25 @@ class WorkSpaceService(BaseService[WorkSpace, WorkSpaceCreate, WorkSpaceUpdate])
         """Получить количество участников workspace"""
         return await self._workspace_repository.get_participants_count(workspace_id)
 
+    async def get_workspace_participants(
+        self,
+        workspace_id: int,
+        skip: int = 0,
+        limit: int = 10,
+        search: str | None = None,
+        project_id: int | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+    ) -> tuple[list[dict], int]:
+        """Получить участников workspace с пагинацией и фильтрацией"""
+        return await self._workspace_repository.get_participants(
+            workspace_id, skip, limit, search, project_id, date_from, date_to
+        )
+
+    async def remove_workspace_participant(self, workspace_id: int, user_id: int) -> bool:
+        """Удалить участника из workspace"""
+        return await self._workspace_repository.remove_participant(workspace_id, user_id)
+
     async def get_all_categories(self) -> list:
         """Получить все категории workspace"""
         return await self._workspace_repository.get_all_categories()

@@ -14,8 +14,9 @@ if TYPE_CHECKING:
     from src.model.kanban_models import Task
     from src.model.language import Language
     from src.model.portfolio import Portfolio
-    from src.model.project import Project, ProjectParticipation, Response
-    from src.model.resume import Resume
+    from src.model.workspace import WorkSpaceParticipation
+from src.model.project import Project, ProjectParticipation, Response
+from src.model.resume import Resume
 
 
 class User(Base):
@@ -50,6 +51,10 @@ class User(Base):
         back_populates="author",
     )
     projects_in: Mapped[list[ProjectParticipation]] = relationship(
+        back_populates="participant",
+        cascade="all, delete-orphan",
+    )
+    workspace_participations: Mapped[list[WorkSpaceParticipation]] = relationship(
         back_populates="participant",
         cascade="all, delete-orphan",
     )
