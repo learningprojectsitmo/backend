@@ -75,3 +75,4 @@ class SpacesListResponse(BaseModel):
     page: int | None = None
     limit: int | None = None
     total: int | None = None
+    role: str

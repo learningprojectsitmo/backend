@@ -47,6 +47,7 @@ async def get_workspace_menu(
         page=page,
         limit=limit,
         total=total,
+        role=current_user.role.name if current_user.role else "member",
     )
 
 
