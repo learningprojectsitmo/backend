@@ -74,7 +74,7 @@ class FixtureService:
         workspaces_by_name = await self._seed_workspaces(admin, categories_by_name)
         await self._seed_projects(users, workspaces_by_name)
         await self._seed_settings_types()
-        await self._seed_resumes(admin)
+        await self._seed_resumes(users)
         await self._seed_portfolio(admin)
         await self._seed_education(admin)
         await self._seed_languages(admin)
@@ -211,7 +211,7 @@ class FixtureService:
 
     # ─── resumes ───────────────────────────────────────────────────────────
 
-    async def _seed_resumes(self, admin: object) -> None:
+    async def _seed_resumes(self, users: list) -> None:
         from src.model.resume import (
             Resume,
             ResumeEducation,
@@ -231,13 +231,17 @@ class FixtureService:
         if result.scalar_one_or_none():
             return
 
+        admin, _member, kirill, anna, ilya = users
+
         # удаляем старые резюме без role
-        old = await session.execute(select(Resume).where(Resume.author_id == admin.id))
-        for r in old.scalars().all():
-            await session.delete(r)
+        for u in [admin, kirill, anna, ilya]:
+            old = await session.execute(select(Resume).where(Resume.author_id == u.id))
+            for r in old.scalars().all():
+                await session.delete(r)
         await session.flush()
 
-        resume = await self._resume_service.create_resume(
+        # ────── Admin: UX/UI Designer — 2 exp, 6 skills, 4 interests, 2 links, 1 edu, 2 lang ──────
+        resume_admin = await self._resume_service.create_resume(
             ResumeCreate(
                 header="UX/UI-дизайнер",
                 resume_text="Опыт работы в продуктовом дизайне 3 года. Работал над образовательными платформами.",
@@ -250,7 +254,7 @@ class FixtureService:
 
         session.add_all([
             ResumeExperience(
-                resume_id=resume.id,
+                resume_id=resume_admin.id,
                 company="Мобильное приложение «Plan It»",
                 position="UX/UI-дизайнер",
                 period_from=datetime(2024, 8, 1),
@@ -266,7 +270,7 @@ class FixtureService:
                 sort_order=0,
             ),
             ResumeExperience(
-                resume_id=resume.id,
+                resume_id=resume_admin.id,
                 company="Веб-сервис для студентов",
                 position="UI/UX Designer",
                 period_from=datetime(2023, 2, 1),
@@ -281,39 +285,199 @@ class FixtureService:
                 sort_order=1,
             ),
         ])
-
         session.add_all([
-            ResumeSkill(resume_id=resume.id, name="Figma", sort_order=0),
-            ResumeSkill(resume_id=resume.id, name="Sketch", sort_order=1),
-            ResumeSkill(resume_id=resume.id, name="UX Research", sort_order=2),
-            ResumeSkill(resume_id=resume.id, name="Wireframing", sort_order=3),
-            ResumeSkill(resume_id=resume.id, name="UI Design", sort_order=4),
-            ResumeSkill(resume_id=resume.id, name="Adobe Illustrator", sort_order=5),
+            ResumeSkill(resume_id=resume_admin.id, name="Figma", sort_order=0),
+            ResumeSkill(resume_id=resume_admin.id, name="Sketch", sort_order=1),
+            ResumeSkill(resume_id=resume_admin.id, name="UX Research", sort_order=2),
+            ResumeSkill(resume_id=resume_admin.id, name="Wireframing", sort_order=3),
+            ResumeSkill(resume_id=resume_admin.id, name="UI Design", sort_order=4),
+            ResumeSkill(resume_id=resume_admin.id, name="Adobe Illustrator", sort_order=5),
         ])
-
         session.add_all([
-            ResumeInterest(resume_id=resume.id, name="Веб-дизайн", sort_order=0),
-            ResumeInterest(resume_id=resume.id, name="Мобильный дизайн", sort_order=1),
-            ResumeInterest(resume_id=resume.id, name="UX-исследования", sort_order=2),
-            ResumeInterest(resume_id=resume.id, name="Адаптивный дизайн", sort_order=3),
+            ResumeInterest(resume_id=resume_admin.id, name="Веб-дизайн", sort_order=0),
+            ResumeInterest(resume_id=resume_admin.id, name="Мобильный дизайн", sort_order=1),
+            ResumeInterest(resume_id=resume_admin.id, name="UX-исследования", sort_order=2),
+            ResumeInterest(resume_id=resume_admin.id, name="Адаптивный дизайн", sort_order=3),
         ])
-
         session.add_all([
-            ResumeLink(resume_id=resume.id, platform="Behance", url="https://behance.net/ezhidze", sort_order=0),
-            ResumeLink(resume_id=resume.id, platform="Dribbble", url="https://dribbble.com/ezhidze", sort_order=1),
+            ResumeLink(resume_id=resume_admin.id, platform="Behance", url="https://behance.net/ezhidze", sort_order=0),
+            ResumeLink(resume_id=resume_admin.id, platform="Dribbble", url="https://dribbble.com/ezhidze", sort_order=1),
         ])
-
         session.add_all([
             ResumeEducation(
-                resume_id=resume.id, institution="ИТМО, Санкт-Петербург",
+                resume_id=resume_admin.id, institution="ИТМО, Санкт-Петербург",
                 faculty="Мобильные и облачные технологии",
                 degree="Магистр", year=2026, sort_order=0,
             ),
         ])
-
         session.add_all([
-            ResumeLanguage(resume_id=resume.id, name="Русский", level="Родной", sort_order=0),
-            ResumeLanguage(resume_id=resume.id, name="English", level="B2", sort_order=1),
+            ResumeLanguage(resume_id=resume_admin.id, name="Русский", level="Родной", sort_order=0),
+            ResumeLanguage(resume_id=resume_admin.id, name="English", level="B2", sort_order=1),
+        ])
+
+        # ────── Кирилл Сомов: Product Manager — 1 exp, 4 skills, 2 interests, 0 links, 1 edu, 1 lang ──────
+        resume_kirill = await self._resume_service.create_resume(
+            ResumeCreate(
+                header="Продуктовый менеджер",
+                resume_text="Управляю продуктовой разработкой в EdTech.",
+                role="Product Manager",
+                about="Начинающий продакт-менеджер с фокусом на образовательные продукты.",
+                cover_letter="Участвовал в запуске двух учебных курсов на платформе ИТМО.",
+            ),
+            kirill.id,
+        )
+        session.add_all([
+            ResumeExperience(
+                resume_id=resume_kirill.id,
+                company="ИТМО, Проектный офис",
+                position="Product Manager (стажёр)",
+                period_from=datetime(2025, 2, 1),
+                period_to=datetime(2025, 8, 1),
+                duration="6 месяцев",
+                responsibilities=[
+                    "Собирал требования от заказчиков и формировал бэклог",
+                    "Проводил продуктовые синки и ревью спринтов",
+                    "Готовил аналитические отчёты по вовлечённости пользователей",
+                ],
+                skills=["Jira", "SQL", "Product Analytics"],
+                sort_order=0,
+            ),
+        ])
+        session.add_all([
+            ResumeSkill(resume_id=resume_kirill.id, name="Jira", sort_order=0),
+            ResumeSkill(resume_id=resume_kirill.id, name="SQL", sort_order=1),
+            ResumeSkill(resume_id=resume_kirill.id, name="Product Analytics", sort_order=2),
+            ResumeSkill(resume_id=resume_kirill.id, name="Notion", sort_order=3),
+        ])
+        session.add_all([
+            ResumeInterest(resume_id=resume_kirill.id, name="Управление продуктами", sort_order=0),
+            ResumeInterest(resume_id=resume_kirill.id, name="EdTech", sort_order=1),
+        ])
+        session.add_all([
+            ResumeEducation(
+                resume_id=resume_kirill.id, institution="ИТМО, Санкт-Петербург",
+                faculty="Бизнес-информатика",
+                degree="Бакалавр", year=2026, sort_order=0,
+            ),
+        ])
+        session.add_all([
+            ResumeLanguage(resume_id=resume_kirill.id, name="Русский", level="Родной", sort_order=0),
+        ])
+
+        # ────── Анна Красина: Backend Developer — 3 exp, 8 skills, 3 interests, 1 link, 2 edu, 2 lang ──────
+        resume_anna = await self._resume_service.create_resume(
+            ResumeCreate(
+                header="Backend-разработчик",
+                resume_text="Пишу на Python и Go. Проектирую API для высоконагруженных систем.",
+                role="Backend Developer",
+                about="Более 4 лет коммерческой разработки. Специализируюсь на микросервисной архитектуре и оптимизации производительности.",
+                cover_letter="За последние два года разработала и запустила три микросервиса для обработки заказов, снизив latency на 30%. Активно участвую в код-ревью и внедрении best practices. Ищу команду, где смогу расти как лид.",
+            ),
+            anna.id,
+        )
+        session.add_all([
+            ResumeExperience(
+                resume_id=resume_anna.id,
+                company="Ozon Tech",
+                position="Backend Developer",
+                period_from=datetime(2024, 6, 1),
+                period_to=None,
+                duration="настоящее время",
+                responsibilities=[
+                    "Разрабатываю микросервисы на Go для платформы логистики",
+                    "Реализовал сервис кэширования, сокративший нагрузку на БД на 40%",
+                    "Провожу код-ревью в команде из 8 человек",
+                ],
+                skills=["Go", "PostgreSQL", "Kafka", "Docker"],
+                sort_order=0,
+            ),
+            ResumeExperience(
+                resume_id=resume_anna.id,
+                company="Тинькофф",
+                position="Python Developer",
+                period_from=datetime(2022, 9, 1),
+                period_to=datetime(2024, 5, 1),
+                duration="1 год 8 месяцев",
+                responsibilities=[
+                    "Писал бэкенд для внутренних инструментов банка на FastAPI",
+                    "Автоматизировал отчёты, сэкономив 20 часов работы команды в месяц",
+                    "Интегрировал внешние API (банки, CRM)",
+                ],
+                skills=["Python", "FastAPI", "SQLAlchemy", "Celery"],
+                sort_order=1,
+            ),
+            ResumeExperience(
+                resume_id=resume_anna.id,
+                company="Яндекс.Практикум",
+                position="Junior Python Developer",
+                period_from=datetime(2021, 6, 1),
+                period_to=datetime(2022, 8, 1),
+                duration="1 год 2 месяца",
+                responsibilities=[
+                    "Разрабатывал учебные проекты и автоматические тесты",
+                    "Поддерживал документацию API в Swagger",
+                ],
+                skills=["Python", "Django", "REST API"],
+                sort_order=2,
+            ),
+        ])
+        session.add_all([
+            ResumeSkill(resume_id=resume_anna.id, name="Python", sort_order=0),
+            ResumeSkill(resume_id=resume_anna.id, name="Go", sort_order=1),
+            ResumeSkill(resume_id=resume_anna.id, name="FastAPI", sort_order=2),
+            ResumeSkill(resume_id=resume_anna.id, name="PostgreSQL", sort_order=3),
+            ResumeSkill(resume_id=resume_anna.id, name="Docker", sort_order=4),
+            ResumeSkill(resume_id=resume_anna.id, name="Kafka", sort_order=5),
+            ResumeSkill(resume_id=resume_anna.id, name="Redis", sort_order=6),
+            ResumeSkill(resume_id=resume_anna.id, name="GitHub Actions", sort_order=7),
+        ])
+        session.add_all([
+            ResumeInterest(resume_id=resume_anna.id, name="Бэкенд-разработка", sort_order=0),
+            ResumeInterest(resume_id=resume_anna.id, name="Системная архитектура", sort_order=1),
+            ResumeInterest(resume_id=resume_anna.id, name="Open Source", sort_order=2),
+        ])
+        session.add_all([
+            ResumeLink(resume_id=resume_anna.id, platform="GitHub", url="https://github.com/annakrasina", sort_order=0),
+        ])
+        session.add_all([
+            ResumeEducation(
+                resume_id=resume_anna.id, institution="ИТМО, Санкт-Петербург",
+                faculty="Программная инженерия",
+                degree="Магистр", year=2025, sort_order=0,
+            ),
+            ResumeEducation(
+                resume_id=resume_anna.id, institution="ИТМО, Санкт-Петербург",
+                faculty="Информационные системы",
+                degree="Бакалавр", year=2023, sort_order=1,
+            ),
+        ])
+        session.add_all([
+            ResumeLanguage(resume_id=resume_anna.id, name="Русский", level="Родной", sort_order=0),
+            ResumeLanguage(resume_id=resume_anna.id, name="English", level="C1", sort_order=1),
+        ])
+
+        # ────── Илья Поперечный: Junior Frontend — 0 exp, 3 skills, 1 interest, 1 link, 0 edu, 1 lang ──────
+        resume_ilya = await self._resume_service.create_resume(
+            ResumeCreate(
+                header="Frontend-разработчик (стажёр)",
+                resume_text="Изучаю React и TypeScript. Хочу расти в продуктовой команде.",
+                role="Junior Frontend Developer",
+            ),
+            ilya.id,
+        )
+        session.add_all([
+            ResumeSkill(resume_id=resume_ilya.id, name="React", sort_order=0),
+            ResumeSkill(resume_id=resume_ilya.id, name="TypeScript", sort_order=1),
+            ResumeSkill(resume_id=resume_ilya.id, name="Tailwind CSS", sort_order=2),
+        ])
+        session.add_all([
+            ResumeInterest(resume_id=resume_ilya.id, name="Фронтенд-разработка", sort_order=0),
+        ])
+        session.add_all([
+            ResumeLink(resume_id=resume_ilya.id, platform="GitHub", url="https://github.com/ilya-front", sort_order=0),
+        ])
+        session.add_all([
+            ResumeLanguage(resume_id=resume_ilya.id, name="Русский", level="Родной", sort_order=0),
         ])
 
         await session.flush()
@@ -485,6 +649,7 @@ class FixtureService:
                 "workspace": ws1,
                 "status_id": 2,
                 "progress": 75,
+                "max_participants": 8,
                 "tags": ["Frontend", "AI/ML", "Design"],
                 "vacancies": [
                     VacancyCreate(
@@ -513,6 +678,7 @@ class FixtureService:
                 "workspace": ws1,
                 "status_id": 4,
                 "progress": 45,
+                "max_participants": 5,
                 "tags": ["Mobile", "iOS", "Android"],
                 "vacancies": [
                     VacancyCreate(
@@ -539,6 +705,7 @@ class FixtureService:
                 "workspace": ws2,
                 "status_id": 2,
                 "progress": 30,
+                "max_participants": 5,
                 "tags": ["Design", "UI/UX"],
                 "vacancies": [
                     VacancyCreate(
@@ -557,6 +724,7 @@ class FixtureService:
                 "workspace": ws2,
                 "status_id": 1,
                 "progress": 10,
+                "max_participants": 5,
                 "tags": ["Mobile", "Frontend"],
                 "vacancies": [
                     VacancyCreate(
@@ -624,6 +792,7 @@ class FixtureService:
                 tags=data["tags"],
                 author_id=admin.id,
                 workspace_id=ws.id,
+                max_participants=data.get("max_participants"),
                 vacancies=data.get("vacancies"),
             )
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from src.core.exceptions import PermissionError
+from src.core.exceptions import PermissionError, ValidationError
 from src.model.project import Project, ProjectParticipation, ProjectVacancy
 from src.schema.project import (
     ParticipantPreview,
@@ -160,6 +160,12 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
                 await self._project_repository.uow.session.flush()
 
             if vacancies_data is not None:
+                total_required = sum(v.get("required_count", 1) for v in vacancies_data)
+                if project.max_participants is not None and total_required > project.max_participants:
+                    raise ValidationError(
+                        f"Сумма необходимых участников ({total_required}) превышает максимальное количество ({project.max_participants})",
+                    )
+
                 # Удаляем старые вакансии и создаём новые
                 for old_v in project.vacancies:
                     await self._project_repository.uow.session.delete(old_v)
