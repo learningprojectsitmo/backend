@@ -40,10 +40,14 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         return result.scalar_one_or_none() is not None
 
     async def get_by_author_id(self, author_id: int) -> list[Project]:
-        query = select(Project).where(Project.author_id == author_id).options(
-            selectinload(Project.participants).selectinload(ProjectParticipation.participant),
-            selectinload(Project.tags),
-            selectinload(Project.status),
+        query = (
+            select(Project)
+            .where(Project.author_id == author_id)
+            .options(
+                selectinload(Project.participants).selectinload(ProjectParticipation.participant),
+                selectinload(Project.tags),
+                selectinload(Project.status),
+            )
         )
         result = await self.uow.session.execute(query)
         return list(result.scalars().all())

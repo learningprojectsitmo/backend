@@ -8,6 +8,7 @@ from src.core.exceptions import PermissionError
 from src.model.resume import (
     Resume,
     ResumeEducation,
+    ResumeExperience,
     ResumeLanguage,
     ResumeLink,
 )
@@ -17,7 +18,9 @@ from src.schema.resume import (
     ResumeEducationCreate,
     ResumeEducationFull,
     ResumeEducationUpdate,
+    ResumeExperienceCreate,
     ResumeExperienceFull,
+    ResumeExperienceUpdate,
     ResumeFull,
     ResumeInterestFull,
     ResumeLanguageCreate,
@@ -120,34 +123,40 @@ class ResumeService(BaseService[Resume, ResumeCreate, ResumeUpdate]):
         if self._portfolio_repository:
             portfolio_items = await self._portfolio_repository.get_by_user_id(user_id)
             for item in portfolio_items:
-                session.add(ResumeLink(
-                    resume_id=resume_id,
-                    platform=item.title,
-                    url=item.url,
-                    sort_order=0,
-                ))
+                session.add(
+                    ResumeLink(
+                        resume_id=resume_id,
+                        platform=item.title,
+                        url=item.url,
+                        sort_order=0,
+                    )
+                )
 
         if self._education_repository:
             education_items = await self._education_repository.get_by_user_id(user_id)
             for item in education_items:
-                session.add(ResumeEducation(
-                    resume_id=resume_id,
-                    institution=item.institution,
-                    faculty=item.faculty,
-                    degree=item.degree,
-                    years=item.years,
-                    sort_order=0,
-                ))
+                session.add(
+                    ResumeEducation(
+                        resume_id=resume_id,
+                        institution=item.institution,
+                        faculty=item.faculty,
+                        degree=item.degree,
+                        years=item.years,
+                        sort_order=0,
+                    )
+                )
 
         if self._language_repository:
             language_items = await self._language_repository.get_by_user_id(user_id)
             for item in language_items:
-                session.add(ResumeLanguage(
-                    resume_id=resume_id,
-                    name=item.name,
-                    level=item.level,
-                    sort_order=0,
-                ))
+                session.add(
+                    ResumeLanguage(
+                        resume_id=resume_id,
+                        name=item.name,
+                        level=item.level,
+                        sort_order=0,
+                    )
+                )
 
     async def update_resume(self, resume_id: int, resume_data: ResumeUpdate, current_user_id: int) -> Resume | None:
         """Обновить резюме (только автор может обновлять)"""
@@ -181,7 +190,9 @@ class ResumeService(BaseService[Resume, ResumeCreate, ResumeUpdate]):
         await session.flush()
         return obj
 
-    async def update_resume_link(self, link_id: int, link_data: ResumeLinkUpdate, current_user_id: int) -> ResumeLink | None:
+    async def update_resume_link(
+        self, link_id: int, link_data: ResumeLinkUpdate, current_user_id: int
+    ) -> ResumeLink | None:
         session = self._resume_repository.uow.session
         result = await session.execute(select(ResumeLink).where(ResumeLink.id == link_id))
         obj = result.scalar_one_or_none()
@@ -206,7 +217,9 @@ class ResumeService(BaseService[Resume, ResumeCreate, ResumeUpdate]):
 
     # ─── ResumeEducation CRUD ───────────────────────────────────────────────
 
-    async def create_resume_education(self, resume_id: int, edu_data: ResumeEducationCreate, current_user_id: int) -> ResumeEducation:
+    async def create_resume_education(
+        self, resume_id: int, edu_data: ResumeEducationCreate, current_user_id: int
+    ) -> ResumeEducation:
         await self._check_ownership(resume_id, current_user_id)
         session = self._resume_repository.uow.session
         obj = ResumeEducation(resume_id=resume_id, **edu_data.model_dump())
@@ -214,7 +227,9 @@ class ResumeService(BaseService[Resume, ResumeCreate, ResumeUpdate]):
         await session.flush()
         return obj
 
-    async def update_resume_education(self, edu_id: int, edu_data: ResumeEducationUpdate, current_user_id: int) -> ResumeEducation | None:
+    async def update_resume_education(
+        self, edu_id: int, edu_data: ResumeEducationUpdate, current_user_id: int
+    ) -> ResumeEducation | None:
         session = self._resume_repository.uow.session
         result = await session.execute(select(ResumeEducation).where(ResumeEducation.id == edu_id))
         obj = result.scalar_one_or_none()
@@ -239,7 +254,9 @@ class ResumeService(BaseService[Resume, ResumeCreate, ResumeUpdate]):
 
     # ─── ResumeLanguage CRUD ────────────────────────────────────────────────
 
-    async def create_resume_language(self, resume_id: int, lang_data: ResumeLanguageCreate, current_user_id: int) -> ResumeLanguage:
+    async def create_resume_language(
+        self, resume_id: int, lang_data: ResumeLanguageCreate, current_user_id: int
+    ) -> ResumeLanguage:
         await self._check_ownership(resume_id, current_user_id)
         session = self._resume_repository.uow.session
         obj = ResumeLanguage(resume_id=resume_id, **lang_data.model_dump())
@@ -247,7 +264,9 @@ class ResumeService(BaseService[Resume, ResumeCreate, ResumeUpdate]):
         await session.flush()
         return obj
 
-    async def update_resume_language(self, lang_id: int, lang_data: ResumeLanguageUpdate, current_user_id: int) -> ResumeLanguage | None:
+    async def update_resume_language(
+        self, lang_id: int, lang_data: ResumeLanguageUpdate, current_user_id: int
+    ) -> ResumeLanguage | None:
         session = self._resume_repository.uow.session
         result = await session.execute(select(ResumeLanguage).where(ResumeLanguage.id == lang_id))
         obj = result.scalar_one_or_none()
@@ -262,6 +281,43 @@ class ResumeService(BaseService[Resume, ResumeCreate, ResumeUpdate]):
     async def delete_resume_language(self, lang_id: int, current_user_id: int) -> bool:
         session = self._resume_repository.uow.session
         result = await session.execute(select(ResumeLanguage).where(ResumeLanguage.id == lang_id))
+        obj = result.scalar_one_or_none()
+        if not obj:
+            return False
+        await self._check_ownership(obj.resume_id, current_user_id)
+        await session.delete(obj)
+        await session.flush()
+        return True
+
+    # ─── ResumeExperience CRUD ─────────────────────────────────────────────
+
+    async def create_resume_experience(
+        self, resume_id: int, exp_data: ResumeExperienceCreate, current_user_id: int
+    ) -> ResumeExperience:
+        await self._check_ownership(resume_id, current_user_id)
+        session = self._resume_repository.uow.session
+        obj = ResumeExperience(resume_id=resume_id, **exp_data.model_dump())
+        session.add(obj)
+        await session.flush()
+        return obj
+
+    async def update_resume_experience(
+        self, exp_id: int, exp_data: ResumeExperienceUpdate, current_user_id: int
+    ) -> ResumeExperience | None:
+        session = self._resume_repository.uow.session
+        result = await session.execute(select(ResumeExperience).where(ResumeExperience.id == exp_id))
+        obj = result.scalar_one_or_none()
+        if not obj:
+            return None
+        await self._check_ownership(obj.resume_id, current_user_id)
+        for field, value in exp_data.model_dump(exclude_unset=True).items():
+            setattr(obj, field, value)
+        await session.flush()
+        return obj
+
+    async def delete_resume_experience(self, exp_id: int, current_user_id: int) -> bool:
+        session = self._resume_repository.uow.session
+        result = await session.execute(select(ResumeExperience).where(ResumeExperience.id == exp_id))
         obj = result.scalar_one_or_none()
         if not obj:
             return False

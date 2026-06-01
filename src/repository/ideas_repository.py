@@ -23,13 +23,10 @@ class IdeaRepository(BaseRepository[Idea, IdeaCreate, IdeaCreate]):
         skip: int = 0,
         limit: int = 100,
     ) -> list[Idea]:
-        query = (
-            select(Idea)
-            .options(
-                selectinload(Idea.tags),
-                selectinload(Idea.author),
-                selectinload(Idea.comments),
-            )
+        query = select(Idea).options(
+            selectinload(Idea.tags),
+            selectinload(Idea.author),
+            selectinload(Idea.comments),
         )
 
         if status and status != "all":
@@ -40,9 +37,7 @@ class IdeaRepository(BaseRepository[Idea, IdeaCreate, IdeaCreate]):
 
         if search:
             q = f"%{search}%"
-            query = query.where(
-                Idea.title.ilike(q) | Idea.description.ilike(q)
-            )
+            query = query.where(Idea.title.ilike(q) | Idea.description.ilike(q))
 
         query = query.order_by(Idea.votes.desc()) if sort == "popular" else query.order_by(Idea.created_at.desc())
 
@@ -66,9 +61,7 @@ class IdeaRepository(BaseRepository[Idea, IdeaCreate, IdeaCreate]):
 
         if search:
             q = f"%{search}%"
-            query = query.where(
-                Idea.title.ilike(q) | Idea.description.ilike(q)
-            )
+            query = query.where(Idea.title.ilike(q) | Idea.description.ilike(q))
 
         result = await self.uow.session.execute(query)
         return result.scalar_one()
@@ -96,9 +89,7 @@ class IdeaRepository(BaseRepository[Idea, IdeaCreate, IdeaCreate]):
         return result.scalar_one_or_none()
 
     async def delete_vote(self, vote_id: int) -> None:
-        await self.uow.session.execute(
-            delete(IdeaVote).where(IdeaVote.id == vote_id)
-        )
+        await self.uow.session.execute(delete(IdeaVote).where(IdeaVote.id == vote_id))
 
 
 class IdeaTagRepository(BaseRepository[IdeaTag, IdeaTag, IdeaTag]):

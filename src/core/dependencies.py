@@ -101,6 +101,3 @@ async def setup_audit(
     user_id = current_user.id
 
     set_audit_context(user_id=user_id, ip_address=ip_address, user_agent=user_agent)
-
-
-

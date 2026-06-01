@@ -12,6 +12,9 @@ from src.schema.resume import (
     ResumeEducationCreate,
     ResumeEducationFull,
     ResumeEducationUpdate,
+    ResumeExperienceCreate,
+    ResumeExperienceFull,
+    ResumeExperienceUpdate,
     ResumeFull,
     ResumeLanguageCreate,
     ResumeLanguageFull,
@@ -293,6 +296,58 @@ async def update_resume_language(
     if not lang:
         raise HTTPException(status_code=404, detail="Language not found")
     return ResumeLanguageFull.model_validate(lang)
+
+
+# ─── Resume Experience CRUD ────────────────────────────────────────────────
+
+
+@resume_router.post("/{resume_id}/experiences", response_model=ResumeExperienceFull)
+async def create_resume_experience(
+    resume_id: int,
+    exp_data: ResumeExperienceCreate,
+    resume_service: ResumeService = Depends(get_resume_service),
+    current_user: User = Depends(get_current_user),
+) -> ResumeExperienceFull:
+    """Создать запись об опыте в резюме"""
+    try:
+        exp = await resume_service.create_resume_experience(resume_id, exp_data, current_user.id)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
+    else:
+        return ResumeExperienceFull.model_validate(exp)
+
+
+@resume_router.put("/experiences/{exp_id}", response_model=ResumeExperienceFull)
+async def update_resume_experience(
+    exp_id: int,
+    exp_data: ResumeExperienceUpdate,
+    resume_service: ResumeService = Depends(get_resume_service),
+    current_user: User = Depends(get_current_user),
+) -> ResumeExperienceFull:
+    """Обновить запись об опыте в резюме"""
+    try:
+        exp = await resume_service.update_resume_experience(exp_id, exp_data, current_user.id)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
+    if not exp:
+        raise HTTPException(status_code=404, detail="Experience not found")
+    return ResumeExperienceFull.model_validate(exp)
+
+
+@resume_router.delete("/experiences/{exp_id}")
+async def delete_resume_experience(
+    exp_id: int,
+    resume_service: ResumeService = Depends(get_resume_service),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, str]:
+    """Удалить запись об опыте из резюме"""
+    try:
+        success = await resume_service.delete_resume_experience(exp_id, current_user.id)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
+    if not success:
+        raise HTTPException(status_code=404, detail="Experience not found")
+    return {"message": "Experience deleted successfully"}
 
 
 @resume_router.delete("/languages/{lang_id}")

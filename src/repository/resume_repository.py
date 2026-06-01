@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from sqlalchemy import func, select
-
-from src.core.uow import IUnitOfWork
 from sqlalchemy.orm import selectinload
 
-from src.model.resume import Resume
-from src.model.resume import ResumeEducation, ResumeExperience, ResumeInterest, ResumeLanguage, ResumeLink, ResumeSkill
+from src.core.uow import IUnitOfWork
+from src.model.resume import (
+    Resume,
+)
 from src.model.user import User
 from src.repository.base_repository import BaseRepository
 from src.schema.resume import ResumeCreate, ResumeUpdate

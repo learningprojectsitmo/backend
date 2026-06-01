@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import JSON, Date, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.core.database import Base
@@ -22,6 +22,8 @@ class Resume(Base):
     role: Mapped[str | None] = mapped_column(String(100), nullable=True)
     about: Mapped[str | None] = mapped_column(Text, nullable=True)
     cover_letter: Mapped[str | None] = mapped_column(Text, nullable=True)
+    has_experience: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    no_experience_description: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
@@ -58,6 +60,7 @@ class ResumeExperience(Base):
     resume_id: Mapped[int] = mapped_column(ForeignKey("resume.id"), nullable=False)
     company: Mapped[str] = mapped_column(String(200), nullable=False)
     position: Mapped[str] = mapped_column(String(200), nullable=False)
+    experience_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
     period_from: Mapped[datetime | None] = mapped_column(Date, nullable=True)
     period_to: Mapped[datetime | None] = mapped_column(Date, nullable=True)
     duration: Mapped[str | None] = mapped_column(String(50), nullable=True)

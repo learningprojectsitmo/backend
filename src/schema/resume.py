@@ -9,6 +9,7 @@ class ResumeExperienceFull(BaseModel):
     id: int
     company: str
     position: str
+    experience_type: str | None = None
     period_from: date | None = None
     period_to: date | None = None
     duration: str | None = None
@@ -105,6 +106,32 @@ class ResumeLanguageUpdate(BaseModel):
     sort_order: int | None = None
 
 
+class ResumeExperienceCreate(BaseModel):
+    company: str
+    position: str
+    experience_type: str | None = None
+    period_from: date | None = None
+    period_to: date | None = None
+    duration: str | None = None
+    description: str | None = None
+    responsibilities: list[str] | None = None
+    skills: list[str] | None = None
+    sort_order: int = 0
+
+
+class ResumeExperienceUpdate(BaseModel):
+    company: str | None = None
+    position: str | None = None
+    experience_type: str | None = None
+    period_from: date | None = None
+    period_to: date | None = None
+    duration: str | None = None
+    description: str | None = None
+    responsibilities: list[str] | None = None
+    skills: list[str] | None = None
+    sort_order: int | None = None
+
+
 class ResumeCreate(BaseModel):
     header: str
     author_id: int | None = None
@@ -112,6 +139,8 @@ class ResumeCreate(BaseModel):
     role: str | None = None
     about: str | None = None
     cover_letter: str | None = None
+    has_experience: bool = True
+    no_experience_description: str | None = None
 
 
 class ResumeUpdate(BaseModel):
@@ -120,6 +149,8 @@ class ResumeUpdate(BaseModel):
     role: str | None = None
     about: str | None = None
     cover_letter: str | None = None
+    has_experience: bool | None = None
+    no_experience_description: str | None = None
 
 
 class ResumeFull(ResumeCreate):
