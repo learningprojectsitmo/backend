@@ -16,6 +16,9 @@ from src.schema.resume import (
     ResumeExperienceFull,
     ResumeExperienceUpdate,
     ResumeFull,
+    ResumeInterestCreate,
+    ResumeInterestFull,
+    ResumeInterestUpdate,
     ResumeLanguageCreate,
     ResumeLanguageFull,
     ResumeLanguageUpdate,
@@ -23,6 +26,9 @@ from src.schema.resume import (
     ResumeLinkFull,
     ResumeLinkUpdate,
     ResumeListResponse,
+    ResumeSkillCreate,
+    ResumeSkillFull,
+    ResumeSkillUpdate,
     ResumeUpdate,
 )
 from src.services.resume_service import ResumeService
@@ -348,6 +354,108 @@ async def delete_resume_experience(
     if not success:
         raise HTTPException(status_code=404, detail="Experience not found")
     return {"message": "Experience deleted successfully"}
+
+
+# ─── ResumeSkill CRUD ──────────────────────────────────────────────────────
+
+@resume_router.post("/{resume_id}/skills", response_model=ResumeSkillFull)
+async def create_resume_skill(
+    resume_id: int,
+    skill_data: ResumeSkillCreate,
+    resume_service: ResumeService = Depends(get_resume_service),
+    current_user: User = Depends(get_current_user),
+) -> ResumeSkillFull:
+    """Добавить навык в резюме"""
+    try:
+        skill = await resume_service.create_resume_skill(resume_id, skill_data, current_user.id)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
+    else:
+        return ResumeSkillFull.model_validate(skill)
+
+
+@resume_router.put("/skills/{skill_id}", response_model=ResumeSkillFull)
+async def update_resume_skill(
+    skill_id: int,
+    skill_data: ResumeSkillUpdate,
+    resume_service: ResumeService = Depends(get_resume_service),
+    current_user: User = Depends(get_current_user),
+) -> ResumeSkillFull:
+    """Обновить навык в резюме"""
+    try:
+        skill = await resume_service.update_resume_skill(skill_id, skill_data, current_user.id)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
+    if not skill:
+        raise HTTPException(status_code=404, detail="Skill not found")
+    return ResumeSkillFull.model_validate(skill)
+
+
+@resume_router.delete("/skills/{skill_id}")
+async def delete_resume_skill(
+    skill_id: int,
+    resume_service: ResumeService = Depends(get_resume_service),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, str]:
+    """Удалить навык из резюме"""
+    try:
+        success = await resume_service.delete_resume_skill(skill_id, current_user.id)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
+    if not success:
+        raise HTTPException(status_code=404, detail="Skill not found")
+    return {"message": "Skill deleted successfully"}
+
+
+# ─── ResumeInterest CRUD ──────────────────────────────────────────────────
+
+@resume_router.post("/{resume_id}/interests", response_model=ResumeInterestFull)
+async def create_resume_interest(
+    resume_id: int,
+    interest_data: ResumeInterestCreate,
+    resume_service: ResumeService = Depends(get_resume_service),
+    current_user: User = Depends(get_current_user),
+) -> ResumeInterestFull:
+    """Добавить интерес в резюме"""
+    try:
+        interest = await resume_service.create_resume_interest(resume_id, interest_data, current_user.id)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
+    else:
+        return ResumeInterestFull.model_validate(interest)
+
+
+@resume_router.put("/interests/{interest_id}", response_model=ResumeInterestFull)
+async def update_resume_interest(
+    interest_id: int,
+    interest_data: ResumeInterestUpdate,
+    resume_service: ResumeService = Depends(get_resume_service),
+    current_user: User = Depends(get_current_user),
+) -> ResumeInterestFull:
+    """Обновить интерес в резюме"""
+    try:
+        interest = await resume_service.update_resume_interest(interest_id, interest_data, current_user.id)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
+    if not interest:
+        raise HTTPException(status_code=404, detail="Interest not found")
+    return ResumeInterestFull.model_validate(interest)
+
+
+@resume_router.delete("/interests/{interest_id}")
+async def delete_resume_interest(
+    interest_id: int,
+    resume_service: ResumeService = Depends(get_resume_service),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, str]:
+    """Удалить интерес из резюме"""
+    try:
+        success = await resume_service.delete_resume_interest(interest_id, current_user.id)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
+    if not success:
+        raise HTTPException(status_code=404, detail="Interest not found")
+    return {"message": "Interest deleted successfully"}
 
 
 @resume_router.delete("/languages/{lang_id}")

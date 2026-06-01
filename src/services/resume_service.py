@@ -9,8 +9,10 @@ from src.model.resume import (
     Resume,
     ResumeEducation,
     ResumeExperience,
+    ResumeInterest,
     ResumeLanguage,
     ResumeLink,
+    ResumeSkill,
 )
 from src.schema.resume import (
     ResumeCreate,
@@ -22,14 +24,18 @@ from src.schema.resume import (
     ResumeExperienceFull,
     ResumeExperienceUpdate,
     ResumeFull,
+    ResumeInterestCreate,
     ResumeInterestFull,
+    ResumeInterestUpdate,
     ResumeLanguageCreate,
     ResumeLanguageFull,
     ResumeLanguageUpdate,
     ResumeLinkCreate,
     ResumeLinkFull,
     ResumeLinkUpdate,
+    ResumeSkillCreate,
     ResumeSkillFull,
+    ResumeSkillUpdate,
     ResumeUpdate,
     ResumeUserInfo,
 )
@@ -318,6 +324,80 @@ class ResumeService(BaseService[Resume, ResumeCreate, ResumeUpdate]):
     async def delete_resume_experience(self, exp_id: int, current_user_id: int) -> bool:
         session = self._resume_repository.uow.session
         result = await session.execute(select(ResumeExperience).where(ResumeExperience.id == exp_id))
+        obj = result.scalar_one_or_none()
+        if not obj:
+            return False
+        await self._check_ownership(obj.resume_id, current_user_id)
+        await session.delete(obj)
+        await session.flush()
+        return True
+
+    # ─── ResumeSkill CRUD ──────────────────────────────────────────────────
+
+    async def create_resume_skill(
+        self, resume_id: int, skill_data: ResumeSkillCreate, current_user_id: int
+    ) -> ResumeSkill:
+        await self._check_ownership(resume_id, current_user_id)
+        session = self._resume_repository.uow.session
+        obj = ResumeSkill(resume_id=resume_id, **skill_data.model_dump())
+        session.add(obj)
+        await session.flush()
+        return obj
+
+    async def update_resume_skill(
+        self, skill_id: int, skill_data: ResumeSkillUpdate, current_user_id: int
+    ) -> ResumeSkill | None:
+        session = self._resume_repository.uow.session
+        result = await session.execute(select(ResumeSkill).where(ResumeSkill.id == skill_id))
+        obj = result.scalar_one_or_none()
+        if not obj:
+            return None
+        await self._check_ownership(obj.resume_id, current_user_id)
+        for field, value in skill_data.model_dump(exclude_unset=True).items():
+            setattr(obj, field, value)
+        await session.flush()
+        return obj
+
+    async def delete_resume_skill(self, skill_id: int, current_user_id: int) -> bool:
+        session = self._resume_repository.uow.session
+        result = await session.execute(select(ResumeSkill).where(ResumeSkill.id == skill_id))
+        obj = result.scalar_one_or_none()
+        if not obj:
+            return False
+        await self._check_ownership(obj.resume_id, current_user_id)
+        await session.delete(obj)
+        await session.flush()
+        return True
+
+    # ─── ResumeInterest CRUD ───────────────────────────────────────────────
+
+    async def create_resume_interest(
+        self, resume_id: int, interest_data: ResumeInterestCreate, current_user_id: int
+    ) -> ResumeInterest:
+        await self._check_ownership(resume_id, current_user_id)
+        session = self._resume_repository.uow.session
+        obj = ResumeInterest(resume_id=resume_id, **interest_data.model_dump())
+        session.add(obj)
+        await session.flush()
+        return obj
+
+    async def update_resume_interest(
+        self, interest_id: int, interest_data: ResumeInterestUpdate, current_user_id: int
+    ) -> ResumeInterest | None:
+        session = self._resume_repository.uow.session
+        result = await session.execute(select(ResumeInterest).where(ResumeInterest.id == interest_id))
+        obj = result.scalar_one_or_none()
+        if not obj:
+            return None
+        await self._check_ownership(obj.resume_id, current_user_id)
+        for field, value in interest_data.model_dump(exclude_unset=True).items():
+            setattr(obj, field, value)
+        await session.flush()
+        return obj
+
+    async def delete_resume_interest(self, interest_id: int, current_user_id: int) -> bool:
+        session = self._resume_repository.uow.session
+        result = await session.execute(select(ResumeInterest).where(ResumeInterest.id == interest_id))
         obj = result.scalar_one_or_none()
         if not obj:
             return False

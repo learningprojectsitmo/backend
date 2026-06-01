@@ -37,6 +37,26 @@ class ResumeInterestFull(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ResumeSkillCreate(BaseModel):
+    name: str
+    sort_order: int = 0
+
+
+class ResumeSkillUpdate(BaseModel):
+    name: str | None = None
+    sort_order: int | None = None
+
+
+class ResumeInterestCreate(BaseModel):
+    name: str
+    sort_order: int = 0
+
+
+class ResumeInterestUpdate(BaseModel):
+    name: str | None = None
+    sort_order: int | None = None
+
+
 class ResumeLinkFull(BaseModel):
     id: int
     platform: str
