@@ -142,6 +142,7 @@ class FixtureService:
     async def _seed_users(self) -> list:
         role_repo = self._role_service._repository
         role_admin = await role_repo.get_by_name("admin")
+        role_teacher = await role_repo.get_by_name("teacher")
         role_member = await role_repo.get_by_name("member")
 
         users_data = [
@@ -193,6 +194,42 @@ class FixtureService:
                 "role_id": role_member.id,
                 "tg_nickname": "@ilya_poperechny",
             },
+            {
+                "email": "maria@example.com",
+                "first_name": "Мария",
+                "middle_name": "",
+                "last_name": "Петрова",
+                "password": "maria_password",
+                "role_id": role_teacher.id,
+                "tg_nickname": "@maria_petrova",
+            },
+            {
+                "email": "dmitry@example.com",
+                "first_name": "Дмитрий",
+                "middle_name": "",
+                "last_name": "Козлов",
+                "password": "dmitry_password",
+                "role_id": role_member.id,
+                "tg_nickname": "@dmitry_kozlov",
+            },
+            {
+                "email": "elena@example.com",
+                "first_name": "Елена",
+                "middle_name": "",
+                "last_name": "Соколова",
+                "password": "elena_password",
+                "role_id": role_member.id,
+                "tg_nickname": "@elena_sokolova",
+            },
+            {
+                "email": "alexey@example.com",
+                "first_name": "Алексей",
+                "middle_name": "",
+                "last_name": "Иванов",
+                "password": "alexey_password",
+                "role_id": role_member.id,
+                "tg_nickname": "@alexey_ivanov",
+            },
         ]
 
         created_users = []
@@ -239,7 +276,7 @@ class FixtureService:
         if result.scalar_one_or_none():
             return
 
-        admin, _member, kirill, anna, ilya = users
+        admin, _member, kirill, anna, ilya, *_ = users
 
         # удаляем старые резюме без role
         for u in [admin, kirill, anna, ilya]:
@@ -706,14 +743,13 @@ class FixtureService:
         ws1 = workspaces_by_name.get("Admin Workspace 1")
         ws2 = workspaces_by_name.get("Admin Workspace 2")
 
-        # id=1 → planned, id=2 → in_progress, id=3 → completed, id=4 → review
-        # По умолчанию allow_multi_project_creation=false и allow_multi_project_participation=false,
-        # поэтому в каждом workspace только 1 проект и каждый участник только в 1 проекте.
+        # status_id: 1=planned, 2=in_progress, 3=completed, 4=review
         projects_data = [
+            # ── Project 0 ──
             {
                 "name": "Tasker — платформа управления задачами",
                 "description": (
-                    "Tasker — учебный проект по разработке веб-сервиса для управления "
+                    "Tasker — учебный проект по разработке веб-сервиса для управления "
                     "задачами и проектами. Сервис предназначен для планирования задач, "
                     "распределения ролей в команде, работы с дедлайнами и отслеживания "
                     "прогресса выполнения проекта."
@@ -722,7 +758,8 @@ class FixtureService:
                 "status_id": 2,
                 "progress": 75,
                 "max_participants": 8,
-                "tags": ["Frontend", "AI/ML", "Design"],
+                "tags": ["Frontend", "Backend", "Design"],
+                "deadline": datetime(2026, 8, 15),
                 "vacancies": [
                     VacancyCreate(
                         title="Backend Developer",
@@ -745,6 +782,7 @@ class FixtureService:
                 ],
                 "participants": [users[2], users[3], users[4]],
             },
+            # ── Project 1 ──
             {
                 "name": "AI Learning Platform",
                 "description": "Разработка цифровой платформы с искусственным интеллектом для персонализированного обучения",
@@ -752,7 +790,8 @@ class FixtureService:
                 "status_id": 2,
                 "progress": 30,
                 "max_participants": 5,
-                "tags": ["Design", "UI/UX"],
+                "tags": ["AI/ML", "Design", "UI/UX"],
+                "deadline": datetime(2026, 12, 1),
                 "vacancies": [
                     VacancyCreate(
                         title="ML Engineer",
@@ -764,6 +803,139 @@ class FixtureService:
                     ),
                 ],
                 "participants": [],
+            },
+            # ── Project 2 ──
+            {
+                "name": "Мобильное приложение Campus Map",
+                "description": "Интерактивная карта кампуса ИТМО с навигацией по аудиториям, расписанием занятий и push-уведомлениями",
+                "workspace": ws1,
+                "status_id": 1,
+                "progress": 10,
+                "max_participants": 6,
+                "tags": ["Mobile", "UI/UX", "Frontend"],
+                "deadline": datetime(2026, 10, 1),
+                "vacancies": [
+                    VacancyCreate(
+                        title="Mobile Developer (React Native)",
+                        tasks=[
+                            "Разработка мобильного интерфейса",
+                            "Интеграция с картами и геолокацией",
+                            "Публикация в App Store и Google Play",
+                        ],
+                        required_count=2,
+                    ),
+                ],
+                "participants": [users[4], users[6]],
+            },
+            # ── Project 3 ──
+            {
+                "name": "Система аналитики учебных групп",
+                "description": "Веб-сервис для сбора и визуализации статистики успеваемости студентов по группам и дисциплинам",
+                "workspace": ws2,
+                "status_id": 3,
+                "progress": 100,
+                "max_participants": 4,
+                "tags": ["Backend", "Data Science", "Design"],
+                "deadline": datetime(2026, 5, 20),
+                "vacancies": [
+                    VacancyCreate(
+                        title="Data Analyst",
+                        tasks=[
+                            "Разработка дашбордов и отчётов",
+                            "Агрегация данных из разных источников",
+                        ],
+                        required_count=1,
+                    ),
+                ],
+                "participants": [users[3], users[7]],
+            },
+            # ── Project 4 ──
+            {
+                "name": "Платформа для хакатонов",
+                "description": "Сервис для организации и проведения хакатонов: регистрация команд, загрузка решений, оценка жюри",
+                "workspace": ws1,
+                "status_id": 2,
+                "progress": 45,
+                "max_participants": 10,
+                "tags": ["Backend", "Frontend", "Design"],
+                "deadline": datetime(2026, 9, 10),
+                "vacancies": [
+                    VacancyCreate(
+                        title="Fullstack Developer",
+                        tasks=[
+                            "Разработка API и фронтенда",
+                            "Система аутентификации и ролей",
+                            "Реализация таймеров и ленты событий",
+                        ],
+                        required_count=3,
+                    ),
+                ],
+                "participants": [users[2], users[5], users[6], users[8]],
+            },
+            # ── Project 5 ──
+            {
+                "name": "Telegram-бот для учебных опросов",
+                "description": "Автоматизированный бот для проведения опросов и тестов в учебных группах с экспортом результатов",
+                "workspace": ws2,
+                "status_id": 4,
+                "progress": 85,
+                "max_participants": 3,
+                "tags": ["Backend", "Mobile"],
+                "deadline": datetime(2026, 7, 1),
+                "vacancies": [
+                    VacancyCreate(
+                        title="Python Developer",
+                        tasks=[
+                            "Разработка логики бота на python-telegram-bot",
+                            "Интеграция с БД для хранения результатов",
+                        ],
+                        required_count=1,
+                    ),
+                ],
+                "participants": [users[7]],
+            },
+            # ── Project 6 ──
+            {
+                "name": "Конструктор резюме",
+                "description": "Визуальный редактор для создания резюме с готовыми шаблонами и экспортом в PDF",
+                "workspace": ws1,
+                "status_id": 1,
+                "progress": 5,
+                "max_participants": 4,
+                "tags": ["Frontend", "Design", "UI/UX"],
+                "deadline": None,
+                "vacancies": [
+                    VacancyCreate(
+                        title="UI/UX Designer",
+                        tasks=[
+                            "Дизайн шаблонов резюме",
+                            "Прототипирование редактора",
+                        ],
+                        required_count=1,
+                    ),
+                    VacancyCreate(
+                        title="Frontend Developer",
+                        tasks=[
+                            "Реализация drag-and-drop редактора",
+                            "Генерация PDF на клиенте",
+                        ],
+                        required_count=2,
+                    ),
+                ],
+                "participants": [users[4], users[8]],
+            },
+            # ── Project 7 ──
+            {
+                "name": "База знаний факультета",
+                "description": "Wiki-платформа для факультета с возможностью коллективного редактирования, поиском и разграничением прав",
+                "workspace": ws2,
+                "status_id": 3,
+                "progress": 100,
+                "max_participants": 6,
+                "tags": ["Backend", "Frontend", "Design"],
+                "deadline": datetime(2026, 6, 15),
+                "vacancies": [],
+                "participants": [users[5], users[6]],
             },
         ]
 
@@ -780,6 +952,58 @@ class FixtureService:
                 {"Нужно сделать": ["Собрать датасет", "Написать пайплайн обучения"]},
                 {"В процессе": ["Разработать архитектуру ML", "Подготовить фичи"]},
                 {"Готово": []},
+            ],
+            # Project 2: Campus Map
+            [
+                {"Нужно сделать": ["Выбрать стек", "Исследовать библиотеки карт", "Нарисовать прототип"]},
+                {"В процессе": []},
+                {"Готово": []},
+            ],
+            # Project 3: Аналитика
+            [
+                {"Нужно сделать": []},
+                {"В процессе": []},
+                {
+                    "Готово": [
+                        "Собрать требования",
+                        "Спроектировать БД",
+                        "Реализовать ETL-пайплайн",
+                        "Настроить дашборды",
+                        "Написать документацию",
+                    ]
+                },
+            ],
+            # Project 4: Хакатоны
+            [
+                {"Нужно сделать": ["Спроектировать API", "Разработать макет главной страницы"]},
+                {"В процессе": ["Реализовать регистрацию команд", "Создать систему оценки"]},
+                {"Готово": ["Определить MVP", "Настроить окружение"]},
+            ],
+            # Project 5: Telegram-бот
+            [
+                {"Нужно сделать": ["Добавить экспорт в Excel"]},
+                {"В процессе": ["Реализовать команду /poll", "Интеграция с Google Forms"]},
+                {"Готово": ["Базовая архитектура бота", "Подключение к БД", "Команда /start и /help"]},
+            ],
+            # Project 6: Конструктор резюме
+            [
+                {"Нужно сделать": ["Исследовать существующие решения", "Создать прототип в Figma"]},
+                {"В процессе": []},
+                {"Готово": []},
+            ],
+            # Project 7: База знаний
+            [
+                {"Нужно сделать": []},
+                {"В процессе": []},
+                {
+                    "Готово": [
+                        "Разработать архитектуру",
+                        "Реализовать поиск",
+                        "Создать редактор статей",
+                        "Настроить права доступа",
+                        "Провести тестирование",
+                    ]
+                },
             ],
         ]
 
@@ -801,6 +1025,7 @@ class FixtureService:
                 author_id=admin.id,
                 workspace_id=ws.id,
                 max_participants=data.get("max_participants"),
+                deadline=data.get("deadline"),
                 vacancies=data.get("vacancies"),
             )
 

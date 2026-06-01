@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from sqlalchemy import Date, cast, func, or_, select
+from sqlalchemy import delete as sa_delete
 from sqlalchemy.orm import selectinload
 
 from src.core.uow import IUnitOfWork
@@ -9,6 +10,7 @@ from src.model.resume import Resume
 from src.model.settings import SpaceSettings
 from src.model.user import User
 from src.model.workspace import WorkSpace, WorkSpaceCategories, WorkSpaceParticipation
+from src.model.workspace_invitation import WorkspaceInvitation
 from src.repository.base_repository import BaseRepository
 from src.schema.workspace import WorkSpaceCreate, WorkSpaceUpdate
 
@@ -17,6 +19,26 @@ class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUp
     def __init__(self, uow: IUnitOfWork) -> None:
         super().__init__(uow)
         self._model = WorkSpace
+
+    async def delete(self, id: int) -> bool:
+        """Удалить workspace и все связанные записи."""
+        db_obj = await self.get_by_id(id)
+        if not db_obj:
+            return False
+
+        await self.uow.session.execute(sa_delete(SpaceSettings).where(SpaceSettings.space_id == id))
+        await self.uow.session.execute(
+            sa_delete(WorkSpaceParticipation).where(WorkSpaceParticipation.workspace_id == id)
+        )
+        await self.uow.session.execute(sa_delete(WorkspaceInvitation).where(WorkspaceInvitation.workspace_id == id))
+        await self.uow.session.execute(
+            sa_delete(ProjectParticipation).where(
+                ProjectParticipation.project_id.in_(select(Project.id).where(Project.workspace_id == id))
+            )
+        )
+        await self.uow.session.execute(sa_delete(Project).where(Project.workspace_id == id))
+        await self.uow.session.delete(db_obj)
+        return True
 
     async def get_by_author_id(self, author_id: int) -> list[WorkSpace]:
         """Получить все workspace по author_id"""
