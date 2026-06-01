@@ -330,7 +330,7 @@ class FixtureService:
                     institution="ИТМО, Санкт-Петербург",
                     faculty="Мобильные и облачные технологии",
                     degree="Магистр",
-                    year=2026,
+                    years="2026",
                     sort_order=0,
                 ),
             ]
@@ -393,7 +393,7 @@ class FixtureService:
                     institution="ИТМО, Санкт-Петербург",
                     faculty="Бизнес-информатика",
                     degree="Бакалавр",
-                    year=2026,
+                    years="2026",
                     sort_order=0,
                 ),
             ]
@@ -496,7 +496,7 @@ class FixtureService:
                     institution="ИТМО, Санкт-Петербург",
                     faculty="Программная инженерия",
                     degree="Магистр",
-                    year=2025,
+                    years="2025",
                     sort_order=0,
                 ),
                 ResumeEducation(
@@ -504,7 +504,7 @@ class FixtureService:
                     institution="ИТМО, Санкт-Петербург",
                     faculty="Информационные системы",
                     degree="Бакалавр",
-                    year=2023,
+                    years="2023",
                     sort_order=1,
                 ),
             ]

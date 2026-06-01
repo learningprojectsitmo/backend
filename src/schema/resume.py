@@ -50,7 +50,7 @@ class ResumeEducationFull(BaseModel):
     institution: str
     faculty: str | None = None
     degree: str | None = None
-    year: int | None = None
+    years: str | None = None
     sort_order: int = 0
 
     model_config = ConfigDict(from_attributes=True)
@@ -63,6 +63,46 @@ class ResumeLanguageFull(BaseModel):
     sort_order: int = 0
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class ResumeLinkCreate(BaseModel):
+    platform: str
+    url: str
+    sort_order: int = 0
+
+
+class ResumeLinkUpdate(BaseModel):
+    platform: str | None = None
+    url: str | None = None
+    sort_order: int | None = None
+
+
+class ResumeEducationCreate(BaseModel):
+    institution: str
+    faculty: str | None = None
+    degree: str | None = None
+    years: str | None = None
+    sort_order: int = 0
+
+
+class ResumeEducationUpdate(BaseModel):
+    institution: str | None = None
+    faculty: str | None = None
+    degree: str | None = None
+    years: str | None = None
+    sort_order: int | None = None
+
+
+class ResumeLanguageCreate(BaseModel):
+    name: str
+    level: str | None = None
+    sort_order: int = 0
+
+
+class ResumeLanguageUpdate(BaseModel):
+    name: str | None = None
+    level: str | None = None
+    sort_order: int | None = None
 
 
 class ResumeCreate(BaseModel):

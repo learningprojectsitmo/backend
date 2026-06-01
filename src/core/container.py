@@ -139,8 +139,18 @@ async def get_session_service(
     return SessionService(session_repository)
 
 
-async def get_resume_service(resume_repository: ResumeRepository = Depends(get_resume_repository)) -> ResumeService:
-    return ResumeService(resume_repository)
+async def get_resume_service(
+    resume_repository: ResumeRepository = Depends(get_resume_repository),
+    portfolio_repository: PortfolioRepository = Depends(get_portfolio_repository),
+    education_repository: EducationRepository = Depends(get_education_repository),
+    language_repository: LanguageRepository = Depends(get_language_repository),
+) -> ResumeService:
+    return ResumeService(
+        resume_repository,
+        portfolio_repository=portfolio_repository,
+        education_repository=education_repository,
+        language_repository=language_repository,
+    )
 
 
 async def get_project_service(

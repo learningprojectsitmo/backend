@@ -4,8 +4,24 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from src.core.container import get_resume_service
 from src.core.dependencies import get_current_user, setup_audit
+from src.core.exceptions import PermissionError
 from src.model.user import User
-from src.schema.resume import ResumeCreate, ResumeDetail, ResumeFull, ResumeListResponse, ResumeUpdate
+from src.schema.resume import (
+    ResumeCreate,
+    ResumeDetail,
+    ResumeEducationCreate,
+    ResumeEducationFull,
+    ResumeEducationUpdate,
+    ResumeFull,
+    ResumeLanguageCreate,
+    ResumeLanguageFull,
+    ResumeLanguageUpdate,
+    ResumeLinkCreate,
+    ResumeLinkFull,
+    ResumeLinkUpdate,
+    ResumeListResponse,
+    ResumeUpdate,
+)
 from src.services.resume_service import ResumeService
 
 resume_router = APIRouter(prefix="/resumes", tags=["resume"])
@@ -137,3 +153,159 @@ async def fetch_my_resumes(
         limit=limit,
         total_pages=total_pages,
     )
+
+
+# ─── Resume Link CRUD ────────────────────────────────────────────────────
+
+
+@resume_router.post("/{resume_id}/links", response_model=ResumeLinkFull)
+async def create_resume_link(
+    resume_id: int,
+    link_data: ResumeLinkCreate,
+    resume_service: ResumeService = Depends(get_resume_service),
+    current_user: User = Depends(get_current_user),
+) -> ResumeLinkFull:
+    """Создать ссылку портфолио в резюме"""
+    try:
+        link = await resume_service.create_resume_link(resume_id, link_data, current_user.id)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
+    else:
+        return ResumeLinkFull.model_validate(link)
+
+
+@resume_router.put("/links/{link_id}", response_model=ResumeLinkFull)
+async def update_resume_link(
+    link_id: int,
+    link_data: ResumeLinkUpdate,
+    resume_service: ResumeService = Depends(get_resume_service),
+    current_user: User = Depends(get_current_user),
+) -> ResumeLinkFull:
+    """Обновить ссылку портфолио в резюме"""
+    try:
+        link = await resume_service.update_resume_link(link_id, link_data, current_user.id)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
+    if not link:
+        raise HTTPException(status_code=404, detail="Link not found")
+    return ResumeLinkFull.model_validate(link)
+
+
+@resume_router.delete("/links/{link_id}")
+async def delete_resume_link(
+    link_id: int,
+    resume_service: ResumeService = Depends(get_resume_service),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, str]:
+    """Удалить ссылку портфолио из резюме"""
+    try:
+        success = await resume_service.delete_resume_link(link_id, current_user.id)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
+    if not success:
+        raise HTTPException(status_code=404, detail="Link not found")
+    return {"message": "Link deleted successfully"}
+
+
+# ─── Resume Education CRUD ────────────────────────────────────────────────
+
+
+@resume_router.post("/{resume_id}/educations", response_model=ResumeEducationFull)
+async def create_resume_education(
+    resume_id: int,
+    edu_data: ResumeEducationCreate,
+    resume_service: ResumeService = Depends(get_resume_service),
+    current_user: User = Depends(get_current_user),
+) -> ResumeEducationFull:
+    """Создать запись об образовании в резюме"""
+    try:
+        edu = await resume_service.create_resume_education(resume_id, edu_data, current_user.id)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
+    else:
+        return ResumeEducationFull.model_validate(edu)
+
+
+@resume_router.put("/educations/{edu_id}", response_model=ResumeEducationFull)
+async def update_resume_education(
+    edu_id: int,
+    edu_data: ResumeEducationUpdate,
+    resume_service: ResumeService = Depends(get_resume_service),
+    current_user: User = Depends(get_current_user),
+) -> ResumeEducationFull:
+    """Обновить запись об образовании в резюме"""
+    try:
+        edu = await resume_service.update_resume_education(edu_id, edu_data, current_user.id)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
+    if not edu:
+        raise HTTPException(status_code=404, detail="Education not found")
+    return ResumeEducationFull.model_validate(edu)
+
+
+@resume_router.delete("/educations/{edu_id}")
+async def delete_resume_education(
+    edu_id: int,
+    resume_service: ResumeService = Depends(get_resume_service),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, str]:
+    """Удалить запись об образовании из резюме"""
+    try:
+        success = await resume_service.delete_resume_education(edu_id, current_user.id)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
+    if not success:
+        raise HTTPException(status_code=404, detail="Education not found")
+    return {"message": "Education deleted successfully"}
+
+
+# ─── Resume Language CRUD ──────────────────────────────────────────────────
+
+
+@resume_router.post("/{resume_id}/languages", response_model=ResumeLanguageFull)
+async def create_resume_language(
+    resume_id: int,
+    lang_data: ResumeLanguageCreate,
+    resume_service: ResumeService = Depends(get_resume_service),
+    current_user: User = Depends(get_current_user),
+) -> ResumeLanguageFull:
+    """Создать язык в резюме"""
+    try:
+        lang = await resume_service.create_resume_language(resume_id, lang_data, current_user.id)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
+    else:
+        return ResumeLanguageFull.model_validate(lang)
+
+
+@resume_router.put("/languages/{lang_id}", response_model=ResumeLanguageFull)
+async def update_resume_language(
+    lang_id: int,
+    lang_data: ResumeLanguageUpdate,
+    resume_service: ResumeService = Depends(get_resume_service),
+    current_user: User = Depends(get_current_user),
+) -> ResumeLanguageFull:
+    """Обновить язык в резюме"""
+    try:
+        lang = await resume_service.update_resume_language(lang_id, lang_data, current_user.id)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
+    if not lang:
+        raise HTTPException(status_code=404, detail="Language not found")
+    return ResumeLanguageFull.model_validate(lang)
+
+
+@resume_router.delete("/languages/{lang_id}")
+async def delete_resume_language(
+    lang_id: int,
+    resume_service: ResumeService = Depends(get_resume_service),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, str]:
+    """Удалить язык из резюме"""
+    try:
+        success = await resume_service.delete_resume_language(lang_id, current_user.id)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
+    if not success:
+        raise HTTPException(status_code=404, detail="Language not found")
+    return {"message": "Language deleted successfully"}

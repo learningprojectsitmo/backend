@@ -111,7 +111,7 @@ class ResumeEducation(Base):
     institution: Mapped[str] = mapped_column(String(200), nullable=False)
     faculty: Mapped[str | None] = mapped_column(String(200), nullable=True)
     degree: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    year: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    years: Mapped[str | None] = mapped_column(String(50), nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
 
     resume: Mapped[Resume] = relationship(back_populates="educations")
