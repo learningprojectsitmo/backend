@@ -161,6 +161,7 @@ class ResumeCreate(BaseModel):
     cover_letter: str | None = None
     has_experience: bool = True
     no_experience_description: str | None = None
+    is_visible: bool = True
 
 
 class ResumeUpdate(BaseModel):
@@ -171,6 +172,7 @@ class ResumeUpdate(BaseModel):
     cover_letter: str | None = None
     has_experience: bool | None = None
     no_experience_description: str | None = None
+    is_visible: bool | None = None
 
 
 class ResumeFull(ResumeCreate):

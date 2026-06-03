@@ -24,6 +24,7 @@ class Resume(Base):
     cover_letter: Mapped[str | None] = mapped_column(Text, nullable=True)
     has_experience: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     no_experience_description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_visible: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
