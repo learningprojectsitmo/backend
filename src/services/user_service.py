@@ -15,6 +15,7 @@ from src.schema.user import (
     UserCreate,
     UserCreateHashedPwd,
     UserFull,
+    UserListItem,
     UserListResponse,
     UserUpdate,
 )
@@ -59,15 +60,31 @@ class UserService(BaseService[User, UserCreate, UserUpdate]):
 
     async def get_users_paginated(self, page: int = 1, limit: int = 10) -> UserListResponse:
         """Получить пользователей с пагинацией"""
-        # TODO why don't we use get_multi from base_service?
         skip = (page - 1) * limit
-        users = await self._user_repository.get_multi(skip=skip, limit=limit)
+        users = await self._user_repository.get_multi_with_role(skip=skip, limit=limit)
         total = await self._user_repository.count()
 
         total_pages = (total + limit - 1) // limit if total > 0 else 0
 
+        items: list[UserListItem] = []
+        for user in users:
+            items.append(
+                UserListItem(
+                    id=user.id,
+                    email=user.email,
+                    first_name=user.first_name,
+                    middle_name=user.middle_name,
+                    last_name=user.last_name,
+                    isu_number=user.isu_number,
+                    tg_nickname=user.tg_nickname,
+                    role_id=user.role_id,
+                    role_name=user.role.name if user.role else "",
+                    created_at=user.created_at,
+                )
+            )
+
         return UserListResponse(
-            items=users,
+            items=items,
             total=total,
             page=page,
             limit=limit,

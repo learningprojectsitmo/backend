@@ -116,6 +116,7 @@ class Role(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(30), nullable=False, unique=True)
+    description: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
     users: Mapped[list[User]] = relationship(back_populates="role")
 

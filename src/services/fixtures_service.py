@@ -114,9 +114,13 @@ class FixtureService:
     async def _seed_roles(self) -> None:
         role_repo = self._role_service._repository
 
-        await self._role_service.get_or_create({"name": "admin"})
-        await self._role_service.get_or_create({"name": "teacher"})
-        await self._role_service.get_or_create({"name": "member"})
+        await self._role_service.get_or_create(
+            {"name": "admin", "description": "Полный доступ ко всем функциям системы"}
+        )
+        await self._role_service.get_or_create({"name": "teacher", "description": "Создание и оценка заданий"})
+        await self._role_service.get_or_create(
+            {"name": "member", "description": "Доступ к проектам и учебным материалам"}
+        )
         await role_repo.uow.commit()
 
         role_admin = await role_repo.get_by_name("admin")
@@ -253,7 +257,7 @@ class FixtureService:
 
     # ─── responses / invitations ───────────────────────────────────────────
 
-    async def _seed_responses(self, users: list) -> None:
+    async def _seed_responses(self, users: list, workspaces_by_name: dict | None = None) -> None:
         session = self._project_repository.uow.session
 
         result = await session.execute(select(Response).limit(1))
