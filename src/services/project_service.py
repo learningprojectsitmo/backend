@@ -4,10 +4,16 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import select
 
-from src.core.exceptions import PermissionError, ValidationError
-from src.model.project import Project, ProjectParticipation, ProjectVacancy
+from src.core.exceptions import NotFoundError, PermissionError, ValidationError
+from src.model.project import Project, ProjectParticipation, ProjectVacancy, Response
 from src.model.workspace import WorkSpaceParticipation
 from src.schema.project import (
+    MyInvitationItem,
+    MyInvitationListResponse,
+    MyProjectItem,
+    MyProjectListResponse,
+    MyResponseItem,
+    MyResponseListResponse,
     ParticipantPreview,
     ProjectCreate,
     ProjectListItem,
@@ -18,12 +24,28 @@ from src.services.base_service import BaseService
 
 if TYPE_CHECKING:
     from src.repository.project_repository import ProjectRepository
+    from src.repository.resume_repository import ResumeRepository
 
 
 class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
-    def __init__(self, project_repository: ProjectRepository):
+    def __init__(
+        self,
+        project_repository: ProjectRepository,
+        resume_repository: ResumeRepository | None = None,
+    ):
         super().__init__(project_repository)
         self._project_repository = project_repository
+        self._resume_repository = resume_repository
+
+    async def _get_user_resume_url(self, user_id: int) -> tuple[str, str]:
+        """Получить URL и заголовок первого резюме пользователя"""
+        if not self._resume_repository:
+            return "", ""
+        resumes = await self._resume_repository.get_by_author_id(user_id)
+        if not resumes:
+            return "", ""
+        resume = resumes[0]
+        return f"/resume/{resume.id}", resume.header or ""
 
     async def get_project_by_id(self, project_id: int) -> Project | None:
         """Получить проект по ID"""
@@ -32,6 +54,116 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
     async def get_projects_by_author(self, author_id: int) -> list[Project]:
         """Получить проекты по автору"""
         return await self._project_repository.get_by_author_id(author_id)
+
+    async def get_my_responses(self, user_id: int) -> MyResponseListResponse:
+        """Получить отклики текущего пользователя"""
+        responses = await self._project_repository.get_responses_by_respondent_id(user_id)
+        resume_url, resume_title = await self._get_user_resume_url(user_id)
+        items = [
+            MyResponseItem(
+                id=r.id,
+                project_id=r.project_id,
+                project_name=r.project.name if r.project else "",
+                description=r.project.description if r.project else "",
+                role=r.vacancy.title if r.vacancy else "",
+                resume_url=resume_url,
+                resume_title=resume_title,
+                date=r.created_at.isoformat() if r.created_at else "",
+                status=r.status,
+            )
+            for r in responses
+        ]
+        return MyResponseListResponse(items=items, total=len(items))
+
+    async def get_my_invitations(self, user_id: int) -> MyInvitationListResponse:
+        """Получить приглашения текущего пользователя"""
+        invitations = await self._project_repository.get_invitations_by_invitee_id(user_id)
+        resume_url, resume_title = await self._get_user_resume_url(user_id)
+        items = [
+            MyInvitationItem(
+                id=inv.id,
+                project_id=inv.project_id,
+                project_name=inv.project.name if inv.project else "",
+                description=inv.project.description if inv.project else "",
+                inviter_name=(
+                    f"{inv.inviter.first_name} {inv.inviter.last_name or ''}".strip()
+                    if inv.inviter else ""
+                ),
+                role=inv.vacancy.title if inv.vacancy else "",
+                resume_url=resume_url,
+                resume_title=resume_title,
+                date=inv.created_at.isoformat() if inv.created_at else "",
+                status=inv.status,
+            )
+            for inv in invitations
+        ]
+        return MyInvitationListResponse(items=items, total=len(items))
+
+    async def get_my_projects(self, user_id: int) -> MyProjectListResponse:
+        """Получить проекты, в которых участвует пользователь"""
+        projects = await self._project_repository.get_projects_by_participant_id(user_id)
+        items = [
+            MyProjectItem(
+                id=p.id,
+                title=p.name,
+                description=p.description,
+                status=p.status.name if p.status else "not_started",
+                progress=p.progress or 0,
+                start_date=p.created_at.isoformat() if p.created_at else "",
+                members_count=len(p.participants or []),
+                roles=[v.title for v in (p.vacancies or [])],
+            )
+            for p in projects
+        ]
+        return MyProjectListResponse(items=items, total=len(items))
+
+    async def withdraw_response(self, response_id: int, user_id: int) -> Response:
+        """Отозвать отклик"""
+        response = await self._project_repository.get_response_by_id(response_id)
+        if not response:
+            raise NotFoundError("Response not found")
+        if response.respondent_id != user_id:
+            raise PermissionError("You can only withdraw your own responses")
+        if response.type != "response":
+            raise ValidationError("This is not a response")
+        if response.status != "pending":
+            raise ValidationError("Can only withdraw pending responses")
+        result = await self._project_repository.update_response_status(response_id, "withdrawn")
+        if not result:
+            raise NotFoundError("Response not found")
+        return result
+
+    async def accept_invitation(self, invitation_id: int, user_id: int) -> Response:
+        """Принять приглашение"""
+        invitation = await self._project_repository.get_response_by_id(invitation_id)
+        if not invitation:
+            raise NotFoundError("Invitation not found")
+        if invitation.respondent_id != user_id:
+            raise PermissionError("This invitation is not for you")
+        if invitation.type != "invitation":
+            raise ValidationError("This is not an invitation")
+        if invitation.status != "pending":
+            raise ValidationError("Can only accept pending invitations")
+        result = await self._project_repository.update_response_status(invitation_id, "accepted")
+        if not result:
+            raise NotFoundError("Invitation not found")
+        return result
+
+    async def reject_invitation(self, invitation_id: int, user_id: int) -> Response:
+        """Отклонить приглашение"""
+        invitation = await self._project_repository.get_response_by_id(invitation_id)
+        if not invitation:
+            raise NotFoundError("Invitation not found")
+        if invitation.respondent_id != user_id:
+            raise PermissionError("This invitation is not for you")
+        if invitation.type != "invitation":
+            raise ValidationError("This is not an invitation")
+        if invitation.status != "pending":
+            raise ValidationError("Can only reject pending invitations")
+        result = await self._project_repository.update_response_status(invitation_id, "rejected")
+        if not result:
+            raise NotFoundError("Invitation not found")
+        return result
 
     async def get_projects_by_workspace(
         self, workspace_id: int, page: int = 1, limit: int = 10

@@ -155,8 +155,9 @@ async def get_resume_service(
 
 async def get_project_service(
     project_repository: ProjectRepository = Depends(get_project_repository),
+    resume_repository: ResumeRepository = Depends(get_resume_repository),
 ) -> ProjectService:
-    return ProjectService(project_repository)
+    return ProjectService(project_repository, resume_repository=resume_repository)
 
 
 async def get_auth_service(

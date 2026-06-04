@@ -4,7 +4,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from src.core.uow import IUnitOfWork
-from src.model.project import Project, ProjectParticipation, Response, Tag
+from src.model.project import Project, ProjectParticipation, ProjectVacancy, Response, Tag
 from src.repository.base_repository import BaseRepository
 from src.schema.project import ProjectCreate, ProjectUpdate
 
@@ -47,6 +47,63 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
                 selectinload(Project.participants).selectinload(ProjectParticipation.participant),
                 selectinload(Project.tags),
                 selectinload(Project.status),
+            )
+        )
+        result = await self.uow.session.execute(query)
+        return list(result.scalars().all())
+
+    async def get_projects_by_participant_id(self, participant_id: int) -> list[Project]:
+        subquery = (
+            select(ProjectParticipation.project_id)
+            .where(ProjectParticipation.participant_id == participant_id)
+        )
+        query = (
+            select(Project)
+            .where(Project.id.in_(subquery))
+            .options(
+                selectinload(Project.participants).selectinload(ProjectParticipation.participant),
+                selectinload(Project.tags),
+                selectinload(Project.status),
+                selectinload(Project.vacancies),
+            )
+        )
+        result = await self.uow.session.execute(query)
+        return list(result.scalars().all())
+
+    async def get_responses_by_respondent_id(self, respondent_id: int) -> list[Response]:
+        query = (
+            select(Response)
+            .where(Response.respondent_id == respondent_id, Response.type == "response")
+            .options(
+                selectinload(Response.project),
+                selectinload(Response.vacancy),
+            )
+        )
+        result = await self.uow.session.execute(query)
+        return list(result.scalars().all())
+
+    async def get_response_by_id(self, response_id: int) -> Response | None:
+        result = await self.uow.session.execute(
+            select(Response).where(Response.id == response_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def update_response_status(self, response_id: int, status: str) -> Response | None:
+        response = await self.get_response_by_id(response_id)
+        if not response:
+            return None
+        response.status = status
+        await self.uow.session.flush()
+        return response
+
+    async def get_invitations_by_invitee_id(self, invitee_id: int) -> list[Response]:
+        query = (
+            select(Response)
+            .where(Response.respondent_id == invitee_id, Response.type == "invitation")
+            .options(
+                selectinload(Response.project),
+                selectinload(Response.vacancy),
+                selectinload(Response.inviter),
             )
         )
         result = await self.uow.session.execute(query)

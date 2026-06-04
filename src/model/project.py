@@ -132,14 +132,20 @@ class Response(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     respondent_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
     project_id: Mapped[int] = mapped_column(ForeignKey("project.id"), nullable=False)
+    vacancy_id: Mapped[int | None] = mapped_column(ForeignKey("project_vacancy.id"), nullable=True)
+    inviter_id: Mapped[int | None] = mapped_column(ForeignKey("user.id"), nullable=True)
+    type: Mapped[str] = mapped_column(String(20), nullable=False, default="response")
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
     note: Mapped[str | None] = mapped_column(String(200), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
-    respondent: Mapped[User] = relationship(back_populates="responses")
+    respondent: Mapped[User] = relationship(foreign_keys=[respondent_id], back_populates="responses")
+    inviter: Mapped[User | None] = relationship(foreign_keys=[inviter_id])
     project: Mapped[Project] = relationship(back_populates="responses")
+    vacancy: Mapped[ProjectVacancy | None] = relationship(back_populates="responses")
 
     def __repr__(self) -> str:
         return f"Response(id={self.id!r}, respondent_id={self.respondent_id!r}, project_id={self.project_id!r})"
@@ -155,6 +161,7 @@ class ProjectVacancy(Base):
     required_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
 
     project: Mapped[Project] = relationship(back_populates="vacancies")
+    responses: Mapped[list[Response]] = relationship(back_populates="vacancy")
 
     def __repr__(self) -> str:
         return (

@@ -46,6 +46,12 @@ class User(Base):
     responses: Mapped[list[Response]] = relationship(
         back_populates="respondent",
         cascade="all, delete-orphan",
+        foreign_keys="Response.respondent_id",
+    )
+    invited_responses: Mapped[list[Response]] = relationship(
+        back_populates="inviter",
+        cascade="all, delete-orphan",
+        foreign_keys="Response.inviter_id",
     )
     projects_led: Mapped[list[Project]] = relationship(
         back_populates="author",

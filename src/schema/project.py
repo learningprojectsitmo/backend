@@ -233,3 +233,72 @@ class ProjectListResponse(BaseModel):
     page: int
     limit: int
     total_pages: int
+
+
+class MyResponseItem(BaseModel):
+    """Схема отклика текущего пользователя"""
+
+    id: int
+    project_id: int
+    project_name: str
+    description: str = ""
+    role: str = ""
+    resume_url: str = ""
+    resume_title: str = ""
+    date: str
+    status: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class MyResponseListResponse(BaseModel):
+    """Схема ответа со списком откликов"""
+
+    items: list[MyResponseItem]
+    total: int
+
+
+class MyInvitationItem(BaseModel):
+    """Схема приглашения для текущего пользователя"""
+
+    id: int
+    project_id: int
+    project_name: str
+    description: str = ""
+    inviter_name: str
+    role: str = ""
+    resume_url: str = ""
+    resume_title: str = ""
+    date: str
+    status: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class MyInvitationListResponse(BaseModel):
+    """Схема ответа со списком приглашений"""
+
+    items: list[MyInvitationItem]
+    total: int
+
+
+class MyProjectItem(BaseModel):
+    """Схема проекта для страницы профиля"""
+
+    id: int
+    title: str
+    description: str | None = None
+    status: str
+    progress: int
+    start_date: str = ""
+    members_count: int = 0
+    roles: list[str] = []
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class MyProjectListResponse(BaseModel):
+    """Схема ответа со списком проектов пользователя"""
+
+    items: list[MyProjectItem]
+    total: int

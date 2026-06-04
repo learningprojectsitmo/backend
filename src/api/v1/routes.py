@@ -8,7 +8,9 @@ from src.api.v1.endpoints.ideas import ideas_router
 from src.api.v1.endpoints.invitation import invitation_router
 from src.api.v1.endpoints.kanban import kanban_router
 from src.api.v1.endpoints.profile import profile_router
+from src.api.v1.endpoints.project import invitation_router as project_invitation_router
 from src.api.v1.endpoints.project import project_router
+from src.api.v1.endpoints.project import response_router
 from src.api.v1.endpoints.resume import resume_router
 from src.api.v1.endpoints.role import role_permission_router, role_router
 from src.api.v1.endpoints.sessions import sessions_router
@@ -33,6 +35,8 @@ router_list = [
     role_permission_router,
     user_permission_router,
     ideas_router,
+    response_router,
+    project_invitation_router,
 ]
 
 for router in router_list:
