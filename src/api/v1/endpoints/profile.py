@@ -95,16 +95,6 @@ async def delete_portfolio(
 # ─── Education CRUD ──────────────────────────────────────────────────────
 
 
-@profile_router.get("/education", response_model=list[EducationFull])
-async def fetch_education(
-    current_user: User = Depends(get_current_user),
-    education_service: EducationService = Depends(get_education_service),
-) -> list[EducationFull]:
-    """Получить список образования текущего пользователя"""
-    items = await education_service.get_by_user_id(current_user.id)
-    return [EducationFull.model_validate(i) for i in items]
-
-
 @profile_router.post("/education", response_model=EducationFull)
 async def create_education(
     data: EducationCreate,
@@ -150,16 +140,6 @@ async def delete_education(
 
 
 # ─── Language CRUD ───────────────────────────────────────────────────────
-
-
-@profile_router.get("/languages", response_model=list[LanguageFull])
-async def fetch_languages(
-    current_user: User = Depends(get_current_user),
-    language_service: LanguageService = Depends(get_language_service),
-) -> list[LanguageFull]:
-    """Получить список языков текущего пользователя"""
-    items = await language_service.get_by_user_id(current_user.id)
-    return [LanguageFull.model_validate(i) for i in items]
 
 
 @profile_router.post("/languages", response_model=LanguageFull)
