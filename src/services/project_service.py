@@ -85,10 +85,7 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
                 project_id=inv.project_id,
                 project_name=inv.project.name if inv.project else "",
                 description=inv.project.description if inv.project else "",
-                inviter_name=(
-                    f"{inv.inviter.first_name} {inv.inviter.last_name or ''}".strip()
-                    if inv.inviter else ""
-                ),
+                inviter_name=(f"{inv.inviter.first_name} {inv.inviter.last_name or ''}".strip() if inv.inviter else ""),
                 role=inv.vacancy.title if inv.vacancy else "",
                 resume_url=resume_url,
                 resume_title=resume_title,
@@ -98,6 +95,42 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
             for inv in invitations
         ]
         return MyInvitationListResponse(items=items, total=len(items))
+
+    async def get_projects_by_ids(self, project_ids: list[int]) -> MyProjectListResponse:
+        """Получить проекты по списку ID"""
+        projects = await self._project_repository.get_projects_by_ids(project_ids)
+        items = [
+            MyProjectItem(
+                id=p.id,
+                title=p.name,
+                description=p.description,
+                status=p.status.name if p.status else "not_started",
+                progress=p.progress or 0,
+                start_date=p.created_at.isoformat() if p.created_at else "",
+                members_count=len(p.participants or []),
+                roles=[v.title for v in (p.vacancies or [])],
+            )
+            for p in projects
+        ]
+        return MyProjectListResponse(items=items, total=len(items))
+
+    async def get_my_created_projects(self, user_id: int) -> MyProjectListResponse:
+        """Получить проекты, созданные пользователем"""
+        projects = await self.get_projects_by_author(user_id)
+        items = [
+            MyProjectItem(
+                id=p.id,
+                title=p.name,
+                description=p.description,
+                status=p.status.name if p.status else "not_started",
+                progress=p.progress or 0,
+                start_date=p.created_at.isoformat() if p.created_at else "",
+                members_count=len(p.participants or []),
+                roles=[v.title for v in (p.vacancies or [])],
+            )
+            for p in projects
+        ]
+        return MyProjectListResponse(items=items, total=len(items))
 
     async def get_my_projects(self, user_id: int) -> MyProjectListResponse:
         """Получить проекты, в которых участвует пользователь"""

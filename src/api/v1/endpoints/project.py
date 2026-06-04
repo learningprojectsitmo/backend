@@ -23,6 +23,15 @@ response_router = APIRouter(prefix="/responses", tags=["response"])
 invitation_router = APIRouter(prefix="/invitations", tags=["invitation"])
 
 
+@project_router.get("/created", response_model=MyProjectListResponse)
+async def fetch_my_created_projects(
+    project_service: ProjectService = Depends(get_project_service),
+    current_user: User = Depends(get_current_user),
+) -> MyProjectListResponse:
+    """Получить проекты, созданные текущим пользователем"""
+    return await project_service.get_my_created_projects(current_user.id)
+
+
 @project_router.get("/my", response_model=MyProjectListResponse)
 async def fetch_my_projects(
     project_service: ProjectService = Depends(get_project_service),
@@ -30,6 +39,17 @@ async def fetch_my_projects(
 ) -> MyProjectListResponse:
     """Получить проекты текущего пользователя"""
     return await project_service.get_my_projects(current_user.id)
+
+
+@project_router.get("/by_ids", response_model=MyProjectListResponse)
+async def fetch_projects_by_ids(
+    ids: str = Query(..., description="Comma-separated project IDs"),
+    project_service: ProjectService = Depends(get_project_service),
+    _current_user: User = Depends(get_current_user),
+) -> MyProjectListResponse:
+    """Получить проекты по списку ID"""
+    project_ids = [int(x.strip()) for x in ids.split(",") if x.strip()]
+    return await project_service.get_projects_by_ids(project_ids)
 
 
 @project_router.get("/{project_id}", response_model=ProjectFull)

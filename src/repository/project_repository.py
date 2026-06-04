@@ -4,7 +4,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from src.core.uow import IUnitOfWork
-from src.model.project import Project, ProjectParticipation, ProjectVacancy, Response, Tag
+from src.model.project import Project, ProjectParticipation, Response, Tag
 from src.repository.base_repository import BaseRepository
 from src.schema.project import ProjectCreate, ProjectUpdate
 
@@ -23,8 +23,6 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
                 selectinload(Project.tags),
                 selectinload(Project.status),
                 selectinload(Project.vacancies),
-                selectinload(Project.responses).selectinload(Response.respondent),
-                selectinload(Project.workspace),
             )
         )
         result = await self.uow.session.execute(query)
@@ -47,16 +45,28 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
                 selectinload(Project.participants).selectinload(ProjectParticipation.participant),
                 selectinload(Project.tags),
                 selectinload(Project.status),
+                selectinload(Project.vacancies),
+            )
+        )
+        result = await self.uow.session.execute(query)
+        return list(result.scalars().all())
+
+    async def get_projects_by_ids(self, project_ids: list[int]) -> list[Project]:
+        query = (
+            select(Project)
+            .where(Project.id.in_(project_ids))
+            .options(
+                selectinload(Project.participants).selectinload(ProjectParticipation.participant),
+                selectinload(Project.tags),
+                selectinload(Project.status),
+                selectinload(Project.vacancies),
             )
         )
         result = await self.uow.session.execute(query)
         return list(result.scalars().all())
 
     async def get_projects_by_participant_id(self, participant_id: int) -> list[Project]:
-        subquery = (
-            select(ProjectParticipation.project_id)
-            .where(ProjectParticipation.participant_id == participant_id)
-        )
+        subquery = select(ProjectParticipation.project_id).where(ProjectParticipation.participant_id == participant_id)
         query = (
             select(Project)
             .where(Project.id.in_(subquery))
@@ -83,9 +93,7 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         return list(result.scalars().all())
 
     async def get_response_by_id(self, response_id: int) -> Response | None:
-        result = await self.uow.session.execute(
-            select(Response).where(Response.id == response_id)
-        )
+        result = await self.uow.session.execute(select(Response).where(Response.id == response_id))
         return result.scalar_one_or_none()
 
     async def update_response_status(self, response_id: int, status: str) -> Response | None:
