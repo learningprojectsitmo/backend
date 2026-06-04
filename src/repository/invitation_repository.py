@@ -25,6 +25,12 @@ class InvitationRepository(BaseRepository[WorkspaceInvitation, dict, dict]):
         result = await self.uow.session.execute(select(WorkspaceInvitation).where(WorkspaceInvitation.token == token))
         return result.scalars().first()
 
+    async def get_by_token_with_for_update(self, token: str) -> WorkspaceInvitation | None:
+        result = await self.uow.session.execute(
+            select(WorkspaceInvitation).where(WorkspaceInvitation.token == token).with_for_update(),
+        )
+        return result.scalars().first()
+
     async def deactivate_by_workspace(self, workspace_id: int) -> None:
         await self.uow.session.execute(
             update(WorkspaceInvitation)

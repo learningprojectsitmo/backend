@@ -6,10 +6,14 @@ from fastapi import Depends
 
 from src.core.uow import IUnitOfWork, SqlAlchemyUoW
 from src.repository.audit_repository import AuditRepository
+from src.repository.education_repository import EducationRepository
+from src.repository.ideas_repository import IdeaCommentRepository, IdeaRepository, IdeaTagRepository
 from src.repository.invitation_repository import InvitationRepository
 from src.repository.kanban_repository import KanbanColumnRepository, KanbanSubtaskRepository, KanbanTaskRepository
+from src.repository.language_repository import LanguageRepository
 from src.repository.password_reset_repository import PasswordResetRepository
 from src.repository.permission_repository import PermissionRepository
+from src.repository.portfolio_repository import PortfolioRepository
 from src.repository.project_repository import ProjectRepository
 from src.repository.resume_repository import ResumeRepository
 from src.repository.role_repository import RolePermissionRepository, RoleRepository
@@ -19,10 +23,15 @@ from src.repository.user_repository import NewUserRepository, UserPermissionRepo
 from src.repository.workspace_repository import WorkSpaceRepository
 from src.services.audit_service import AuditService
 from src.services.auth_service import AuthService
+from src.services.education_service import EducationService
 from src.services.fixtures_service import FixtureService
+from src.services.ideas_service import IdeaService, IdeaTagService
 from src.services.invitation_service import InvitationService
 from src.services.kanban_service import KanbanService
+from src.services.language_service import LanguageService
 from src.services.permission_service import PermissionService
+from src.services.portfolio_service import PortfolioService
+from src.services.profile_service import ProfileService
 from src.services.project_service import ProjectService
 from src.services.resume_service import ResumeService
 from src.services.role_service import RoleService
@@ -84,6 +93,18 @@ async def get_password_reset_repository(uow: IUnitOfWork = Depends(get_uow)) -> 
     return PasswordResetRepository(uow)
 
 
+async def get_portfolio_repository(uow: IUnitOfWork = Depends(get_uow)) -> PortfolioRepository:
+    return PortfolioRepository(uow)
+
+
+async def get_education_repository(uow: IUnitOfWork = Depends(get_uow)) -> EducationRepository:
+    return EducationRepository(uow)
+
+
+async def get_language_repository(uow: IUnitOfWork = Depends(get_uow)) -> LanguageRepository:
+    return LanguageRepository(uow)
+
+
 async def get_workspace_repository(uow: IUnitOfWork = Depends(get_uow)) -> WorkSpaceRepository:
     return WorkSpaceRepository(uow)
 
@@ -118,14 +139,25 @@ async def get_session_service(
     return SessionService(session_repository)
 
 
-async def get_resume_service(resume_repository: ResumeRepository = Depends(get_resume_repository)) -> ResumeService:
-    return ResumeService(resume_repository)
+async def get_resume_service(
+    resume_repository: ResumeRepository = Depends(get_resume_repository),
+    portfolio_repository: PortfolioRepository = Depends(get_portfolio_repository),
+    education_repository: EducationRepository = Depends(get_education_repository),
+    language_repository: LanguageRepository = Depends(get_language_repository),
+) -> ResumeService:
+    return ResumeService(
+        resume_repository,
+        portfolio_repository=portfolio_repository,
+        education_repository=education_repository,
+        language_repository=language_repository,
+    )
 
 
 async def get_project_service(
     project_repository: ProjectRepository = Depends(get_project_repository),
+    resume_repository: ResumeRepository = Depends(get_resume_repository),
 ) -> ProjectService:
-    return ProjectService(project_repository)
+    return ProjectService(project_repository, resume_repository=resume_repository)
 
 
 async def get_auth_service(
@@ -204,6 +236,75 @@ async def get_kanban_service(
     )
 
 
+async def get_audit_service(
+    audit_repository: AuditRepository = Depends(get_audit_repository),
+) -> AuditService:
+    return AuditService(audit_repository)
+
+
+async def get_portfolio_service(
+    portfolio_repository: PortfolioRepository = Depends(get_portfolio_repository),
+) -> PortfolioService:
+    return PortfolioService(portfolio_repository)
+
+
+async def get_education_service(
+    education_repository: EducationRepository = Depends(get_education_repository),
+) -> EducationService:
+    return EducationService(education_repository)
+
+
+async def get_language_service(
+    language_repository: LanguageRepository = Depends(get_language_repository),
+) -> LanguageService:
+    return LanguageService(language_repository)
+
+
+async def get_profile_service(
+    user_repository: UserRepository = Depends(get_user_repository),
+    resume_repository: ResumeRepository = Depends(get_resume_repository),
+    portfolio_repository: PortfolioRepository = Depends(get_portfolio_repository),
+    education_repository: EducationRepository = Depends(get_education_repository),
+    language_repository: LanguageRepository = Depends(get_language_repository),
+) -> ProfileService:
+    return ProfileService(
+        user_repository,
+        resume_repository,
+        portfolio_repository,
+        education_repository,
+        language_repository,
+    )
+
+
+# ========== Ideas ==========
+
+
+async def get_idea_repository(uow: IUnitOfWork = Depends(get_uow)) -> IdeaRepository:
+    return IdeaRepository(uow)
+
+
+async def get_idea_tag_repository(uow: IUnitOfWork = Depends(get_uow)) -> IdeaTagRepository:
+    return IdeaTagRepository(uow)
+
+
+async def get_idea_comment_repository(uow: IUnitOfWork = Depends(get_uow)) -> IdeaCommentRepository:
+    return IdeaCommentRepository(uow)
+
+
+async def get_idea_service(
+    idea_repository: IdeaRepository = Depends(get_idea_repository),
+    tag_repository: IdeaTagRepository = Depends(get_idea_tag_repository),
+    comment_repository: IdeaCommentRepository = Depends(get_idea_comment_repository),
+) -> IdeaService:
+    return IdeaService(idea_repository, tag_repository, comment_repository)
+
+
+async def get_idea_tag_service(
+    tag_repository: IdeaTagRepository = Depends(get_idea_tag_repository),
+) -> IdeaTagService:
+    return IdeaTagService(tag_repository)
+
+
 async def get_fixtures_service(
     permission_service: PermissionService = Depends(get_permission_service),
     role_service: RoleService = Depends(get_role_service),
@@ -213,6 +314,10 @@ async def get_fixtures_service(
     project_repository: ProjectRepository = Depends(get_project_repository),
     settings_service: SpaceSettingsService = Depends(get_settings_service),
     kanban_service: KanbanService = Depends(get_kanban_service),
+    resume_service: ResumeService = Depends(get_resume_service),
+    portfolio_service: PortfolioService = Depends(get_portfolio_service),
+    education_service: EducationService = Depends(get_education_service),
+    language_service: LanguageService = Depends(get_language_service),
 ) -> FixtureService:
     return FixtureService(
         permission_service,
@@ -223,10 +328,8 @@ async def get_fixtures_service(
         project_repository,
         settings_service,
         kanban_service,
+        resume_service,
+        portfolio_service,
+        education_service,
+        language_service,
     )
-
-
-async def get_audit_service(
-    audit_repository: AuditRepository = Depends(get_audit_repository),
-) -> AuditService:
-    return AuditService(audit_repository)

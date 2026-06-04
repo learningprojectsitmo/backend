@@ -56,6 +56,7 @@ class Space(BaseModel):
     category_id: int | None = None
     description: str | None = None
     icon_url: str | None = None
+    author_id: int
 
 
 class Category(BaseModel):
@@ -74,3 +75,47 @@ class SpacesListResponse(BaseModel):
     page: int | None = None
     limit: int | None = None
     total: int | None = None
+    role: str
+
+
+class ProjectRef(BaseModel):
+    """Краткая ссылка на проект"""
+
+    id: int
+    title: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ParticipantContact(BaseModel):
+    """Контакты участника"""
+
+    telegram: str | None = None
+    email: str | None = None
+    linkedin: str | None = None
+
+
+class WorkspaceParticipantItem(BaseModel):
+    """Участник рабочего пространства"""
+
+    id: int
+    user_id: int
+    name: str
+    avatar_url: str | None = None
+    projects: list[ProjectRef] = []
+    role: str = ""
+    contacts: ParticipantContact = ParticipantContact()
+    resume_url: str = ""
+    created_at: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class WorkspaceParticipantListResponse(BaseModel):
+    """Список участников workspace с пагинацией"""
+
+    items: list[WorkspaceParticipantItem]
+    total: int
+    page: int
+    limit: int
+    total_pages: int

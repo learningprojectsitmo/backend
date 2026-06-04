@@ -5,11 +5,51 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from src.core.container import get_kanban_service, get_project_service
 from src.core.dependencies import get_current_user, setup_audit
 from src.model.user import User
-from src.schema.project import ProjectCreate, ProjectFull, ProjectListResponse, ProjectUpdate
+from src.schema.project import (
+    MyInvitationListResponse,
+    MyProjectListResponse,
+    MyResponseListResponse,
+    ProjectCreate,
+    ProjectFull,
+    ProjectListResponse,
+    ProjectUpdate,
+)
 from src.services.kanban_service import KanbanService
 from src.services.project_service import ProjectService
 
 project_router = APIRouter(prefix="/projects", tags=["project"])
+
+response_router = APIRouter(prefix="/responses", tags=["response"])
+invitation_router = APIRouter(prefix="/invitations", tags=["invitation"])
+
+
+@project_router.get("/created", response_model=MyProjectListResponse)
+async def fetch_my_created_projects(
+    project_service: ProjectService = Depends(get_project_service),
+    current_user: User = Depends(get_current_user),
+) -> MyProjectListResponse:
+    """Получить проекты, созданные текущим пользователем"""
+    return await project_service.get_my_created_projects(current_user.id)
+
+
+@project_router.get("/my", response_model=MyProjectListResponse)
+async def fetch_my_projects(
+    project_service: ProjectService = Depends(get_project_service),
+    current_user: User = Depends(get_current_user),
+) -> MyProjectListResponse:
+    """Получить проекты текущего пользователя"""
+    return await project_service.get_my_projects(current_user.id)
+
+
+@project_router.get("/by_ids", response_model=MyProjectListResponse)
+async def fetch_projects_by_ids(
+    ids: str = Query(..., description="Comma-separated project IDs"),
+    project_service: ProjectService = Depends(get_project_service),
+    _current_user: User = Depends(get_current_user),
+) -> MyProjectListResponse:
+    """Получить проекты по списку ID"""
+    project_ids = [int(x.strip()) for x in ids.split(",") if x.strip()]
+    return await project_service.get_projects_by_ids(project_ids)
 
 
 @project_router.get("/{project_id}", response_model=ProjectFull)
@@ -54,6 +94,57 @@ async def fetch_projects(
     )
 
 
+@response_router.get("/my", response_model=MyResponseListResponse)
+async def fetch_my_responses(
+    project_service: ProjectService = Depends(get_project_service),
+    current_user: User = Depends(get_current_user),
+) -> MyResponseListResponse:
+    """Получить отклики текущего пользователя"""
+    return await project_service.get_my_responses(current_user.id)
+
+
+@invitation_router.get("/my", response_model=MyInvitationListResponse)
+async def fetch_my_invitations(
+    project_service: ProjectService = Depends(get_project_service),
+    current_user: User = Depends(get_current_user),
+) -> MyInvitationListResponse:
+    """Получить приглашения текущего пользователя"""
+    return await project_service.get_my_invitations(current_user.id)
+
+
+@response_router.patch("/{response_id}/withdraw")
+async def withdraw_response(
+    response_id: int,
+    project_service: ProjectService = Depends(get_project_service),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, str]:
+    """Отозвать отклик"""
+    await project_service.withdraw_response(response_id, current_user.id)
+    return {"message": "Response withdrawn successfully"}
+
+
+@invitation_router.patch("/{invitation_id}/accept")
+async def accept_invitation(
+    invitation_id: int,
+    project_service: ProjectService = Depends(get_project_service),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, str]:
+    """Принять приглашение"""
+    await project_service.accept_invitation(invitation_id, current_user.id)
+    return {"message": "Invitation accepted successfully"}
+
+
+@invitation_router.patch("/{invitation_id}/reject")
+async def reject_invitation(
+    invitation_id: int,
+    project_service: ProjectService = Depends(get_project_service),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, str]:
+    """Отклонить приглашение"""
+    await project_service.reject_invitation(invitation_id, current_user.id)
+    return {"message": "Invitation rejected successfully"}
+
+
 @project_router.post("/", response_model=ProjectFull)
 async def create_project(
     project_data: ProjectCreate,
@@ -84,6 +175,21 @@ async def update_project(
         raise HTTPException(status_code=404, detail="Project not found")
 
     return ProjectFull.from_orm(project)
+
+
+@project_router.delete("/{project_id}/participants/{user_id}")
+async def remove_participant(
+    project_id: int,
+    user_id: int,
+    project_service: ProjectService = Depends(get_project_service),
+    current_user: User = Depends(get_current_user),
+    _audit=Depends(setup_audit),
+) -> dict[str, str]:
+    """Удалить участника из проекта (только автор)"""
+    success = await project_service.remove_participant(project_id, user_id, current_user.id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Participant not found")
+    return {"message": "Participant removed successfully"}
 
 
 @project_router.delete("/{project_id}")

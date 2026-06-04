@@ -6,7 +6,8 @@ from unittest.mock import Mock
 import pytest
 from fastapi.security import OAuth2PasswordRequestForm
 
-from src.model.project import Project, Resume
+from src.model.project import Project
+from src.model.resume import Resume
 from src.model.user import User
 from src.schema import Token, UserCreate
 from src.schema.project import ProjectCreate

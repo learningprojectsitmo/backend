@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 from sqlalchemy import delete, select
+from sqlalchemy.orm import selectinload
 
 from src.core.uow import IUnitOfWork
 from src.model.auth import NewUser
@@ -21,9 +22,21 @@ class UserRepository(BaseRepository[User, UserCreateHashedPwd, UserUpdate]):
         super().__init__(uow)
         self._model = User
 
+    async def get_by_id_with_role(self, id: int) -> User | None:
+        result = await self.uow.session.execute(
+            select(User).where(User.id == id).options(selectinload(User.role)),
+        )
+        return result.scalar_one_or_none()
+
+    async def get_multi_by_ids(self, ids: list[int]) -> list[User]:
+        result = await self.uow.session.execute(
+            select(User).where(User.id.in_(ids)),
+        )
+        return list(result.scalars().all())
+
     async def get_by_email(self, email: str) -> User | None:
         result = await self.uow.session.execute(
-            select(User).where(User.email == email),
+            select(User).where(User.email == email).options(selectinload(User.role)),
         )
         return result.scalar_one_or_none()
 

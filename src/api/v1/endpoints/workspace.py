@@ -14,6 +14,8 @@ from src.schema.workspace import (
     SpacesListResponse,
     WorkSpaceCreate,
     WorkSpaceFull,
+    WorkspaceParticipantItem,
+    WorkspaceParticipantListResponse,
     WorkSpaceUpdate,
 )
 from src.services.settings_service import SpaceSettingsService
@@ -47,6 +49,7 @@ async def get_workspace_menu(
         page=page,
         limit=limit,
         total=total,
+        role=current_user.role.name if current_user.role else "member",
     )
 
 
@@ -113,6 +116,59 @@ async def update_workspace(
         raise HTTPException(status_code=400, detail=f"Failed to update workspace: {e!s}") from e
     else:
         return WorkSpaceFull.model_validate(workspace)
+
+
+@workspace_router.get("/{workspace_id}/participants", response_model=WorkspaceParticipantListResponse)
+async def get_workspace_participants(
+    workspace_id: int,
+    page: int = Query(1, ge=1, description="Номер страницы"),
+    limit: int = Query(10, ge=1, le=100, description="Количество участников на странице"),
+    search: str | None = Query(None, description="Поиск по имени/контактам"),
+    project_id: int | None = Query(None, description="Фильтр по id проекта"),
+    date_from: str | None = Query(None, description="Фильтр от даты (YYYY-MM-DD)"),
+    date_to: str | None = Query(None, description="Фильтр до даты (YYYY-MM-DD)"),
+    workspace_service: WorkSpaceService = Depends(get_workspace_service),
+    _current_user: User = Depends(get_current_user),
+) -> WorkspaceParticipantListResponse:
+    """Получить список участников workspace с пагинацией и фильтрацией"""
+    workspace = await workspace_service.get_workspace_by_id(workspace_id)
+    if not workspace:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    skip = (page - 1) * limit
+    items, total = await workspace_service.get_workspace_participants(
+        workspace_id,
+        skip,
+        limit,
+        search,
+        project_id=project_id,
+        date_from=date_from,
+        date_to=date_to,
+    )
+
+    parsed = [WorkspaceParticipantItem.model_validate(item) for item in items]
+
+    return WorkspaceParticipantListResponse(
+        items=parsed,
+        total=total,
+        page=page,
+        limit=limit,
+        total_pages=(total + limit - 1) // limit if limit > 0 else 0,
+    )
+
+
+@workspace_router.delete("/{workspace_id}/participants/{user_id}")
+async def remove_workspace_participant(
+    workspace_id: int,
+    user_id: int,
+    workspace_service: WorkSpaceService = Depends(get_workspace_service),
+    _current_user: User = Depends(get_current_user),
+) -> dict[str, str]:
+    """Удалить участника из workspace"""
+    success = await workspace_service.remove_workspace_participant(workspace_id, user_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Participant not found")
+    return {"message": "Participant removed successfully"}
 
 
 @workspace_router.delete("/{workspace_id}")

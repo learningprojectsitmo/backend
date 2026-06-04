@@ -9,8 +9,14 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from src.core.database import Base
 
 if TYPE_CHECKING:
+    from src.model.education import Education
+    from src.model.ideas import Idea
     from src.model.kanban_models import Task
-    from src.model.project import Project, ProjectParticipation, Response, Resume
+    from src.model.language import Language
+    from src.model.portfolio import Portfolio
+    from src.model.workspace import WorkSpaceParticipation
+from src.model.project import Project, ProjectParticipation, Response
+from src.model.resume import Resume
 
 
 class User(Base):
@@ -25,9 +31,13 @@ class User(Base):
     email: Mapped[str | None] = mapped_column(String(50), nullable=True, unique=True)
     isu_number: Mapped[int | None] = mapped_column(nullable=True)
     tg_nickname: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    vk_nickname: Mapped[str | None] = mapped_column(String(40), nullable=True)
 
     password_hashed: Mapped[str] = mapped_column(String, nullable=False)
     role_id: Mapped[int] = mapped_column(ForeignKey("role.id"), nullable=False)
+
+    role: Mapped[Role] = relationship(back_populates="users")
 
     resumes: Mapped[list[Resume]] = relationship(
         back_populates="user",
@@ -36,16 +46,41 @@ class User(Base):
     responses: Mapped[list[Response]] = relationship(
         back_populates="respondent",
         cascade="all, delete-orphan",
+        foreign_keys="Response.respondent_id",
+    )
+    invited_responses: Mapped[list[Response]] = relationship(
+        back_populates="inviter",
+        cascade="all, delete-orphan",
+        foreign_keys="Response.inviter_id",
     )
     projects_led: Mapped[list[Project]] = relationship(
-        # The project will not be deleted when its author gets deleted
         back_populates="author",
     )
     projects_in: Mapped[list[ProjectParticipation]] = relationship(
         back_populates="participant",
         cascade="all, delete-orphan",
     )
+    workspace_participations: Mapped[list[WorkSpaceParticipation]] = relationship(
+        back_populates="participant",
+        cascade="all, delete-orphan",
+    )
     tasks: Mapped[list[Task]] = relationship(secondary="task_assignee", back_populates="assignees")
+    portfolios: Mapped[list[Portfolio]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    educations: Mapped[list[Education]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    languages: Mapped[list[Language]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    ideas: Mapped[list[Idea]] = relationship(
+        back_populates="author",
+        cascade="all, delete-orphan",
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
@@ -81,6 +116,8 @@ class Role(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(30), nullable=False, unique=True)
+
+    users: Mapped[list[User]] = relationship(back_populates="role")
 
     def __repr__(self) -> str:
         return f"Role(id={self.id!r}, role_name={self.name!r}"

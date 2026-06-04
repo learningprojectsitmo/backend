@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
 from src.core.exceptions import PermissionError
-from src.model.project import Resume
+from src.model.resume import Resume
 from src.repository.resume_repository import ResumeRepository
 from src.schema.resume import ResumeCreate, ResumeUpdate
 from src.services.resume_service import ResumeService
@@ -21,9 +21,12 @@ class TestResumeService:
     async def test_should_create_resume_with_valid_data(self):
         """Тест должен создать резюме с корректными данными"""
         # given
-        mock_repository = Mock(spec=ResumeRepository)
+        mock_repository = Mock()
+        mock_repository.uow = Mock()
+        mock_repository.uow.session = Mock()
+        mock_repository.uow.session.flush = AsyncMock()
         mock_resume = Resume(id=1, header="Senior Developer", resume_text="Experienced Python developer", author_id=1)
-        mock_repository.create.return_value = mock_resume
+        mock_repository.create = AsyncMock(return_value=mock_resume)
 
         resume_service = ResumeService(mock_repository)
 

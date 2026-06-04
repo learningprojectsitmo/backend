@@ -42,7 +42,7 @@ class InvitationService(BaseService[WorkspaceInvitation, dict, dict]):
         await self._invitation_repository.deactivate_by_workspace(workspace_id)
 
     async def join_by_link(self, token: str, user_id: int) -> WorkspaceInvitation | None:
-        invitation = await self._invitation_repository.get_by_token(token)
+        invitation = await self._invitation_repository.get_by_token_with_for_update(token)
         if not invitation or not invitation.is_active:
             return None
 

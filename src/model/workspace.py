@@ -10,6 +10,7 @@ from src.core.database import Base
 
 if TYPE_CHECKING:
     from src.model.project import Project
+    from src.model.user import User
 
 
 class WorkSpaceCategories(Base):
@@ -68,6 +69,8 @@ class WorkSpaceParticipation(Base):
     workspace_id: Mapped[int] = mapped_column(ForeignKey("workspace.id"), nullable=False)
     participant_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
     created_at: Mapped[TIMESTAMP] = mapped_column(TIMESTAMP, server_default=func.now(), nullable=False)
+
+    participant: Mapped[User] = relationship(back_populates="workspace_participations")
 
     def __repr__(self) -> str:
         return f"WorkSpaceParticipation(id={self.id!r}, workspace_id={self.workspace_id!r}, participant_id={self.participant_id!r})"
