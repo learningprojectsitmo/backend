@@ -358,6 +358,7 @@ async def delete_resume_experience(
 
 # ─── ResumeSkill CRUD ──────────────────────────────────────────────────────
 
+
 @resume_router.post("/{resume_id}/skills", response_model=ResumeSkillFull)
 async def create_resume_skill(
     resume_id: int,
@@ -408,6 +409,7 @@ async def delete_resume_skill(
 
 
 # ─── ResumeInterest CRUD ──────────────────────────────────────────────────
+
 
 @resume_router.post("/{resume_id}/interests", response_model=ResumeInterestFull)
 async def create_resume_interest(

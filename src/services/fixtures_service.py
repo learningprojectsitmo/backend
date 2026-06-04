@@ -2,9 +2,18 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import and_, select
 
 from src.model.project import Project, ProjectParticipation, ProjectVacancy, Response
+from src.model.resume import (
+    Resume,
+    ResumeEducation,
+    ResumeExperience,
+    ResumeInterest,
+    ResumeLanguage,
+    ResumeLink,
+    ResumeSkill,
+)
 from src.model.settings import SettingsType
 from src.model.workspace import WorkSpace, WorkSpaceCategories, WorkSpaceParticipation, WorkSpaceStatus
 from src.repository.project_repository import ProjectRepository
@@ -244,142 +253,161 @@ class FixtureService:
 
     # ─── responses / invitations ───────────────────────────────────────────
 
-    async def _seed_responses(
-        self,
-        users: list,
-        workspaces_by_name: dict[str, WorkSpace],
-    ) -> None:
-        from sqlalchemy import and_
-
-        repo = self._project_repository
-        session = repo.uow.session
+    async def _seed_responses(self, users: list) -> None:
+        session = self._project_repository.uow.session
 
         result = await session.execute(select(Response).limit(1))
         if result.scalar_one_or_none():
             return
 
-        # users: admin=0, member=1, kirill=2, anna=3, ilya=4,
-        #        maria=5, dmitry=6, elena=7, alexey=8
         admin = users[0]
-
-        async def find_vacancy(project_name: str, title: str) -> int | None:
-            r = await session.execute(
-                select(ProjectVacancy.id).where(
-                    and_(
-                        ProjectVacancy.title == title,
-                        ProjectVacancy.project.has(Project.name == project_name),
-                    )
-                )
-            )
-            return r.scalar_one_or_none()
-
-        async def vacancy_from_id(vacancy_id: int):
-            vr = await session.execute(select(ProjectVacancy).where(ProjectVacancy.id == vacancy_id))
-            return vr.scalar_one_or_none()
-
-        # ──────────────────────────────────────────────
-        # 1. Accepted responses — user applied → accepted → participant
-        # ──────────────────────────────────────────────
-        accepted_responses = [
-            (users[2], await find_vacancy("Tasker", "Backend Developer")),       # kirill → Tasker
-            (users[3], await find_vacancy("Tasker", "Backend Developer")),       # anna   → Tasker
-            (users[4], await find_vacancy("Tasker", "Frontend Developer")),      # ilya   → Tasker
-            (users[6], await find_vacancy("Campus Map", "Mobile Developer (React Native)")),  # dmitry → Campus Map
-            (users[7], await find_vacancy("Telegram-бот", "Python Developer")),  # elena  → Telegram-бот
-        ]
-        for user, vacancy_id in accepted_responses:
-            if not vacancy_id:
-                continue
-            vacancy = await vacancy_from_id(vacancy_id)
-            if not vacancy:
-                continue
-            session.add(Response(
-                respondent_id=user.id, project_id=vacancy.project_id,
-                vacancy_id=vacancy_id, inviter_id=None,
-                type="response", status="accepted",
-            ))
-
-        # ──────────────────────────────────────────────
-        # 2. Accepted invitations — admin invited → user accepted → participant
-        # ──────────────────────────────────────────────
-        accepted_invitations = [
-            (users[4], await find_vacancy("Campus Map", "Mobile Developer (React Native)")),  # admin→ilya   → Campus Map
-            (users[3], await find_vacancy("Аналитика", "Data Analyst")),                      # admin→anna   → Аналитика
-            (users[7], await find_vacancy("Аналитика", "Data Analyst")),                      # admin→elena  → Аналитика
-            (users[2], await find_vacancy("Хакатоны", "Fullstack Developer")),                # admin→kirill → Хакатоны
-            (users[5], await find_vacancy("Хакатоны", "Fullstack Developer")),                # admin→maria  → Хакатоны
-            (users[6], await find_vacancy("Хакатоны", "Fullstack Developer")),                # admin→dmitry → Хакатоны
-            (users[8], await find_vacancy("Хакатоны", "Fullstack Developer")),                # admin→alexey → Хакатоны
-            (users[4], await find_vacancy("Конструктор резюме", "UI/UX Designer")),           # admin→ilya   → Конструктор
-            (users[8], await find_vacancy("Конструктор резюме", "Frontend Developer")),       # admin→alexey → Конструктор
-        ]
-        for user, vacancy_id in accepted_invitations:
-            if not vacancy_id:
-                continue
-            vacancy = await vacancy_from_id(vacancy_id)
-            if not vacancy:
-                continue
-            session.add(Response(
-                respondent_id=user.id, project_id=vacancy.project_id,
-                vacancy_id=vacancy_id, inviter_id=admin.id,
-                type="invitation", status="accepted",
-            ))
-
-        # ──────────────────────────────────────────────
-        # 3. Pending responses — user applied, not in project
-        # ──────────────────────────────────────────────
-        pending_responses = [
-            (users[1], await find_vacancy("Tasker", "Backend Developer")),       # member → Tasker (not in project)
-            (users[8], await find_vacancy("Tasker", "Frontend Developer")),      # alexey → Tasker (not in project)
-            (users[5], await find_vacancy("Campus Map", "Mobile Developer (React Native)")),  # maria → Campus Map
-            (users[1], await find_vacancy("AI Learning Platform", "ML Engineer")),             # member → AI Learning
-        ]
-        for user, vacancy_id in pending_responses:
-            if not vacancy_id:
-                continue
-            vacancy = await vacancy_from_id(vacancy_id)
-            if not vacancy:
-                continue
-            session.add(Response(
-                respondent_id=user.id, project_id=vacancy.project_id,
-                vacancy_id=vacancy_id, inviter_id=None,
-                type="response", status="pending",
-            ))
-
-        # ──────────────────────────────────────────────
-        # 4. Pending invitations — invited, user hasn't accepted yet
-        # ──────────────────────────────────────────────
-        pending_invitations = [
-            (users[1], await find_vacancy("AI Learning Platform", "ML Engineer")),              # admin→member  → AI Learning
-            (users[3], await find_vacancy("AI Learning Platform", "ML Engineer")),              # admin→anna    → AI Learning
-            (users[6], await find_vacancy("Аналитика", "Data Analyst")),                        # admin→dmitry  → Аналитика
-            (users[2], await find_vacancy("Конструктор резюме", "Frontend Developer")),         # admin→kirill  → Конструктор
-            (users[7], await find_vacancy("База знаний", None)),                                # admin→elena   → База знаний (no vacancy)
-        ]
-        for user, vacancy_id in pending_invitations:
-            if vacancy_id:
-                vacancy = await vacancy_from_id(vacancy_id)
-                if not vacancy:
-                    continue
-                session.add(Response(
-                    respondent_id=user.id, project_id=vacancy.project_id,
-                    vacancy_id=vacancy_id, inviter_id=admin.id,
-                    type="invitation", status="pending",
-                ))
-            else:
-                # invitation with no specific vacancy
-                project_result = await session.execute(
-                    select(Project).where(Project.name == "База знаний")
-                )
-                project = project_result.scalar_one_or_none()
-                if project:
-                    session.add(Response(
-                        respondent_id=user.id, project_id=project.id,
-                        vacancy_id=None, inviter_id=admin.id,
-                        type="invitation", status="pending",
-                    ))
+        await self._seed_accepted_responses(session, users)
+        await self._seed_accepted_invitations(session, users, admin)
+        await self._seed_pending_responses(session, users)
+        await self._seed_pending_invitations(session, users, admin)
 
         await session.flush()
+
+    async def _find_vacancy_id(self, project_name: str, title: str | None) -> int | None:
+        if title is None:
+            return None
+        session = self._project_repository.uow.session
+        r = await session.execute(
+            select(ProjectVacancy.id).where(
+                and_(
+                    ProjectVacancy.title == title,
+                    ProjectVacancy.project.has(Project.name == project_name),
+                )
+            )
+        )
+        return r.scalar_one_or_none()
+
+    async def _vacancy_from_id(self, vacancy_id: int) -> ProjectVacancy | None:
+        session = self._project_repository.uow.session
+        vr = await session.execute(select(ProjectVacancy).where(ProjectVacancy.id == vacancy_id))
+        return vr.scalar_one_or_none()
+
+    async def _seed_accepted_responses(self, session, users: list) -> None:
+        pairs = [
+            (users[2], "Tasker", "Backend Developer"),
+            (users[3], "Tasker", "Backend Developer"),
+            (users[4], "Tasker", "Frontend Developer"),
+            (users[6], "Campus Map", "Mobile Developer (React Native)"),
+            (users[7], "Telegram-бот", "Python Developer"),
+        ]
+        for user, project_name, title in pairs:
+            vacancy_id = await self._find_vacancy_id(project_name, title)
+            if not vacancy_id:
+                continue
+            vacancy = await self._vacancy_from_id(vacancy_id)
+            if not vacancy:
+                continue
+            session.add(
+                Response(
+                    respondent_id=user.id,
+                    project_id=vacancy.project_id,
+                    vacancy_id=vacancy_id,
+                    inviter_id=None,
+                    type="response",
+                    status="accepted",
+                )
+            )
+
+    async def _seed_accepted_invitations(self, session, users: list, admin) -> None:
+        pairs = [
+            (users[4], "Campus Map", "Mobile Developer (React Native)"),
+            (users[3], "Аналитика", "Data Analyst"),
+            (users[7], "Аналитика", "Data Analyst"),
+            (users[2], "Хакатоны", "Fullstack Developer"),
+            (users[5], "Хакатоны", "Fullstack Developer"),
+            (users[6], "Хакатоны", "Fullstack Developer"),
+            (users[8], "Хакатоны", "Fullstack Developer"),
+            (users[4], "Конструктор резюме", "UI/UX Designer"),
+            (users[8], "Конструктор резюме", "Frontend Developer"),
+        ]
+        for user, project_name, title in pairs:
+            vacancy_id = await self._find_vacancy_id(project_name, title)
+            if not vacancy_id:
+                continue
+            vacancy = await self._vacancy_from_id(vacancy_id)
+            if not vacancy:
+                continue
+            session.add(
+                Response(
+                    respondent_id=user.id,
+                    project_id=vacancy.project_id,
+                    vacancy_id=vacancy_id,
+                    inviter_id=admin.id,
+                    type="invitation",
+                    status="accepted",
+                )
+            )
+
+    async def _seed_pending_responses(self, session, users: list) -> None:
+        pairs = [
+            (users[1], "Tasker", "Backend Developer"),
+            (users[8], "Tasker", "Frontend Developer"),
+            (users[5], "Campus Map", "Mobile Developer (React Native)"),
+            (users[1], "AI Learning Platform", "ML Engineer"),
+        ]
+        for user, project_name, title in pairs:
+            vacancy_id = await self._find_vacancy_id(project_name, title)
+            if not vacancy_id:
+                continue
+            vacancy = await self._vacancy_from_id(vacancy_id)
+            if not vacancy:
+                continue
+            session.add(
+                Response(
+                    respondent_id=user.id,
+                    project_id=vacancy.project_id,
+                    vacancy_id=vacancy_id,
+                    inviter_id=None,
+                    type="response",
+                    status="pending",
+                )
+            )
+
+    async def _seed_pending_invitations(self, session, users: list, admin) -> None:
+        pairs = [
+            (users[1], "AI Learning Platform", "ML Engineer"),
+            (users[3], "AI Learning Platform", "ML Engineer"),
+            (users[6], "Аналитика", "Data Analyst"),
+            (users[2], "Конструктор резюме", "Frontend Developer"),
+            (users[7], "База знаний", None),
+        ]
+        for user, project_name, title in pairs:
+            if title:
+                vacancy_id = await self._find_vacancy_id(project_name, title)
+                if not vacancy_id:
+                    continue
+                vacancy = await self._vacancy_from_id(vacancy_id)
+                if not vacancy:
+                    continue
+                session.add(
+                    Response(
+                        respondent_id=user.id,
+                        project_id=vacancy.project_id,
+                        vacancy_id=vacancy_id,
+                        inviter_id=admin.id,
+                        type="invitation",
+                        status="pending",
+                    )
+                )
+            else:
+                project_result = await session.execute(select(Project).where(Project.name == project_name))
+                project = project_result.scalar_one_or_none()
+                if project:
+                    session.add(
+                        Response(
+                            respondent_id=user.id,
+                            project_id=project.id,
+                            vacancy_id=None,
+                            inviter_id=admin.id,
+                            type="invitation",
+                            status="pending",
+                        )
+                    )
 
     # ─── settings types ────────────────────────────────────────────────────
 
@@ -399,16 +427,6 @@ class FixtureService:
     # ─── resumes ───────────────────────────────────────────────────────────
 
     async def _seed_resumes(self, users: list) -> None:
-        from src.model.resume import (
-            Resume,
-            ResumeEducation,
-            ResumeExperience,
-            ResumeInterest,
-            ResumeLanguage,
-            ResumeLink,
-            ResumeSkill,
-        )
-
         repo = self._resume_service._repository
         session = repo.uow.session
 
@@ -739,30 +757,46 @@ class FixtureService:
             ),
             _member.id,
         )
-        session.add_all([
-            ResumeExperience(
-                resume_id=resume_member.id, company="Учебные проекты ИТМО",
-                position="Fullstack Developer (стажёр)", period_from=datetime(2025, 9, 1),
-                period_to=None, duration="настоящее время",
-                responsibilities=["Разработка API", "Вёрстка интерфейсов", "Работа с БД"],
-                skills=["Python", "JavaScript", "PostgreSQL"], sort_order=0,
-            ),
-        ])
-        session.add_all([
-            ResumeSkill(resume_id=resume_member.id, name="Python", sort_order=0),
-            ResumeSkill(resume_id=resume_member.id, name="JavaScript", sort_order=1),
-            ResumeSkill(resume_id=resume_member.id, name="React", sort_order=2),
-            ResumeSkill(resume_id=resume_member.id, name="PostgreSQL", sort_order=3),
-        ])
-        session.add_all([
-            ResumeEducation(
-                resume_id=resume_member.id, institution="ИТМО, Санкт-Петербург",
-                faculty="Программная инженерия", degree="Бакалавр", years="2027", sort_order=0,
-            ),
-        ])
-        session.add_all([
-            ResumeLanguage(resume_id=resume_member.id, name="Русский", level="Родной", sort_order=0),
-        ])
+        session.add_all(
+            [
+                ResumeExperience(
+                    resume_id=resume_member.id,
+                    company="Учебные проекты ИТМО",
+                    position="Fullstack Developer (стажёр)",
+                    period_from=datetime(2025, 9, 1),
+                    period_to=None,
+                    duration="настоящее время",
+                    responsibilities=["Разработка API", "Вёрстка интерфейсов", "Работа с БД"],
+                    skills=["Python", "JavaScript", "PostgreSQL"],
+                    sort_order=0,
+                ),
+            ]
+        )
+        session.add_all(
+            [
+                ResumeSkill(resume_id=resume_member.id, name="Python", sort_order=0),
+                ResumeSkill(resume_id=resume_member.id, name="JavaScript", sort_order=1),
+                ResumeSkill(resume_id=resume_member.id, name="React", sort_order=2),
+                ResumeSkill(resume_id=resume_member.id, name="PostgreSQL", sort_order=3),
+            ]
+        )
+        session.add_all(
+            [
+                ResumeEducation(
+                    resume_id=resume_member.id,
+                    institution="ИТМО, Санкт-Петербург",
+                    faculty="Программная инженерия",
+                    degree="Бакалавр",
+                    years="2027",
+                    sort_order=0,
+                ),
+            ]
+        )
+        session.add_all(
+            [
+                ResumeLanguage(resume_id=resume_member.id, name="Русский", level="Родной", sort_order=0),
+            ]
+        )
 
         # ────── Мария Петрова: Project Manager — 1 exp, 4 skills, 1 link ──────
 
@@ -776,34 +810,57 @@ class FixtureService:
             ),
             _maria.id,
         )
-        session.add_all([
-            ResumeExperience(
-                resume_id=resume_maria.id, company="ИТМО, Учебный офис",
-                position="Project Manager", period_from=datetime(2023, 9, 1),
-                period_to=None, duration="настоящее время",
-                responsibilities=["Координация проектных команд", "Ведение документации", "Организация демо-дней"],
-                skills=["Jira", "Agile", "MS Project"], sort_order=0,
-            ),
-        ])
-        session.add_all([
-            ResumeSkill(resume_id=resume_maria.id, name="Jira", sort_order=0),
-            ResumeSkill(resume_id=resume_maria.id, name="Agile", sort_order=1),
-            ResumeSkill(resume_id=resume_maria.id, name="Scrum", sort_order=2),
-            ResumeSkill(resume_id=resume_maria.id, name="Confluence", sort_order=3),
-        ])
-        session.add_all([
-            ResumeLink(resume_id=resume_maria.id, platform="LinkedIn", url="https://linkedin.com/in/maria-petrova", sort_order=0),
-        ])
-        session.add_all([
-            ResumeEducation(
-                resume_id=resume_maria.id, institution="ИТМО, Санкт-Петербург",
-                faculty="Управление проектами", degree="Магистр", years="2025", sort_order=0,
-            ),
-        ])
-        session.add_all([
-            ResumeLanguage(resume_id=resume_maria.id, name="Русский", level="Родной", sort_order=0),
-            ResumeLanguage(resume_id=resume_maria.id, name="English", level="B2", sort_order=1),
-        ])
+        session.add_all(
+            [
+                ResumeExperience(
+                    resume_id=resume_maria.id,
+                    company="ИТМО, Учебный офис",
+                    position="Project Manager",
+                    period_from=datetime(2023, 9, 1),
+                    period_to=None,
+                    duration="настоящее время",
+                    responsibilities=["Координация проектных команд", "Ведение документации", "Организация демо-дней"],
+                    skills=["Jira", "Agile", "MS Project"],
+                    sort_order=0,
+                ),
+            ]
+        )
+        session.add_all(
+            [
+                ResumeSkill(resume_id=resume_maria.id, name="Jira", sort_order=0),
+                ResumeSkill(resume_id=resume_maria.id, name="Agile", sort_order=1),
+                ResumeSkill(resume_id=resume_maria.id, name="Scrum", sort_order=2),
+                ResumeSkill(resume_id=resume_maria.id, name="Confluence", sort_order=3),
+            ]
+        )
+        session.add_all(
+            [
+                ResumeLink(
+                    resume_id=resume_maria.id,
+                    platform="LinkedIn",
+                    url="https://linkedin.com/in/maria-petrova",
+                    sort_order=0,
+                ),
+            ]
+        )
+        session.add_all(
+            [
+                ResumeEducation(
+                    resume_id=resume_maria.id,
+                    institution="ИТМО, Санкт-Петербург",
+                    faculty="Управление проектами",
+                    degree="Магистр",
+                    years="2025",
+                    sort_order=0,
+                ),
+            ]
+        )
+        session.add_all(
+            [
+                ResumeLanguage(resume_id=resume_maria.id, name="Русский", level="Родной", sort_order=0),
+                ResumeLanguage(resume_id=resume_maria.id, name="English", level="B2", sort_order=1),
+            ]
+        )
 
         # ────── Дмитрий Козлов: QA Engineer — 2 exp, 5 skills, 1 link ──────
         resume_dmitry = await self._resume_service.create_resume(
@@ -815,39 +872,65 @@ class FixtureService:
             ),
             _dmitry.id,
         )
-        session.add_all([
-            ResumeExperience(
-                resume_id=resume_dmitry.id, company="Яндекс", position="QA Engineer",
-                period_from=datetime(2024, 3, 1), period_to=None, duration="настоящее время",
-                responsibilities=["Функциональное тестирование", "Автоматизация регресса", "Ведение тест-кейсов"],
-                skills=["Selenium", "Python", "Postman"], sort_order=0,
-            ),
-            ResumeExperience(
-                resume_id=resume_dmitry.id, company="Технопарк ИТМО", position="Junior QA",
-                period_from=datetime(2023, 2, 1), period_to=datetime(2024, 2, 1),
-                duration="1 год", responsibilities=["Ручное тестирование", "Составление баг-репортов"],
-                skills=["Jira", "TestRail"], sort_order=1,
-            ),
-        ])
-        session.add_all([
-            ResumeSkill(resume_id=resume_dmitry.id, name="Python", sort_order=0),
-            ResumeSkill(resume_id=resume_dmitry.id, name="Selenium", sort_order=1),
-            ResumeSkill(resume_id=resume_dmitry.id, name="Postman", sort_order=2),
-            ResumeSkill(resume_id=resume_dmitry.id, name="SQL", sort_order=3),
-            ResumeSkill(resume_id=resume_dmitry.id, name="Git", sort_order=4),
-        ])
-        session.add_all([
-            ResumeLink(resume_id=resume_dmitry.id, platform="GitHub", url="https://github.com/dmitry-qa", sort_order=0),
-        ])
-        session.add_all([
-            ResumeEducation(
-                resume_id=resume_dmitry.id, institution="ИТМО, Санкт-Петербург",
-                faculty="Программная инженерия", degree="Бакалавр", years="2026", sort_order=0,
-            ),
-        ])
-        session.add_all([
-            ResumeLanguage(resume_id=resume_dmitry.id, name="Русский", level="Родной", sort_order=0),
-        ])
+        session.add_all(
+            [
+                ResumeExperience(
+                    resume_id=resume_dmitry.id,
+                    company="Яндекс",
+                    position="QA Engineer",
+                    period_from=datetime(2024, 3, 1),
+                    period_to=None,
+                    duration="настоящее время",
+                    responsibilities=["Функциональное тестирование", "Автоматизация регресса", "Ведение тест-кейсов"],
+                    skills=["Selenium", "Python", "Postman"],
+                    sort_order=0,
+                ),
+                ResumeExperience(
+                    resume_id=resume_dmitry.id,
+                    company="Технопарк ИТМО",
+                    position="Junior QA",
+                    period_from=datetime(2023, 2, 1),
+                    period_to=datetime(2024, 2, 1),
+                    duration="1 год",
+                    responsibilities=["Ручное тестирование", "Составление баг-репортов"],
+                    skills=["Jira", "TestRail"],
+                    sort_order=1,
+                ),
+            ]
+        )
+        session.add_all(
+            [
+                ResumeSkill(resume_id=resume_dmitry.id, name="Python", sort_order=0),
+                ResumeSkill(resume_id=resume_dmitry.id, name="Selenium", sort_order=1),
+                ResumeSkill(resume_id=resume_dmitry.id, name="Postman", sort_order=2),
+                ResumeSkill(resume_id=resume_dmitry.id, name="SQL", sort_order=3),
+                ResumeSkill(resume_id=resume_dmitry.id, name="Git", sort_order=4),
+            ]
+        )
+        session.add_all(
+            [
+                ResumeLink(
+                    resume_id=resume_dmitry.id, platform="GitHub", url="https://github.com/dmitry-qa", sort_order=0
+                ),
+            ]
+        )
+        session.add_all(
+            [
+                ResumeEducation(
+                    resume_id=resume_dmitry.id,
+                    institution="ИТМО, Санкт-Петербург",
+                    faculty="Программная инженерия",
+                    degree="Бакалавр",
+                    years="2026",
+                    sort_order=0,
+                ),
+            ]
+        )
+        session.add_all(
+            [
+                ResumeLanguage(resume_id=resume_dmitry.id, name="Русский", level="Родной", sort_order=0),
+            ]
+        )
 
         # ────── Елена Соколова: Data Scientist — 1 exp, 4 skills ──────
         resume_elena = await self._resume_service.create_resume(
@@ -859,30 +942,47 @@ class FixtureService:
             ),
             _elena.id,
         )
-        session.add_all([
-            ResumeExperience(
-                resume_id=resume_elena.id, company="ИТМО, Data Lab", position="Data Scientist",
-                period_from=datetime(2024, 6, 1), period_to=None, duration="настоящее время",
-                responsibilities=["Сбор и очистка данных", "Обучение моделей", "Подготовка отчётов"],
-                skills=["Python", "Pandas", "Scikit-learn"], sort_order=0,
-            ),
-        ])
-        session.add_all([
-            ResumeSkill(resume_id=resume_elena.id, name="Python", sort_order=0),
-            ResumeSkill(resume_id=resume_elena.id, name="Pandas", sort_order=1),
-            ResumeSkill(resume_id=resume_elena.id, name="Scikit-learn", sort_order=2),
-            ResumeSkill(resume_id=resume_elena.id, name="SQL", sort_order=3),
-        ])
-        session.add_all([
-            ResumeEducation(
-                resume_id=resume_elena.id, institution="ИТМО, Санкт-Петербург",
-                faculty="Прикладная математика", degree="Магистр", years="2026", sort_order=0,
-            ),
-        ])
-        session.add_all([
-            ResumeLanguage(resume_id=resume_elena.id, name="Русский", level="Родной", sort_order=0),
-            ResumeLanguage(resume_id=resume_elena.id, name="English", level="B2", sort_order=1),
-        ])
+        session.add_all(
+            [
+                ResumeExperience(
+                    resume_id=resume_elena.id,
+                    company="ИТМО, Data Lab",
+                    position="Data Scientist",
+                    period_from=datetime(2024, 6, 1),
+                    period_to=None,
+                    duration="настоящее время",
+                    responsibilities=["Сбор и очистка данных", "Обучение моделей", "Подготовка отчётов"],
+                    skills=["Python", "Pandas", "Scikit-learn"],
+                    sort_order=0,
+                ),
+            ]
+        )
+        session.add_all(
+            [
+                ResumeSkill(resume_id=resume_elena.id, name="Python", sort_order=0),
+                ResumeSkill(resume_id=resume_elena.id, name="Pandas", sort_order=1),
+                ResumeSkill(resume_id=resume_elena.id, name="Scikit-learn", sort_order=2),
+                ResumeSkill(resume_id=resume_elena.id, name="SQL", sort_order=3),
+            ]
+        )
+        session.add_all(
+            [
+                ResumeEducation(
+                    resume_id=resume_elena.id,
+                    institution="ИТМО, Санкт-Петербург",
+                    faculty="Прикладная математика",
+                    degree="Магистр",
+                    years="2026",
+                    sort_order=0,
+                ),
+            ]
+        )
+        session.add_all(
+            [
+                ResumeLanguage(resume_id=resume_elena.id, name="Русский", level="Родной", sort_order=0),
+                ResumeLanguage(resume_id=resume_elena.id, name="English", level="B2", sort_order=1),
+            ]
+        )
 
         # ────── Алексей Иванов: DevOps Engineer — 1 exp, 4 skills ──────
         resume_alexey = await self._resume_service.create_resume(
@@ -894,32 +994,57 @@ class FixtureService:
             ),
             _alexey.id,
         )
-        session.add_all([
-            ResumeExperience(
-                resume_id=resume_alexey.id, company="VK Cloud", position="DevOps Engineer",
-                period_from=datetime(2024, 1, 1), period_to=None, duration="настоящее время",
-                responsibilities=["Настройка CI/CD pipelines", "Контейнеризация сервисов", "Мониторинг инфраструктуры"],
-                skills=["Docker", "Kubernetes", "GitLab CI"], sort_order=0,
-            ),
-        ])
-        session.add_all([
-            ResumeSkill(resume_id=resume_alexey.id, name="Docker", sort_order=0),
-            ResumeSkill(resume_id=resume_alexey.id, name="Kubernetes", sort_order=1),
-            ResumeSkill(resume_id=resume_alexey.id, name="Linux", sort_order=2),
-            ResumeSkill(resume_id=resume_alexey.id, name="Terraform", sort_order=3),
-        ])
-        session.add_all([
-            ResumeLink(resume_id=resume_alexey.id, platform="GitHub", url="https://github.com/alexey-devops", sort_order=0),
-        ])
-        session.add_all([
-            ResumeEducation(
-                resume_id=resume_alexey.id, institution="ИТМО, Санкт-Петербург",
-                faculty="Инфокоммуникационные технологии", degree="Бакалавр", years="2025", sort_order=0,
-            ),
-        ])
-        session.add_all([
-            ResumeLanguage(resume_id=resume_alexey.id, name="Русский", level="Родной", sort_order=0),
-        ])
+        session.add_all(
+            [
+                ResumeExperience(
+                    resume_id=resume_alexey.id,
+                    company="VK Cloud",
+                    position="DevOps Engineer",
+                    period_from=datetime(2024, 1, 1),
+                    period_to=None,
+                    duration="настоящее время",
+                    responsibilities=[
+                        "Настройка CI/CD pipelines",
+                        "Контейнеризация сервисов",
+                        "Мониторинг инфраструктуры",
+                    ],
+                    skills=["Docker", "Kubernetes", "GitLab CI"],
+                    sort_order=0,
+                ),
+            ]
+        )
+        session.add_all(
+            [
+                ResumeSkill(resume_id=resume_alexey.id, name="Docker", sort_order=0),
+                ResumeSkill(resume_id=resume_alexey.id, name="Kubernetes", sort_order=1),
+                ResumeSkill(resume_id=resume_alexey.id, name="Linux", sort_order=2),
+                ResumeSkill(resume_id=resume_alexey.id, name="Terraform", sort_order=3),
+            ]
+        )
+        session.add_all(
+            [
+                ResumeLink(
+                    resume_id=resume_alexey.id, platform="GitHub", url="https://github.com/alexey-devops", sort_order=0
+                ),
+            ]
+        )
+        session.add_all(
+            [
+                ResumeEducation(
+                    resume_id=resume_alexey.id,
+                    institution="ИТМО, Санкт-Петербург",
+                    faculty="Инфокоммуникационные технологии",
+                    degree="Бакалавр",
+                    years="2025",
+                    sort_order=0,
+                ),
+            ]
+        )
+        session.add_all(
+            [
+                ResumeLanguage(resume_id=resume_alexey.id, name="Русский", level="Родной", sort_order=0),
+            ]
+        )
 
         await session.flush()
 

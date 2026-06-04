@@ -9,7 +9,8 @@ from sqlalchemy.inspection import inspect as sqlalchemy_inspect
 from src.core.audit_context import get_audit_context
 from src.core.logging_config import get_logger
 from src.model.audit import AuditLog
-from src.model.project import Project, Resume
+from src.model.project import Project
+from src.model.resume import Resume
 from src.model.user import User
 
 logger = get_logger(__name__)
