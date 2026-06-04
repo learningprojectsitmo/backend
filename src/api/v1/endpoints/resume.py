@@ -54,10 +54,10 @@ async def fetch_resume(
 async def fetch_resume_detail(
     resume_id: int,
     resume_service: ResumeService = Depends(get_resume_service),
-    _current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> ResumeDetail:
     """Получить полное резюме со всеми секциями"""
-    detail = await resume_service.get_resume_detail(resume_id)
+    detail = await resume_service.get_resume_detail(resume_id, viewer=current_user)
     if not detail:
         raise HTTPException(status_code=404, detail="There is no resume with that id!")
     return detail

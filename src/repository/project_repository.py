@@ -117,6 +117,14 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         result = await self.uow.session.execute(query)
         return list(result.scalars().all())
 
+    async def count_invitations_by_user_id(self, user_id: int) -> int:
+        result = await self.uow.session.execute(
+            select(func.count())
+            .select_from(Response)
+            .where(Response.respondent_id == user_id, Response.type == "invitation"),
+        )
+        return result.scalar() or 0
+
     async def get_projects_by_workspace(self, workspace_id: int, skip: int = 0, limit: int = 100) -> list[Project]:
         query = (
             select(Project)

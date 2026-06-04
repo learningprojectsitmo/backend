@@ -266,6 +266,7 @@ async def get_profile_service(
     portfolio_repository: PortfolioRepository = Depends(get_portfolio_repository),
     education_repository: EducationRepository = Depends(get_education_repository),
     language_repository: LanguageRepository = Depends(get_language_repository),
+    project_repository: ProjectRepository = Depends(get_project_repository),
 ) -> ProfileService:
     return ProfileService(
         user_repository,
@@ -273,6 +274,7 @@ async def get_profile_service(
         portfolio_repository,
         education_repository,
         language_repository,
+        project_repository,
     )
 
 
