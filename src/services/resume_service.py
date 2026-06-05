@@ -76,6 +76,7 @@ class ResumeService(BaseService[Resume, ResumeCreate, ResumeUpdate]):
             role_name = viewer.role.name if viewer.role else ""
             if role_name not in ("admin", "teacher"):
                 await self._resume_repository.increment_views_count(resume_id)
+                await self._resume_repository.uow.session.refresh(resume)
 
         user = resume.user
         return ResumeDetail(

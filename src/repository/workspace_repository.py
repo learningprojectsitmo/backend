@@ -6,7 +6,7 @@ from sqlalchemy.orm import selectinload
 
 from src.core.uow import IUnitOfWork
 from src.model.project import Project, ProjectParticipation
-from src.model.resume import Resume
+from src.model.resume import Resume, ResumeInterest, ResumeSkill
 from src.model.settings import SpaceSettings
 from src.model.user import User
 from src.model.workspace import WorkSpace, WorkSpaceCategories, WorkSpaceParticipation
@@ -231,6 +231,69 @@ class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUp
             )
 
         return items, total
+
+    async def get_workspace_resumes(self, workspace_id: int) -> list[dict]:
+        """Получить все видимые резюме участников workspace со скиллами и интересами"""
+
+        user_name = func.concat_ws(" ", User.last_name, User.first_name, User.middle_name).label("participant_name")
+
+        skills_subq = (
+            select(
+                ResumeSkill.resume_id,
+                func.array_agg(ResumeSkill.name).label("skills"),
+            )
+            .group_by(ResumeSkill.resume_id)
+            .subquery()
+        )
+
+        interests_subq = (
+            select(
+                ResumeInterest.resume_id,
+                func.array_agg(ResumeInterest.name).label("interests"),
+            )
+            .group_by(ResumeInterest.resume_id)
+            .subquery()
+        )
+
+        query = (
+            select(
+                Resume.id,
+                Resume.header,
+                skills_subq.c.skills,
+                interests_subq.c.interests,
+                user_name,
+                WorkSpaceParticipation.participant_id,
+            )
+            .select_from(WorkSpaceParticipation)
+            .join(User, User.id == WorkSpaceParticipation.participant_id)
+            .join(Resume, Resume.author_id == WorkSpaceParticipation.participant_id)
+            .outerjoin(skills_subq, skills_subq.c.resume_id == Resume.id)
+            .outerjoin(interests_subq, interests_subq.c.resume_id == Resume.id)
+            .where(
+                WorkSpaceParticipation.workspace_id == workspace_id,
+                Resume.is_visible.is_(True),
+                Resume.header != '',
+            )
+            .order_by(Resume.id)
+        )
+
+        result = await self.uow.session.execute(query)
+        rows = result.mappings().all()
+
+        items = []
+        for row in rows:
+            items.append(
+                {
+                    "id": row["id"],
+                    "header": row["header"],
+                    "skills": [s for s in (row["skills"] or []) if s],
+                    "interests": [i for i in (row["interests"] or []) if i],
+                    "participant_name": row["participant_name"] or "",
+                    "participant_id": row["participant_id"],
+                }
+            )
+
+        return items
 
     async def get_workspaces_menu_data(self, user_id: int, skip: int = 0, limit: int = 10) -> tuple[list[dict], int]:
         """Получить workspace с подсчётом участников (только видимые пользователю)"""

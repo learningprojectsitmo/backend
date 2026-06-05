@@ -103,6 +103,10 @@ class WorkSpaceService(BaseService[WorkSpace, WorkSpaceCreate, WorkSpaceUpdate])
         """Удалить участника из workspace"""
         return await self._workspace_repository.remove_participant(workspace_id, user_id)
 
+    async def get_workspace_resumes(self, workspace_id: int) -> list[dict]:
+        """Получить все видимые резюме участников workspace"""
+        return await self._workspace_repository.get_workspace_resumes(workspace_id)
+
     async def get_all_categories(self) -> list:
         """Получить все категории workspace"""
         return await self._workspace_repository.get_all_categories()

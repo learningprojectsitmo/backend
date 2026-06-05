@@ -119,3 +119,23 @@ class WorkspaceParticipantListResponse(BaseModel):
     page: int
     limit: int
     total_pages: int
+
+
+class WorkspaceResumeItem(BaseModel):
+    """Резюме участника workspace (упрощённое, для карточек)"""
+
+    id: int
+    header: str
+    skills: list[str] = []
+    interests: list[str] = []
+    participant_name: str
+    participant_id: int
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class WorkspaceResumeListResponse(BaseModel):
+    """Список резюме участников workspace"""
+
+    items: list[WorkspaceResumeItem]
+    total: int

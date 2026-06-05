@@ -16,6 +16,8 @@ from src.schema.workspace import (
     WorkSpaceFull,
     WorkspaceParticipantItem,
     WorkspaceParticipantListResponse,
+    WorkspaceResumeItem,
+    WorkspaceResumeListResponse,
     WorkSpaceUpdate,
 )
 from src.services.settings_service import SpaceSettingsService
@@ -153,8 +155,25 @@ async def get_workspace_participants(
         total=total,
         page=page,
         limit=limit,
-        total_pages=(total + limit - 1) // limit if limit > 0 else 0,
-    )
+            total_pages=(total + limit - 1) // limit if limit > 0 else 0,
+        )
+
+
+@workspace_router.get("/{workspace_id}/resumes", response_model=WorkspaceResumeListResponse)
+async def get_workspace_resumes(
+    workspace_id: int,
+    workspace_service: WorkSpaceService = Depends(get_workspace_service),
+    _current_user: User = Depends(get_current_user),
+) -> WorkspaceResumeListResponse:
+    """Получить все видимые резюме участников workspace"""
+    workspace = await workspace_service.get_workspace_by_id(workspace_id)
+    if not workspace:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    items = await workspace_service.get_workspace_resumes(workspace_id)
+    parsed = [WorkspaceResumeItem.model_validate(item) for item in items]
+
+    return WorkspaceResumeListResponse(items=parsed, total=len(parsed))
 
 
 @workspace_router.delete("/{workspace_id}/participants/{user_id}")
