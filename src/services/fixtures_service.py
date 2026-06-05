@@ -539,7 +539,7 @@ class FixtureService:
                 ResumeLanguage(resume_id=resume_admin.id, name="Русский", level="Родной", sort_order=0),
                 ResumeLanguage(resume_id=resume_admin.id, name="English", level="B2", sort_order=1),
             ]
-        )tg_nickname
+        )
 
         # ────── Кирилл Сомов: Product Manager — 1 exp, 4 skills, 2 interests, 0 links, 1 edu, 1 lang ──────
         resume_kirill = await self._resume_service.create_resume(
