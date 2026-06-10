@@ -125,6 +125,17 @@ async def withdraw_response(
     return {"message": "Response withdrawn successfully"}
 
 
+@response_router.patch("/{response_id}/confirm-join")
+async def confirm_join(
+    response_id: int,
+    project_service: ProjectService = Depends(get_project_service),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, str]:
+    """Участник подтверждает вступление в проект"""
+    await project_service.confirm_join(response_id, current_user.id)
+    return {"message": "Joined project successfully"}
+
+
 @invitation_router.patch("/{invitation_id}/accept")
 async def accept_invitation(
     invitation_id: int,

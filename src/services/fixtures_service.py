@@ -270,6 +270,28 @@ class FixtureService:
             return
 
         admin = users[0]
+        member = users[1]
+
+        # Добавляем member в workspace, чтобы он мог откликаться на проекты
+        if workspaces_by_name:
+            for ws_name in ["Admin Workspace 1", "Admin Workspace 2"]:
+                ws = workspaces_by_name.get(ws_name)
+                if ws:
+                    existing = await session.execute(
+                        select(WorkSpaceParticipation).where(
+                            WorkSpaceParticipation.workspace_id == ws.id,
+                            WorkSpaceParticipation.participant_id == member.id,
+                        )
+                    )
+                    if not existing.scalar_one_or_none():
+                        session.add(
+                            WorkSpaceParticipation(
+                                workspace_id=ws.id,
+                                participant_id=member.id,
+                            )
+                        )
+            await session.flush()
+
         await self._seed_accepted_responses(session, users)
         await self._seed_accepted_invitations(session, users, admin)
         await self._seed_pending_responses(session, users)
@@ -357,7 +379,6 @@ class FixtureService:
             (users[1], "Tasker", "Backend Developer"),
             (users[8], "Tasker", "Frontend Developer"),
             (users[5], "Campus Map", "Mobile Developer (React Native)"),
-            (users[1], "AI Learning Platform", "ML Engineer"),
         ]
         for user, project_name, title in pairs:
             vacancy_id = await self._find_vacancy_id(project_name, title)

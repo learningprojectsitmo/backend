@@ -210,6 +210,17 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         )
         return result.scalar_one_or_none() is not None
 
+    async def has_pending_invitation(self, project_id: int, user_id: int) -> bool:
+        result = await self.uow.session.execute(
+            select(Response).where(
+                Response.project_id == project_id,
+                Response.respondent_id == user_id,
+                Response.type == "invitation",
+                Response.status == "pending",
+            ),
+        )
+        return result.scalar_one_or_none() is not None
+
     async def create_response(
         self,
         respondent_id: int,

@@ -436,6 +436,8 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
             raise ValidationError("You are already a participant of this project")
         if await self._project_repository.has_pending_response(project_id, user_id):
             raise ValidationError("You already have a pending response for this project")
+        if await self._project_repository.has_pending_invitation(project_id, user_id):
+            raise ValidationError("You already have a pending invitation for this project")
         response = await self._project_repository.create_response(
             respondent_id=user_id,
             project_id=project_id,
@@ -470,6 +472,8 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
             raise PermissionError("Only project author can invite")
         if await self._project_repository.is_user_in_project(project_id, invitee_id):
             raise ValidationError("User is already a participant of this project")
+        if await self._project_repository.has_pending_response(project_id, invitee_id):
+            raise ValidationError("User already has a pending response for this project")
         invitation = await self._project_repository.create_response(
             respondent_id=invitee_id,
             project_id=project_id,
@@ -493,7 +497,7 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         return invitation
 
     async def accept_response(self, response_id: int, author_id: int) -> Response:
-        """Принять отклик (автор проекта) — создаёт приглашение для пользователя"""
+        """Принять отклик (автор проекта) — участник получает уведомление и решает, вступить ли"""
         response = await self._project_repository.get_response_by_id(response_id)
         if not response:
             raise NotFoundError("Response not found")
@@ -509,13 +513,6 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         result = await self._project_repository.update_response_status(response_id, "accepted")
         if not result:
             raise NotFoundError("Response not found")
-        invitation = await self._project_repository.create_response(
-            respondent_id=response.respondent_id,
-            project_id=response.project_id,
-            vacancy_id=response.vacancy_id,
-            type="invitation",
-            inviter_id=author_id,
-        )
         if self._notification_service and project.author:
             actor_name = f"{project.author.first_name} {project.author.last_name or ''}".strip()
             await self._notification_service.create_notification(
@@ -526,9 +523,28 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
                 project_id=response.project_id,
                 project_name=project.name,
                 vacancy_title=response.vacancy.title if response.vacancy else None,
-                invitation_id=invitation.id,
+                response_id=response.id,
             )
-        return invitation
+        return result
+
+    async def confirm_join(self, response_id: int, user_id: int) -> Response:
+        """Участник подтверждает вступление в проект после принятия отклика"""
+        response = await self._project_repository.get_response_by_id(response_id)
+        if not response:
+            raise NotFoundError("Response not found")
+        if response.respondent_id != user_id:
+            raise PermissionError("This response is not yours")
+        if response.type != "response":
+            raise ValidationError("This is not a response")
+        if response.status != "accepted":
+            raise ValidationError("Can only confirm accepted responses")
+        project = await self._project_repository.get_by_id(response.project_id)
+        if project and project.max_participants is not None and len(project.participants) >= project.max_participants:
+            raise ValidationError("Project has reached maximum number of participants")
+        await self._project_repository.add_participant(response.project_id, user_id)
+        if response.vacancy_id:
+            await self._project_repository.decrement_vacancy_count(response.vacancy_id)
+        return response
 
     async def reject_response(self, response_id: int, author_id: int) -> Response:
         """Отклонить отклик (автор проекта)"""
