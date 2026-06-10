@@ -11,6 +11,7 @@ from src.core.database import Base
 
 if TYPE_CHECKING:
     from src.model.kanban_models import Column
+    from src.model.resume import Resume
     from src.model.user import User
     from src.model.workspace import WorkSpace
 
@@ -134,6 +135,7 @@ class Response(Base):
     project_id: Mapped[int] = mapped_column(ForeignKey("project.id"), nullable=False)
     vacancy_id: Mapped[int | None] = mapped_column(ForeignKey("project_vacancy.id"), nullable=True)
     inviter_id: Mapped[int | None] = mapped_column(ForeignKey("user.id"), nullable=True)
+    resume_id: Mapped[int | None] = mapped_column(ForeignKey("resume.id"), nullable=True)
     type: Mapped[str] = mapped_column(String(20), nullable=False, default="response")
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
     note: Mapped[str | None] = mapped_column(String(200), nullable=True)
@@ -146,6 +148,7 @@ class Response(Base):
     inviter: Mapped[User | None] = relationship(foreign_keys=[inviter_id])
     project: Mapped[Project] = relationship(back_populates="responses")
     vacancy: Mapped[ProjectVacancy | None] = relationship(back_populates="responses")
+    resume: Mapped[Resume | None] = relationship(foreign_keys=[resume_id])
 
     def __repr__(self) -> str:
         return f"Response(id={self.id!r}, respondent_id={self.respondent_id!r}, project_id={self.project_id!r})"

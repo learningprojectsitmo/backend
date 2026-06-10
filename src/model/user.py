@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from src.model.ideas import Idea
     from src.model.kanban_models import Task
     from src.model.language import Language
+    from src.model.notification import Notification
     from src.model.portfolio import Portfolio
     from src.model.workspace import WorkSpaceParticipation
 from src.model.project import Project, ProjectParticipation, Response
@@ -81,6 +82,13 @@ class User(Base):
         back_populates="author",
         cascade="all, delete-orphan",
     )
+    notifications: Mapped[list[Notification]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    lang: Mapped[str] = mapped_column(String(10), nullable=False, server_default="ru")
+    push_token: Mapped[str | None] = mapped_column(String(255), nullable=True, comment="FCM/APNs push token for mobile")
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False

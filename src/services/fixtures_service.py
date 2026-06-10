@@ -4,6 +4,7 @@ from datetime import datetime
 
 from sqlalchemy import and_, select
 
+from src.model.notification import Notification, NotificationType
 from src.model.project import Project, ProjectParticipation, ProjectVacancy, Response
 from src.model.resume import (
     Resume,
@@ -30,6 +31,7 @@ from src.schema.workspace import WorkSpaceCreate
 from src.services.education_service import EducationService
 from src.services.kanban_service import KanbanService
 from src.services.language_service import LanguageService
+from src.services.notification_service import NotificationService
 from src.services.permission_service import PermissionService
 from src.services.portfolio_service import PortfolioService
 from src.services.project_service import ProjectService
@@ -57,6 +59,7 @@ class FixtureService:
         portfolio_service: PortfolioService,
         education_service: EducationService,
         language_service: LanguageService,
+        notification_service: NotificationService | None = None,
     ) -> None:
         self._permission_service = permission_service
         self._role_service = role_service
@@ -70,6 +73,7 @@ class FixtureService:
         self._portfolio_service = portfolio_service
         self._education_service = education_service
         self._language_service = language_service
+        self._notification_service = notification_service
 
     # ─── main entry ────────────────────────────────────────────────────────
 
@@ -88,6 +92,7 @@ class FixtureService:
         await self._seed_portfolio(admin)
         await self._seed_education(admin)
         await self._seed_languages(admin)
+        await self._seed_notifications(users, workspaces_by_name)
 
     # ─── permissions ───────────────────────────────────────────────────────
 
@@ -1109,6 +1114,131 @@ class FixtureService:
             LanguageCreate(name="English", level="B2", flag="🇬🇧"),
             admin.id,
         )
+
+    # ─── notifications ─────────────────────────────────────────────────────
+
+    async def _seed_notifications(self, users: list, workspaces_by_name: dict | None = None) -> None:
+        if not self._notification_service:
+            return
+
+        session = self._project_repository.uow.session
+
+        result = await session.execute(select(Notification).limit(1))
+        if result.scalar_one_or_none():
+            return
+
+        admin = users[0]
+        member = users[1]
+
+        projects_result = await session.execute(select(Project).limit(10))
+        all_projects = list(projects_result.scalars().all())
+
+        project_map = {p.name: p for p in all_projects}
+
+        # build lookup for Response records (project_id, respondent_id) -> Response
+        responses_result = await session.execute(select(Response))
+        all_responses = list(responses_result.scalars().all())
+        response_lookup: dict[tuple[int, int], Response] = {}
+        invitation_lookup: dict[tuple[int, int], Response] = {}
+        for r in all_responses:
+            if r.type == "response":
+                response_lookup[(r.project_id, r.respondent_id)] = r
+            elif r.type == "invitation":
+                invitation_lookup[(r.project_id, r.respondent_id)] = r
+
+        def pname(name: str) -> tuple[int, str]:
+            p = project_map.get(name)
+            return (p.id, p.name) if p else (0, name)
+
+        def actor(user) -> tuple[int, str]:
+            name = f"{user.first_name} {user.last_name or ''}".strip()
+            return (user.id, name)
+
+        # response_received: someone applied to admin's project
+        for project_name in ["Tasker — платформа управления задачами", "Campus Map"]:
+            pid, pname_str = pname(project_name)
+            if pid:
+                for u in [member]:
+                    aid, aname = actor(u)
+                    resp = response_lookup.get((pid, u.id))
+                    await self._notification_service.create_notification(
+                        user_id=admin.id, type=NotificationType.response_received,
+                        actor_name=aname, actor_id=aid,
+                        project_id=pid, project_name=pname_str,
+                        response_id=resp.id if resp else None,
+                    )
+
+        # response_accepted: admin accepted someone's response
+        for project_name in ["Tasker — платформа управления задачами", "Campus Map", "Telegram-бот для учебных опросов"]:
+            pid, pname_str = pname(project_name)
+            if pid:
+                for u in users[2:4]:
+                    aid, aname = actor(admin)
+                    resp = response_lookup.get((pid, u.id))
+                    await self._notification_service.create_notification(
+                        user_id=u.id, type=NotificationType.response_accepted,
+                        actor_name=aname, actor_id=admin.id,
+                        project_id=pid, project_name=pname_str,
+                        response_id=resp.id if resp else None,
+                    )
+
+        # response_rejected: admin rejected someone
+        for project_name in ["Tasker — платформа управления задачами"]:
+            pid, pname_str = pname(project_name)
+            if pid:
+                for u in users[7:8]:
+                    aid, aname = actor(admin)
+                    resp = response_lookup.get((pid, u.id))
+                    await self._notification_service.create_notification(
+                        user_id=u.id, type=NotificationType.response_rejected,
+                        actor_name=aname, actor_id=admin.id,
+                        project_id=pid, project_name=pname_str,
+                        response_id=resp.id if resp else None,
+                    )
+
+        # invitation_received: admin invited someone
+        for project_name in ["AI Learning Platform", "База знаний факультета"]:
+            pid, pname_str = pname(project_name)
+            if pid:
+                for u in [member, users[6]]:
+                    aid, aname = actor(admin)
+                    inv = invitation_lookup.get((pid, u.id))
+                    await self._notification_service.create_notification(
+                        user_id=u.id, type=NotificationType.invitation_received,
+                        actor_name=aname, actor_id=admin.id,
+                        project_id=pid, project_name=pname_str,
+                        invitation_id=inv.id if inv else None,
+                    )
+
+        # invitation_accepted: someone accepted admin's invitation
+        for project_name in ["Платформа для хакатонов"]:
+            pid, pname_str = pname(project_name)
+            if pid:
+                for u in users[2:5]:
+                    aid, aname = actor(u)
+                    inv = invitation_lookup.get((pid, u.id))
+                    await self._notification_service.create_notification(
+                        user_id=admin.id, type=NotificationType.invitation_accepted,
+                        actor_name=aname, actor_id=u.id,
+                        project_id=pid, project_name=pname_str,
+                        invitation_id=inv.id if inv else None,
+                    )
+
+        # invitation_rejected: someone rejected admin's invitation
+        for project_name in ["AI Learning Platform"]:
+            pid, pname_str = pname(project_name)
+            if pid:
+                for u in [member]:
+                    aid, aname = actor(u)
+                    inv = invitation_lookup.get((pid, u.id))
+                    await self._notification_service.create_notification(
+                        user_id=admin.id, type=NotificationType.invitation_rejected,
+                        actor_name=aname, actor_id=u.id,
+                        project_id=pid, project_name=pname_str,
+                        invitation_id=inv.id if inv else None,
+                    )
+
+        await session.flush()
 
     # ─── workspace statuses ────────────────────────────────────────────────
 

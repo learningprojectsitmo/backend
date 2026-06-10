@@ -11,6 +11,7 @@ from src.repository.ideas_repository import IdeaCommentRepository, IdeaRepositor
 from src.repository.invitation_repository import InvitationRepository
 from src.repository.kanban_repository import KanbanColumnRepository, KanbanSubtaskRepository, KanbanTaskRepository
 from src.repository.language_repository import LanguageRepository
+from src.repository.notification_repository import NotificationRepository
 from src.repository.password_reset_repository import PasswordResetRepository
 from src.repository.permission_repository import PermissionRepository
 from src.repository.portfolio_repository import PortfolioRepository
@@ -29,6 +30,7 @@ from src.services.ideas_service import IdeaService, IdeaTagService
 from src.services.invitation_service import InvitationService
 from src.services.kanban_service import KanbanService
 from src.services.language_service import LanguageService
+from src.services.notification_service import NotificationService
 from src.services.permission_service import PermissionService
 from src.services.portfolio_service import PortfolioService
 from src.services.profile_service import ProfileService
@@ -117,6 +119,10 @@ async def get_invitation_repository(uow: IUnitOfWork = Depends(get_uow)) -> Invi
     return InvitationRepository(uow)
 
 
+async def get_notification_repository(uow: IUnitOfWork = Depends(get_uow)) -> NotificationRepository:
+    return NotificationRepository(uow)
+
+
 # Service
 async def get_kanban_column_repository(uow: IUnitOfWork = Depends(get_uow)) -> KanbanColumnRepository:
     return KanbanColumnRepository(uow)
@@ -153,11 +159,22 @@ async def get_resume_service(
     )
 
 
+async def get_notification_service(
+    notification_repository: NotificationRepository = Depends(get_notification_repository),
+) -> NotificationService:
+    return NotificationService(notification_repository)
+
+
 async def get_project_service(
     project_repository: ProjectRepository = Depends(get_project_repository),
     resume_repository: ResumeRepository = Depends(get_resume_repository),
+    notification_service: NotificationService = Depends(get_notification_service),
 ) -> ProjectService:
-    return ProjectService(project_repository, resume_repository=resume_repository)
+    return ProjectService(
+        project_repository,
+        resume_repository=resume_repository,
+        notification_service=notification_service,
+    )
 
 
 async def get_auth_service(
@@ -320,6 +337,7 @@ async def get_fixtures_service(
     portfolio_service: PortfolioService = Depends(get_portfolio_service),
     education_service: EducationService = Depends(get_education_service),
     language_service: LanguageService = Depends(get_language_service),
+    notification_service: NotificationService = Depends(get_notification_service),
 ) -> FixtureService:
     return FixtureService(
         permission_service,
@@ -334,4 +352,5 @@ async def get_fixtures_service(
         portfolio_service,
         education_service,
         language_service,
+        notification_service=notification_service,
     )

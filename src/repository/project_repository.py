@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import selectinload
 
 from src.core.uow import IUnitOfWork
@@ -25,6 +25,9 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
                 selectinload(Project.status),
                 selectinload(Project.vacancies),
                 selectinload(Project.responses).selectinload(Response.vacancy),
+                selectinload(Project.responses).selectinload(Response.respondent),
+                selectinload(Project.responses).selectinload(Response.inviter),
+                selectinload(Project.responses).selectinload(Response.resume),
             )
         )
         result = await self.uow.session.execute(query)
@@ -215,6 +218,7 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         type: str = "response",
         inviter_id: int | None = None,
         note: str | None = None,
+        resume_id: int | None = None,
     ) -> Response:
         response = Response(
             respondent_id=respondent_id,
@@ -223,11 +227,28 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
             type=type,
             inviter_id=inviter_id,
             note=note,
+            resume_id=resume_id,
         )
         self.uow.session.add(response)
         await self.uow.session.flush()
         await self.uow.session.refresh(response, ["vacancy"])
         return response
+
+    async def decrement_vacancy_count(self, vacancy_id: int) -> None:
+        await self.uow.session.execute(
+            update(ProjectVacancy)
+            .where(ProjectVacancy.id == vacancy_id, ProjectVacancy.required_count > 0)
+            .values(required_count=ProjectVacancy.required_count - 1),
+        )
+        await self.uow.session.flush()
+
+    async def increment_vacancy_count(self, vacancy_id: int) -> None:
+        await self.uow.session.execute(
+            update(ProjectVacancy)
+            .where(ProjectVacancy.id == vacancy_id)
+            .values(required_count=ProjectVacancy.required_count + 1),
+        )
+        await self.uow.session.flush()
 
     async def add_participant(self, project_id: int, user_id: int) -> ProjectParticipation:
         participation = ProjectParticipation(
@@ -248,3 +269,15 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
             )
         )
         return list(result.scalars().all())
+
+    async def get_accepted_response_for_participant(
+        self, project_id: int, user_id: int
+    ) -> Response | None:
+        result = await self.uow.session.execute(
+            select(Response).where(
+                Response.project_id == project_id,
+                Response.respondent_id == user_id,
+                Response.status == "accepted",
+            )
+        )
+        return result.scalar_one_or_none()

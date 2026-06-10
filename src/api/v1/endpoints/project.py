@@ -187,7 +187,7 @@ async def apply_for_project(
     current_user: User = Depends(get_current_user),
 ) -> dict[str, str]:
     """Откликнуться на проект"""
-    await project_service.apply_for_project(project_id, current_user.id, body.vacancy_id)
+    await project_service.apply_for_project(project_id, current_user.id, body.vacancy_id, body.resume_id)
     return {"message": "Application sent successfully"}
 
 
@@ -199,7 +199,7 @@ async def invite_to_project(
     current_user: User = Depends(get_current_user),
 ) -> dict[str, str]:
     """Пригласить пользователя в проект (только автор)"""
-    await project_service.invite_to_project(project_id, current_user.id, body.user_id, body.vacancy_id)
+    await project_service.invite_to_project(project_id, current_user.id, body.user_id, body.vacancy_id, body.resume_id)
     return {"message": "Invitation sent successfully"}
 
 

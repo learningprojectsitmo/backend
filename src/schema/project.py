@@ -81,11 +81,13 @@ class ProjectCreate(BaseModel):
 
 class ApplyRequest(BaseModel):
     vacancy_id: int | None = None
+    resume_id: int | None = None
 
 
 class InviteRequest(BaseModel):
     user_id: int
     vacancy_id: int | None = None
+    resume_id: int | None = None
 
 
 class ProjectUpdate(BaseModel):
@@ -290,6 +292,7 @@ class MyResponseItem(BaseModel):
     project_name: str
     description: str = ""
     role: str = ""
+    resume_id: int | None = None
     resume_url: str = ""
     resume_title: str = ""
     date: str
@@ -314,6 +317,7 @@ class MyInvitationItem(BaseModel):
     description: str = ""
     inviter_name: str
     role: str = ""
+    resume_id: int | None = None
     resume_url: str = ""
     resume_title: str = ""
     date: str

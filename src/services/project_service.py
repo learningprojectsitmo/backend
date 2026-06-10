@@ -5,7 +5,9 @@ from typing import TYPE_CHECKING
 from sqlalchemy import select
 
 from src.core.exceptions import NotFoundError, PermissionError, ValidationError
+from src.model.notification import NotificationType
 from src.model.project import Project, ProjectParticipation, ProjectVacancy, Response
+from src.model.user import User
 from src.model.workspace import WorkSpaceParticipation
 from src.schema.project import (
     MyInvitationItem,
@@ -25,6 +27,7 @@ from src.services.base_service import BaseService
 if TYPE_CHECKING:
     from src.repository.project_repository import ProjectRepository
     from src.repository.resume_repository import ResumeRepository
+    from src.services.notification_service import NotificationService
 
 
 class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
@@ -32,10 +35,12 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         self,
         project_repository: ProjectRepository,
         resume_repository: ResumeRepository | None = None,
+        notification_service: NotificationService | None = None,
     ):
         super().__init__(project_repository)
         self._project_repository = project_repository
         self._resume_repository = resume_repository
+        self._notification_service = notification_service
 
     async def _get_user_resume_url(self, user_id: int) -> tuple[str, str]:
         """Получить URL и заголовок первого резюме пользователя"""
@@ -185,6 +190,22 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
             raise NotFoundError("Invitation not found")
         # Добавляем пользователя как участника проекта
         await self._project_repository.add_participant(invitation.project_id, user_id)
+        # Уменьшаем количество необходимых участников для роли
+        if invitation.vacancy_id:
+            await self._project_repository.decrement_vacancy_count(invitation.vacancy_id)
+        if self._notification_service and invitation.inviter_id and project:
+            invitee = await self._project_repository.uow.session.get(User, user_id)
+            actor_name = f"{invitee.first_name} {invitee.last_name or ''}".strip() if invitee else "User"
+            await self._notification_service.create_notification(
+                user_id=invitation.inviter_id,
+                type=NotificationType.invitation_accepted,
+                actor_name=actor_name,
+                actor_id=user_id,
+                project_id=invitation.project_id,
+                project_name=project.name,
+                vacancy_title=invitation.vacancy.title if invitation.vacancy else None,
+                invitation_id=invitation_id,
+            )
         return result
 
     async def reject_invitation(self, invitation_id: int, user_id: int) -> Response:
@@ -201,6 +222,20 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         result = await self._project_repository.update_response_status(invitation_id, "rejected")
         if not result:
             raise NotFoundError("Invitation not found")
+        if self._notification_service and invitation.inviter_id:
+            project = await self._project_repository.get_by_id(invitation.project_id)
+            invitee = await self._project_repository.uow.session.get(User, user_id)
+            actor_name = f"{invitee.first_name} {invitee.last_name or ''}".strip() if invitee else "User"
+            project_name = project.name if project else "Project"
+            await self._notification_service.create_notification(
+                user_id=invitation.inviter_id,
+                type=NotificationType.invitation_rejected,
+                actor_name=actor_name,
+                actor_id=user_id,
+                project_id=invitation.project_id,
+                project_name=project_name,
+                invitation_id=invitation_id,
+            )
         return result
 
     async def get_projects_by_workspace(
@@ -380,9 +415,17 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
             return False
         if project.author_id != current_user_id:
             raise PermissionError("Only project author can remove participants")
+        # Увеличиваем количество мест в вакансии если участник был принят по роли
+        accepted = await self._project_repository.get_accepted_response_for_participant(
+            project_id, participant_user_id
+        )
+        if accepted and accepted.vacancy_id:
+            await self._project_repository.increment_vacancy_count(accepted.vacancy_id)
         return await self._project_repository.remove_participant(project_id, participant_user_id)
 
-    async def apply_for_project(self, project_id: int, user_id: int, vacancy_id: int | None = None) -> Response:
+    async def apply_for_project(
+        self, project_id: int, user_id: int, vacancy_id: int | None = None, resume_id: int | None = None
+    ) -> Response:
         """Откликнуться на проект"""
         project = await self._project_repository.get_by_id(project_id)
         if not project:
@@ -393,15 +436,31 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
             raise ValidationError("You are already a participant of this project")
         if await self._project_repository.has_pending_response(project_id, user_id):
             raise ValidationError("You already have a pending response for this project")
-        return await self._project_repository.create_response(
+        response = await self._project_repository.create_response(
             respondent_id=user_id,
             project_id=project_id,
             vacancy_id=vacancy_id,
+            resume_id=resume_id,
             type="response",
         )
+        if self._notification_service and project.author:
+            user = await self._project_repository.uow.session.get(User, user_id)
+            actor_name = f"{user.first_name} {user.last_name or ''}".strip() if user else "User"
+            await self._notification_service.create_notification(
+                user_id=project.author_id,
+                type=NotificationType.response_received,
+                actor_name=actor_name,
+                actor_id=user_id,
+                project_id=project_id,
+                project_name=project.name,
+                vacancy_title=response.vacancy.title if response.vacancy else None,
+                response_id=response.id,
+            )
+        return response
 
     async def invite_to_project(
-        self, project_id: int, inviter_id: int, invitee_id: int, vacancy_id: int | None = None
+        self, project_id: int, inviter_id: int, invitee_id: int, vacancy_id: int | None = None,
+        resume_id: int | None = None,
     ) -> Response:
         """Пригласить пользователя в проект"""
         project = await self._project_repository.get_by_id(project_id)
@@ -411,13 +470,27 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
             raise PermissionError("Only project author can invite")
         if await self._project_repository.is_user_in_project(project_id, invitee_id):
             raise ValidationError("User is already a participant of this project")
-        return await self._project_repository.create_response(
+        invitation = await self._project_repository.create_response(
             respondent_id=invitee_id,
             project_id=project_id,
             vacancy_id=vacancy_id,
+            resume_id=resume_id,
             type="invitation",
             inviter_id=inviter_id,
         )
+        if self._notification_service and project.author:
+            actor_name = f"{project.author.first_name} {project.author.last_name or ''}".strip()
+            await self._notification_service.create_notification(
+                user_id=invitee_id,
+                type=NotificationType.invitation_received,
+                actor_name=actor_name,
+                actor_id=inviter_id,
+                project_id=project_id,
+                project_name=project.name,
+                vacancy_title=invitation.vacancy.title if invitation.vacancy else None,
+                invitation_id=invitation.id,
+            )
+        return invitation
 
     async def accept_response(self, response_id: int, author_id: int) -> Response:
         """Принять отклик (автор проекта) — создаёт приглашение для пользователя"""
@@ -443,6 +516,18 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
             type="invitation",
             inviter_id=author_id,
         )
+        if self._notification_service and project.author:
+            actor_name = f"{project.author.first_name} {project.author.last_name or ''}".strip()
+            await self._notification_service.create_notification(
+                user_id=response.respondent_id,
+                type=NotificationType.response_accepted,
+                actor_name=actor_name,
+                actor_id=author_id,
+                project_id=response.project_id,
+                project_name=project.name,
+                vacancy_title=response.vacancy.title if response.vacancy else None,
+                invitation_id=invitation.id,
+            )
         return invitation
 
     async def reject_response(self, response_id: int, author_id: int) -> Response:
@@ -460,6 +545,17 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         result = await self._project_repository.update_response_status(response_id, "rejected")
         if not result:
             raise NotFoundError("Response not found")
+        if self._notification_service and project.author:
+            actor_name = f"{project.author.first_name} {project.author.last_name or ''}".strip()
+            await self._notification_service.create_notification(
+                user_id=response.respondent_id,
+                type=NotificationType.response_rejected,
+                actor_name=actor_name,
+                actor_id=author_id,
+                project_id=response.project_id,
+                project_name=project.name,
+                response_id=response.id,
+            )
         return result
 
     async def get_project_responses(self, project_id: int, author_id: int) -> list[Response]:
