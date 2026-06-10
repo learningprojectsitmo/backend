@@ -6,6 +6,8 @@ from src.core.container import get_kanban_service, get_project_service
 from src.core.dependencies import get_current_user, setup_audit
 from src.model.user import User
 from src.schema.project import (
+    ApplyRequest,
+    InviteRequest,
     MyInvitationListResponse,
     MyProjectListResponse,
     MyResponseListResponse,
@@ -56,14 +58,14 @@ async def fetch_projects_by_ids(
 async def fetch_project(
     project_id: int,
     project_service: ProjectService = Depends(get_project_service),
-    _current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> ProjectFull:
     """Получить проект по ID"""
     project = await project_service.get_project_by_id(project_id)
     if not project:
         raise HTTPException(status_code=404, detail="There is no project with that id!")
 
-    return ProjectFull.from_orm(project)
+    return ProjectFull.from_orm(project, current_user.id)
 
 
 @project_router.get("/", response_model=ProjectListResponse)
@@ -157,7 +159,7 @@ async def create_project(
 
     project = await project_service.create_project(project_data, current_user.id)
     await kanban_service.create_default_columns(project.id)
-    return ProjectFull.from_orm(project)
+    return ProjectFull.from_orm(project, current_user.id)
 
 
 @project_router.put("/{project_id}", response_model=ProjectFull)
@@ -174,7 +176,57 @@ async def update_project(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    return ProjectFull.from_orm(project)
+    return ProjectFull.from_orm(project, current_user.id)
+
+
+@project_router.post("/{project_id}/apply")
+async def apply_for_project(
+    project_id: int,
+    body: ApplyRequest,
+    project_service: ProjectService = Depends(get_project_service),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, str]:
+    """Откликнуться на проект"""
+    await project_service.apply_for_project(project_id, current_user.id, body.vacancy_id)
+    return {"message": "Application sent successfully"}
+
+
+@project_router.post("/{project_id}/invite")
+async def invite_to_project(
+    project_id: int,
+    body: InviteRequest,
+    project_service: ProjectService = Depends(get_project_service),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, str]:
+    """Пригласить пользователя в проект (только автор)"""
+    await project_service.invite_to_project(project_id, current_user.id, body.user_id, body.vacancy_id)
+    return {"message": "Invitation sent successfully"}
+
+
+@project_router.put("/{project_id}/responses/{response_id}/accept")
+async def accept_response(
+    project_id: int,
+    response_id: int,
+    project_service: ProjectService = Depends(get_project_service),
+    current_user: User = Depends(get_current_user),
+    _audit=Depends(setup_audit),
+) -> dict[str, str]:
+    """Принять отклик (только автор)"""
+    await project_service.accept_response(response_id, current_user.id)
+    return {"message": "Response accepted successfully"}
+
+
+@project_router.put("/{project_id}/responses/{response_id}/reject")
+async def reject_response(
+    project_id: int,
+    response_id: int,
+    project_service: ProjectService = Depends(get_project_service),
+    current_user: User = Depends(get_current_user),
+    _audit=Depends(setup_audit),
+) -> dict[str, str]:
+    """Отклонить отклик (только автор)"""
+    await project_service.reject_response(response_id, current_user.id)
+    return {"message": "Response rejected successfully"}
 
 
 @project_router.delete("/{project_id}/participants/{user_id}")

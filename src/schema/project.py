@@ -34,6 +34,10 @@ class ResponseItem(BaseModel):
     contacts: str = ""
     resume_url: str = ""
     response_date: str
+    vacancy_id: int | None = None
+    role: str = ""
+    type: str = "response"
+    status: str = "pending"
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -75,6 +79,15 @@ class ProjectCreate(BaseModel):
     vacancies: list[VacancyCreate] | None = None
 
 
+class ApplyRequest(BaseModel):
+    vacancy_id: int | None = None
+
+
+class InviteRequest(BaseModel):
+    user_id: int
+    vacancy_id: int | None = None
+
+
 class ProjectUpdate(BaseModel):
     """Схема для обновления проекта"""
 
@@ -103,11 +116,14 @@ class ProjectFull(ProjectCreate):
     members: list[ParticipantFull] = []
     replycants: list[ResponseItem] = []
     vacancies: list[VacancyItem] = []
+    author_name: str = ""
+    author_email: str | None = None
+    has_user_applied: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 
     @staticmethod
-    def from_orm(project: Project) -> ProjectFull:
+    def from_orm(project: Project, current_user_id: int | None = None) -> ProjectFull:
         try:
             project_tags = project.tags or []
         except Exception:
@@ -135,22 +151,30 @@ class ProjectFull(ProjectCreate):
             if p.participant
         ]
 
+        try:
+            all_responses = project.responses or []
+        except Exception:
+            all_responses = []
+
+        # Build a lookup: participant_id -> vacancy title from accepted response
+        accepted_role_map: dict[int, str] = {}
+        for r in all_responses:
+            if r.status == "accepted" and r.respondent_id:
+                title = getattr(r.vacancy, "title", "") if r.vacancy else ""
+                accepted_role_map[r.respondent_id] = title
+
         members = [
             ParticipantFull(
                 id=p.id,
                 user_id=p.participant_id,
                 name=f"{p.participant.first_name} {p.participant.last_name}",
+                role=accepted_role_map.get(p.participant_id, ""),
                 contacts=getattr(p.participant, "email", ""),
                 date_added=str(p.created_at.date()) if p.created_at else "",
             )
             for p in participants
             if p.participant
         ]
-
-        try:
-            responses = project.responses or []
-        except Exception:
-            responses = []
 
         replycants = [
             ResponseItem(
@@ -159,8 +183,12 @@ class ProjectFull(ProjectCreate):
                 name=f"{r.respondent.first_name} {r.respondent.last_name}",
                 contacts=getattr(r.respondent, "email", ""),
                 response_date=str(r.created_at.date()) if r.created_at else "",
+                vacancy_id=getattr(r.vacancy, "id", None) if r.vacancy else None,
+                role=getattr(r.vacancy, "title", "") if r.vacancy else "",
+                type=r.type,
+                status=r.status,
             )
-            for r in responses
+            for r in all_responses
             if r.respondent
         ]
 
@@ -179,10 +207,28 @@ class ProjectFull(ProjectCreate):
             for v in vacancies_list
         ]
 
+        try:
+            author = project.author
+            author_name = f"{author.first_name} {author.last_name}".strip() if author else ""
+            author_email = author.email if author else None
+        except Exception:
+            author_name = ""
+            author_email = None
+
+        has_user_applied = False
+        if current_user_id is not None:
+            has_user_applied = any(
+                r.respondent_id == current_user_id and r.status == "pending"
+                for r in all_responses
+                if r.respondent
+            )
+
         return ProjectFull(
             id=project.id,
             name=project.name,
             author_id=project.author_id,
+            author_name=author_name,
+            author_email=author_email,
             description=project.description,
             max_participants=project.max_participants,
             status_id=project.status_id,
@@ -197,6 +243,7 @@ class ProjectFull(ProjectCreate):
             members=members,
             replycants=replycants,
             vacancies=vacancies,
+            has_user_applied=has_user_applied,
         )
 
 

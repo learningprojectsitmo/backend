@@ -4,7 +4,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from src.core.uow import IUnitOfWork
-from src.model.project import Project, ProjectParticipation, Response, Tag
+from src.model.project import Project, ProjectParticipation, ProjectVacancy, Response, Tag
 from src.repository.base_repository import BaseRepository
 from src.schema.project import ProjectCreate, ProjectUpdate
 
@@ -19,10 +19,12 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
             select(Project)
             .where(Project.id == id)
             .options(
+                selectinload(Project.author),
                 selectinload(Project.participants).selectinload(ProjectParticipation.participant),
                 selectinload(Project.tags),
                 selectinload(Project.status),
                 selectinload(Project.vacancies),
+                selectinload(Project.responses).selectinload(Response.vacancy),
             )
         )
         result = await self.uow.session.execute(query)
@@ -32,7 +34,7 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         result = await self.uow.session.execute(
             select(ProjectParticipation).where(
                 ProjectParticipation.project_id == project_id,
-                ProjectParticipation.user_id == user_id,
+                ProjectParticipation.participant_id == user_id,
             ),
         )
         return result.scalar_one_or_none() is not None
@@ -194,3 +196,55 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
 
         await self.uow.session.flush()
         return tags
+
+    async def has_pending_response(self, project_id: int, user_id: int) -> bool:
+        result = await self.uow.session.execute(
+            select(Response).where(
+                Response.project_id == project_id,
+                Response.respondent_id == user_id,
+                Response.status == "pending",
+            ),
+        )
+        return result.scalar_one_or_none() is not None
+
+    async def create_response(
+        self,
+        respondent_id: int,
+        project_id: int,
+        vacancy_id: int | None = None,
+        type: str = "response",
+        inviter_id: int | None = None,
+        note: str | None = None,
+    ) -> Response:
+        response = Response(
+            respondent_id=respondent_id,
+            project_id=project_id,
+            vacancy_id=vacancy_id,
+            type=type,
+            inviter_id=inviter_id,
+            note=note,
+        )
+        self.uow.session.add(response)
+        await self.uow.session.flush()
+        await self.uow.session.refresh(response, ["vacancy"])
+        return response
+
+    async def add_participant(self, project_id: int, user_id: int) -> ProjectParticipation:
+        participation = ProjectParticipation(
+            project_id=project_id,
+            participant_id=user_id,
+        )
+        self.uow.session.add(participation)
+        await self.uow.session.flush()
+        return participation
+
+    async def get_responses_by_project_id(self, project_id: int) -> list[Response]:
+        result = await self.uow.session.execute(
+            select(Response)
+            .where(Response.project_id == project_id)
+            .options(
+                selectinload(Response.vacancy),
+                selectinload(Response.respondent),
+            )
+        )
+        return list(result.scalars().all())

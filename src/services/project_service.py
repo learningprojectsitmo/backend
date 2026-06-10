@@ -177,9 +177,14 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
             raise ValidationError("This is not an invitation")
         if invitation.status != "pending":
             raise ValidationError("Can only accept pending invitations")
+        project = await self._project_repository.get_by_id(invitation.project_id)
+        if project and project.max_participants is not None and len(project.participants) >= project.max_participants:
+            raise ValidationError("Project has reached maximum number of participants")
         result = await self._project_repository.update_response_status(invitation_id, "accepted")
         if not result:
             raise NotFoundError("Invitation not found")
+        # Добавляем пользователя как участника проекта
+        await self._project_repository.add_participant(invitation.project_id, user_id)
         return result
 
     async def reject_invitation(self, invitation_id: int, user_id: int) -> Response:
@@ -376,6 +381,95 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         if project.author_id != current_user_id:
             raise PermissionError("Only project author can remove participants")
         return await self._project_repository.remove_participant(project_id, participant_user_id)
+
+    async def apply_for_project(self, project_id: int, user_id: int, vacancy_id: int | None = None) -> Response:
+        """Откликнуться на проект"""
+        project = await self._project_repository.get_by_id(project_id)
+        if not project:
+            raise NotFoundError("Project not found")
+        if project.author_id == user_id:
+            raise ValidationError("You cannot apply to your own project")
+        if await self._project_repository.is_user_in_project(project_id, user_id):
+            raise ValidationError("You are already a participant of this project")
+        if await self._project_repository.has_pending_response(project_id, user_id):
+            raise ValidationError("You already have a pending response for this project")
+        return await self._project_repository.create_response(
+            respondent_id=user_id,
+            project_id=project_id,
+            vacancy_id=vacancy_id,
+            type="response",
+        )
+
+    async def invite_to_project(
+        self, project_id: int, inviter_id: int, invitee_id: int, vacancy_id: int | None = None
+    ) -> Response:
+        """Пригласить пользователя в проект"""
+        project = await self._project_repository.get_by_id(project_id)
+        if not project:
+            raise NotFoundError("Project not found")
+        if project.author_id != inviter_id:
+            raise PermissionError("Only project author can invite")
+        if await self._project_repository.is_user_in_project(project_id, invitee_id):
+            raise ValidationError("User is already a participant of this project")
+        return await self._project_repository.create_response(
+            respondent_id=invitee_id,
+            project_id=project_id,
+            vacancy_id=vacancy_id,
+            type="invitation",
+            inviter_id=inviter_id,
+        )
+
+    async def accept_response(self, response_id: int, author_id: int) -> Response:
+        """Принять отклик (автор проекта) — создаёт приглашение для пользователя"""
+        response = await self._project_repository.get_response_by_id(response_id)
+        if not response:
+            raise NotFoundError("Response not found")
+        if response.type != "response":
+            raise ValidationError("This is not a response")
+        if response.status != "pending":
+            raise ValidationError("Can only accept pending responses")
+        project = await self._project_repository.get_by_id(response.project_id)
+        if not project or project.author_id != author_id:
+            raise PermissionError("Only project author can accept responses")
+        if project.max_participants is not None and len(project.participants) >= project.max_participants:
+            raise ValidationError("Project has reached maximum number of participants")
+        result = await self._project_repository.update_response_status(response_id, "accepted")
+        if not result:
+            raise NotFoundError("Response not found")
+        invitation = await self._project_repository.create_response(
+            respondent_id=response.respondent_id,
+            project_id=response.project_id,
+            vacancy_id=response.vacancy_id,
+            type="invitation",
+            inviter_id=author_id,
+        )
+        return invitation
+
+    async def reject_response(self, response_id: int, author_id: int) -> Response:
+        """Отклонить отклик (автор проекта)"""
+        response = await self._project_repository.get_response_by_id(response_id)
+        if not response:
+            raise NotFoundError("Response not found")
+        if response.type != "response":
+            raise ValidationError("This is not a response")
+        if response.status != "pending":
+            raise ValidationError("Can only reject pending responses")
+        project = await self._project_repository.get_by_id(response.project_id)
+        if not project or project.author_id != author_id:
+            raise PermissionError("Only project author can reject responses")
+        result = await self._project_repository.update_response_status(response_id, "rejected")
+        if not result:
+            raise NotFoundError("Response not found")
+        return result
+
+    async def get_project_responses(self, project_id: int, author_id: int) -> list[Response]:
+        """Получить все отклики проекта (только автор)"""
+        project = await self._project_repository.get_by_id(project_id)
+        if not project:
+            raise NotFoundError("Project not found")
+        if project.author_id != author_id:
+            raise PermissionError("Only project author can view responses")
+        return await self._project_repository.get_responses_by_project_id(project_id)
 
     async def delete_project(self, project_id: int, current_user_id: int) -> bool:
         """Удалить проект (только автор может удалять)"""
