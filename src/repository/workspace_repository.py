@@ -272,7 +272,7 @@ class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUp
             .where(
                 WorkSpaceParticipation.workspace_id == workspace_id,
                 Resume.is_visible.is_(True),
-                Resume.header != '',
+                Resume.header != "",
             )
             .order_by(Resume.id)
         )

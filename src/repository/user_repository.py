@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from pydantic import BaseModel
 from collections.abc import Sequence
 
+from pydantic import BaseModel
 from sqlalchemy import delete, select
 from sqlalchemy.orm import selectinload
 

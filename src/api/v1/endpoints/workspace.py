@@ -155,8 +155,8 @@ async def get_workspace_participants(
         total=total,
         page=page,
         limit=limit,
-            total_pages=(total + limit - 1) // limit if limit > 0 else 0,
-        )
+        total_pages=(total + limit - 1) // limit if limit > 0 else 0,
+    )
 
 
 @workspace_router.get("/{workspace_id}/resumes", response_model=WorkspaceResumeListResponse)

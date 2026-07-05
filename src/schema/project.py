@@ -220,9 +220,7 @@ class ProjectFull(ProjectCreate):
         has_user_applied = False
         if current_user_id is not None:
             has_user_applied = any(
-                r.respondent_id == current_user_id and r.status == "pending"
-                for r in all_responses
-                if r.respondent
+                r.respondent_id == current_user_id and r.status == "pending" for r in all_responses if r.respondent
             )
 
         return ProjectFull(

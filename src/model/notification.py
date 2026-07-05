@@ -4,7 +4,7 @@ import enum
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import JSON, DateTime, Enum, ForeignKey, Integer, String, func
+from sqlalchemy import JSON, DateTime, Enum, ForeignKey, Integer, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.core.database import Base

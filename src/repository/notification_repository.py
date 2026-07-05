@@ -12,9 +12,7 @@ class NotificationRepository(BaseRepository[Notification, dict, dict]):
         super().__init__(uow)
         self._model = Notification
 
-    async def get_by_user_id(
-        self, user_id: int, page: int = 1, limit: int = 20
-    ) -> tuple[list[Notification], int, int]:
+    async def get_by_user_id(self, user_id: int, page: int = 1, limit: int = 20) -> tuple[list[Notification], int, int]:
         query = (
             select(Notification)
             .where(Notification.user_id == user_id)
@@ -39,9 +37,7 @@ class NotificationRepository(BaseRepository[Notification, dict, dict]):
 
         return items, total, unread_count
 
-    async def create_notification(
-        self, user_id: int, type: NotificationType, data: dict
-    ) -> Notification:
+    async def create_notification(self, user_id: int, type: NotificationType, data: dict) -> Notification:
         notification = Notification(
             user_id=user_id,
             type=type,
@@ -66,9 +62,7 @@ class NotificationRepository(BaseRepository[Notification, dict, dict]):
 
     async def mark_all_read(self, user_id: int) -> int:
         result = await self.uow.session.execute(
-            update(Notification)
-            .where(Notification.user_id == user_id, Notification.read == False)
-            .values(read=True)
+            update(Notification).where(Notification.user_id == user_id, Notification.read == False).values(read=True)
         )
         await self.uow.session.flush()
         return result.rowcount

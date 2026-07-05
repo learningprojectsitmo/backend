@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from math import ceil
 
-from src.core.exceptions import NotFoundError, PermissionError
+from src.core.exceptions import NotFoundError
 from src.model.notification import Notification, NotificationType
 from src.repository.notification_repository import NotificationRepository
 from src.schema.notification import NotificationListResponse, NotificationResponse
@@ -12,9 +12,7 @@ class NotificationService:
     def __init__(self, notification_repository: NotificationRepository) -> None:
         self._repository = notification_repository
 
-    async def get_my_notifications(
-        self, user_id: int, page: int = 1, limit: int = 20
-    ) -> NotificationListResponse:
+    async def get_my_notifications(self, user_id: int, page: int = 1, limit: int = 20) -> NotificationListResponse:
         items, total, unread_count = await self._repository.get_by_user_id(user_id, page, limit)
         total_pages = ceil(total / limit) if total > 0 else 0
         return NotificationListResponse(

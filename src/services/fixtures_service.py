@@ -1183,23 +1183,33 @@ class FixtureService:
                     aid, aname = actor(u)
                     resp = response_lookup.get((pid, u.id))
                     await self._notification_service.create_notification(
-                        user_id=admin.id, type=NotificationType.response_received,
-                        actor_name=aname, actor_id=aid,
-                        project_id=pid, project_name=pname_str,
+                        user_id=admin.id,
+                        type=NotificationType.response_received,
+                        actor_name=aname,
+                        actor_id=aid,
+                        project_id=pid,
+                        project_name=pname_str,
                         response_id=resp.id if resp else None,
                     )
 
         # response_accepted: admin accepted someone's response
-        for project_name in ["Tasker — платформа управления задачами", "Campus Map", "Telegram-бот для учебных опросов"]:
+        for project_name in [
+            "Tasker — платформа управления задачами",
+            "Campus Map",
+            "Telegram-бот для учебных опросов",
+        ]:
             pid, pname_str = pname(project_name)
             if pid:
                 for u in users[2:4]:
                     aid, aname = actor(admin)
                     resp = response_lookup.get((pid, u.id))
                     await self._notification_service.create_notification(
-                        user_id=u.id, type=NotificationType.response_accepted,
-                        actor_name=aname, actor_id=admin.id,
-                        project_id=pid, project_name=pname_str,
+                        user_id=u.id,
+                        type=NotificationType.response_accepted,
+                        actor_name=aname,
+                        actor_id=admin.id,
+                        project_id=pid,
+                        project_name=pname_str,
                         response_id=resp.id if resp else None,
                     )
 
@@ -1211,9 +1221,12 @@ class FixtureService:
                     aid, aname = actor(admin)
                     resp = response_lookup.get((pid, u.id))
                     await self._notification_service.create_notification(
-                        user_id=u.id, type=NotificationType.response_rejected,
-                        actor_name=aname, actor_id=admin.id,
-                        project_id=pid, project_name=pname_str,
+                        user_id=u.id,
+                        type=NotificationType.response_rejected,
+                        actor_name=aname,
+                        actor_id=admin.id,
+                        project_id=pid,
+                        project_name=pname_str,
                         response_id=resp.id if resp else None,
                     )
 
@@ -1225,9 +1238,12 @@ class FixtureService:
                     aid, aname = actor(admin)
                     inv = invitation_lookup.get((pid, u.id))
                     await self._notification_service.create_notification(
-                        user_id=u.id, type=NotificationType.invitation_received,
-                        actor_name=aname, actor_id=admin.id,
-                        project_id=pid, project_name=pname_str,
+                        user_id=u.id,
+                        type=NotificationType.invitation_received,
+                        actor_name=aname,
+                        actor_id=admin.id,
+                        project_id=pid,
+                        project_name=pname_str,
                         invitation_id=inv.id if inv else None,
                     )
 
@@ -1239,9 +1255,12 @@ class FixtureService:
                     aid, aname = actor(u)
                     inv = invitation_lookup.get((pid, u.id))
                     await self._notification_service.create_notification(
-                        user_id=admin.id, type=NotificationType.invitation_accepted,
-                        actor_name=aname, actor_id=u.id,
-                        project_id=pid, project_name=pname_str,
+                        user_id=admin.id,
+                        type=NotificationType.invitation_accepted,
+                        actor_name=aname,
+                        actor_id=u.id,
+                        project_id=pid,
+                        project_name=pname_str,
                         invitation_id=inv.id if inv else None,
                     )
 
@@ -1253,9 +1272,12 @@ class FixtureService:
                     aid, aname = actor(u)
                     inv = invitation_lookup.get((pid, u.id))
                     await self._notification_service.create_notification(
-                        user_id=admin.id, type=NotificationType.invitation_rejected,
-                        actor_name=aname, actor_id=u.id,
-                        project_id=pid, project_name=pname_str,
+                        user_id=admin.id,
+                        type=NotificationType.invitation_rejected,
+                        actor_name=aname,
+                        actor_id=u.id,
+                        project_id=pid,
+                        project_name=pname_str,
                         invitation_id=inv.id if inv else None,
                     )
 

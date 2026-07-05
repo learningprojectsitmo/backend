@@ -416,9 +416,7 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         if project.author_id != current_user_id:
             raise PermissionError("Only project author can remove participants")
         # Увеличиваем количество мест в вакансии если участник был принят по роли
-        accepted = await self._project_repository.get_accepted_response_for_participant(
-            project_id, participant_user_id
-        )
+        accepted = await self._project_repository.get_accepted_response_for_participant(project_id, participant_user_id)
         if accepted and accepted.vacancy_id:
             await self._project_repository.increment_vacancy_count(accepted.vacancy_id)
         return await self._project_repository.remove_participant(project_id, participant_user_id)
@@ -461,7 +459,11 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         return response
 
     async def invite_to_project(
-        self, project_id: int, inviter_id: int, invitee_id: int, vacancy_id: int | None = None,
+        self,
+        project_id: int,
+        inviter_id: int,
+        invitee_id: int,
+        vacancy_id: int | None = None,
         resume_id: int | None = None,
     ) -> Response:
         """Пригласить пользователя в проект"""

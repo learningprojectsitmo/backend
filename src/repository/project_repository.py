@@ -281,9 +281,7 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         )
         return list(result.scalars().all())
 
-    async def get_accepted_response_for_participant(
-        self, project_id: int, user_id: int
-    ) -> Response | None:
+    async def get_accepted_response_for_participant(self, project_id: int, user_id: int) -> Response | None:
         result = await self.uow.session.execute(
             select(Response).where(
                 Response.project_id == project_id,
