@@ -130,6 +130,7 @@ class WorkspaceResumeItem(BaseModel):
     interests: list[str] = []
     participant_name: str
     participant_id: int
+    in_team: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 

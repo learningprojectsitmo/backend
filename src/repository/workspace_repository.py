@@ -255,6 +255,17 @@ class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUp
             .subquery()
         )
 
+        in_team_expr = (
+            select(ProjectParticipation.id)
+            .join(Project, Project.id == ProjectParticipation.project_id)
+            .where(
+                Project.workspace_id == workspace_id,
+                ProjectParticipation.participant_id == WorkSpaceParticipation.participant_id,
+            )
+            .exists()
+            .correlate(WorkSpaceParticipation)
+        )
+
         query = (
             select(
                 Resume.id,
@@ -263,6 +274,7 @@ class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUp
                 interests_subq.c.interests,
                 user_name,
                 WorkSpaceParticipation.participant_id,
+                in_team_expr.label("in_team"),
             )
             .select_from(WorkSpaceParticipation)
             .join(User, User.id == WorkSpaceParticipation.participant_id)
@@ -290,6 +302,7 @@ class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUp
                     "interests": [i for i in (row["interests"] or []) if i],
                     "participant_name": row["participant_name"] or "",
                     "participant_id": row["participant_id"],
+                    "in_team": bool(row["in_team"]),
                 }
             )
 
