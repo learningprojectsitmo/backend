@@ -4,7 +4,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
 
-from src.util.validator import TelegramValidator
+from src.util.validator import NameValidator, TelegramValidator
 
 
 class UserBase(BaseModel):
@@ -19,11 +19,22 @@ class UserBase(BaseModel):
     tg_nickname: str | None = None
     phone: str | None = None
     vk_nickname: str | None = None
+    show_my_contacts: bool = False
 
 
 class UserCreate(UserBase):
     """Схема для создания пользователя"""
 
+    password: str
+
+
+class SignupRequest(BaseModel):
+    """Схема запроса на регистрацию — только email и пароль.
+
+    ФИО и роль заполняются отдельно (ФИО — отдельный шаг, роль — по ссылке-приглашению).
+    """
+
+    email: EmailStr
     password: str
 
 
@@ -58,11 +69,31 @@ class UserUpdate(BaseModel):
     phone: str | None = None
     vk_nickname: str | None = None
     role_id: int | None = None
+    show_my_contacts: bool | None = None
 
     @field_validator("tg_nickname")
     @classmethod
     def validate_tg_nickname(cls, v):
         return TelegramValidator.validate_tg_nickname_optional(v)
+
+    @field_validator("first_name")
+    @classmethod
+    def validate_first_name(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        return NameValidator.validate_name(v, "Имя")
+
+    @field_validator("last_name")
+    @classmethod
+    def validate_last_name(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        return NameValidator.validate_name(v, "Фамилия")
+
+    @field_validator("middle_name")
+    @classmethod
+    def validate_middle_name(cls, v: str | None) -> str | None:
+        return NameValidator.validate_name_optional(v)
 
 
 class UserResponse(BaseModel):

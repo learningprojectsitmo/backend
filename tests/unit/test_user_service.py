@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from unittest.mock import Mock
+
+from datetime import UTC, datetime
 
 import pytest
 
@@ -12,6 +16,8 @@ from src.services.user_service import UserService
 
 EXPECTED_USERS_COUNT = 2
 EXPECTED_PAGE_LIMIT = 10
+
+_DT = datetime.now(UTC)
 
 
 class TestUserService:
@@ -32,7 +38,14 @@ class TestUserService:
         )
         mock_repository.create.return_value = mock_user
 
-        user_service = UserService(mock_repository, Mock(), mock_auth_service, Mock(), Mock())
+        user_service = UserService(
+            mock_repository,
+            Mock(),
+            mock_auth_service,
+            Mock(),
+            Mock(),
+            Mock(),
+        )
 
         user_data = UserCreate(
             email="test@example.com",
@@ -57,7 +70,14 @@ class TestUserService:
         mock_user = User(id=1, email="test@example.com", first_name="Test", middle_name="User")
         mock_repository.get_by_id.return_value = mock_user
 
-        user_service = UserService(mock_repository, Mock(), Mock(), Mock(), Mock())
+        user_service = UserService(
+            mock_repository,
+            Mock(),
+            Mock(),
+            Mock(),
+            Mock(),
+            Mock(),
+        )
 
         # when
         result = await user_service.get_by_id(1)
@@ -72,7 +92,14 @@ class TestUserService:
         mock_repository = Mock(spec=UserRepository)
         mock_repository.get_by_id.return_value = None
 
-        user_service = UserService(mock_repository, Mock(), Mock(), Mock(), Mock())
+        user_service = UserService(
+            mock_repository,
+            Mock(),
+            Mock(),
+            Mock(),
+            Mock(),
+            Mock(),
+        )
 
         # when / then
         with pytest.raises(NotFoundError):
@@ -87,7 +114,14 @@ class TestUserService:
         updated_user = User(id=1, email="updated@example.com", first_name="Updated", middle_name="User")
         mock_repository.update.return_value = updated_user
 
-        user_service = UserService(mock_repository, Mock(), Mock(), Mock(), Mock())
+        user_service = UserService(
+            mock_repository,
+            Mock(),
+            Mock(),
+            Mock(),
+            Mock(),
+            Mock(),
+        )
 
         update_data = UserUpdate(email="updated@example.com", first_name="Updated")
 
@@ -104,7 +138,14 @@ class TestUserService:
         mock_repository = Mock(spec=UserRepository)
         mock_repository.delete.return_value = True
 
-        user_service = UserService(mock_repository, Mock(), Mock(), Mock(), Mock())
+        user_service = UserService(
+            mock_repository,
+            Mock(),
+            Mock(),
+            Mock(),
+            Mock(),
+            Mock(),
+        )
 
         # when
         result = await user_service.delete(1)
@@ -119,7 +160,14 @@ class TestUserService:
         mock_repository = Mock(spec=UserRepository)
         mock_repository.delete.return_value = False
 
-        user_service = UserService(mock_repository, Mock(), Mock(), Mock(), Mock())
+        user_service = UserService(
+            mock_repository,
+            Mock(),
+            Mock(),
+            Mock(),
+            Mock(),
+            Mock(),
+        )
 
         # when / then
         with pytest.raises(NotFoundError):
@@ -131,15 +179,45 @@ class TestUserService:
     async def test_should_get_users_paginated(self):
         # given
         mock_repository = Mock(spec=UserRepository)
+        role_ns = SimpleNamespace(name="member")
         mock_users = [
-            User(id=1, email="user1@example.com", first_name="User", middle_name="One"),
-            User(id=2, email="user2@example.com", first_name="User", middle_name="Two"),
+            SimpleNamespace(
+                id=1,
+                email="user1@example.com",
+                first_name="User",
+                middle_name="One",
+                last_name=None,
+                isu_number=None,
+                tg_nickname=None,
+                role_id=3,
+                role=role_ns,
+                created_at=_DT,
+            ),
+            SimpleNamespace(
+                id=2,
+                email="user2@example.com",
+                first_name="User",
+                middle_name="Two",
+                last_name=None,
+                isu_number=None,
+                tg_nickname=None,
+                role_id=3,
+                role=role_ns,
+                created_at=_DT,
+            ),
         ]
 
-        mock_repository.get_multi.return_value = mock_users
+        mock_repository.get_multi_with_role.return_value = mock_users
         mock_repository.count.return_value = 2
 
-        user_service = UserService(mock_repository, Mock(), Mock(), Mock(), Mock())
+        user_service = UserService(
+            mock_repository,
+            Mock(),
+            Mock(),
+            Mock(),
+            Mock(),
+            Mock(),
+        )
 
         # when
         result = await user_service.get_users_paginated(page=1, limit=10)
@@ -151,5 +229,15 @@ class TestUserService:
         assert result.page == 1
         assert result.limit == EXPECTED_PAGE_LIMIT
         assert result.total_pages == 1
-        mock_repository.get_multi.assert_called_once_with(skip=0, limit=10)
+        mock_repository.get_multi_with_role.assert_called_once_with(skip=0, limit=10)
         mock_repository.count.assert_called_once()
+
+    def test_should_generate_six_digit_code(self):
+        # when
+        code, expires_at = UserService._generate_code()
+
+        # then
+        assert isinstance(code, int)
+        assert 100000 <= code <= 999999
+        assert len(str(code)) == 6
+        assert expires_at > _DT

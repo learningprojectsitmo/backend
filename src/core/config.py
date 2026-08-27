@@ -22,6 +22,15 @@ class Settings(BaseSettings):
     # CORS - исправленные настройки для Docker
     FRONTEND_URL: str = "http://localhost:3000"
 
+    # SMTP (maildev: web UI http://localhost:9000, SMTP localhost:2500)
+    MAIL_SMTP_HOST: str = "localhost"
+    MAIL_SMTP_PORT: int = 2500
+    MAIL_SMTP_USER: str | None = None
+    MAIL_SMTP_PASSWORD: str | None = None
+    MAIL_FROM: str = "maildev@localhost"
+    MAIL_FROM_NAME: str = "FPIN Projects"
+    MAIL_TLS: bool = False
+
     CORS_ORIGINS: list = [
         "http://localhost:3000",
         "http://localhost:5173",

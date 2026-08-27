@@ -21,6 +21,7 @@ if TYPE_CHECKING:
 
 from src.schema.auth import Token
 from src.schema.session import SessionCreate, SessionTerminateRequest
+from src.services.mail_service import MailService
 from src.services.session_service import SessionService
 
 
@@ -32,12 +33,15 @@ class AuthService:
         password_reset_repository: PasswordResetRepository,
         user_permission_repository: UserPermissionRepository,
         role_permission_repository: RolePermissionRepository,
+        *,
+        mail_service: MailService | None = None,
     ):
         self._user_repository = user_repository
         self._session_service = session_service
         self._user_permission_repository = user_permission_repository
         self._role_permission_repository = role_permission_repository
         self._password_reset_repository = password_reset_repository
+        self._mail_service = mail_service or MailService()
         self._pwd_context = PasswordHash.recommended()
         self._secret_key = settings.SECRET_KEY
         self._algorithm = settings.ALGORITHM
@@ -172,6 +176,63 @@ class AuthService:
 
         self._logger.info(f"Successful authentication for user: {email} (ID: {user.id})")
         return user
+
+    async def create_session_and_tokens(
+        self,
+        user: User,
+        remember_me: bool = True,
+        request: Request | None = None,
+    ) -> tuple[Token, str]:
+        """Выдать access-токен, создать refresh-сессию и вернуть (Token, raw_refresh).
+
+        Используется при авто-входе после подтверждения регистрации, когда
+        пользователь уже подтверждён и аутентифицировать его по паролю не нужно.
+        """
+        refresh_expire_days = self._refresh_token_expire_days if remember_me else self._refresh_token_expire_days_short
+        access_ttl = timedelta(minutes=self._access_token_expire_minutes)
+        refresh_ttl = timedelta(days=refresh_expire_days)
+
+        access_token = self.create_access_token(
+            data={"sub": user.email, "user_id": user.id},
+            expires_delta=access_ttl,
+        )
+
+        raw_refresh, refresh_hash = self._generate_refresh_token()
+        token_family = str(uuid.uuid4())
+
+        if request:
+            try:
+                user_agent = request.headers.get("user-agent", "")
+                ip_address = request.client.host if request.client else "unknown"
+
+                session_data = SessionCreate(
+                    user_id=user.id,
+                    device_name=self._get_device_name(user_agent),
+                    browser_name=self._parse_user_agent(user_agent)[0],
+                    browser_version=self._parse_user_agent(user_agent)[1],
+                    operating_system=self._get_os_name(user_agent),
+                    device_type=self._get_device_type(user_agent),
+                    ip_address=ip_address,
+                    user_agent=user_agent,
+                    expires_at=datetime.now(UTC) + refresh_ttl,
+                )
+
+                session = await self._session_service.create_session_with_refresh_token(
+                    session_data, refresh_hash, token_family
+                )
+                await self._session_service.set_current_session(user.id, session.id)
+                self._logger.info(f"Session created for user {user.id} with ID: {session.id}")
+
+            except Exception:
+                self._logger.exception("Failed to create session for user %s", user.id)
+                raise
+
+        self._logger.info(f"Tokens issued for user: {user.email} (ID: {user.id})")
+
+        return (
+            Token(access_token=access_token, expires_in=self._access_token_expire_minutes * 60),
+            raw_refresh,
+        )
 
     # ───────── access token (JWT) ─────────
 
@@ -472,7 +533,8 @@ class AuthService:
 
         await self._password_reset_repository.create(reset_data)
 
-        # TODO: добавить генерацию и отправку ссылки через email-клиент, сейчас токен для сброса доступен в БД
+        reset_url = f"{settings.FRONTEND_URL}/auth/reset-password?token={token}"
+        await self._mail_service.send_password_reset(email, reset_url)
         self._logger.info(f"Password reset requested for user {user.id}")
         return True
 

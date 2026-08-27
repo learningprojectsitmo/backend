@@ -199,6 +199,7 @@ async def get_user_service(
     auth_service: AuthService = Depends(get_auth_service),
     user_permission_repository: UserPermissionRepository = Depends(get_user_permission_repository),
     permission_repository: PermissionRepository = Depends(get_permission_repository),
+    role_repository: RoleRepository = Depends(get_role_repository),
 ) -> UserService:
     return UserService(
         user_repository,
@@ -206,6 +207,7 @@ async def get_user_service(
         auth_service,
         user_permission_repository,
         permission_repository=permission_repository,
+        role_repository=role_repository,
     )
 
 

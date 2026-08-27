@@ -32,6 +32,14 @@ services:
     ports:
       - "28080:80"
 
+  maildev:
+    restart: always
+    container_name: maildev
+    image: maildev/maildev:latest
+    ports:
+      - "9000:1080"
+      - "2500:1025"
+
   backend:
     build: .
     container_name: backend

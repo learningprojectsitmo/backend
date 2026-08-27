@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from src.core.container import get_user_service
+from src.core.container import get_auth_service, get_user_service
 from src.core.dependencies import get_current_user, permission_required, setup_audit
 from src.model.user import User
 from src.schema.permission import PermissionMatrix
@@ -71,15 +71,21 @@ async def update_user(
     user_id: int,
     user_data: UserUpdate,
     user_service: UserService = Depends(get_user_service),
-    current_user: User = Depends(permission_required("user:update")),
+    current_user: User = Depends(get_current_user),
+    auth_service=Depends(get_auth_service),
     _audit=Depends(setup_audit),
 ) -> UserFull:
     """Обновить пользователя (только сам пользователь или админ)"""
+    # Шаг регистрации «ФИО» и редактирование профиля — это изменение СВОЕГО аккаунта,
+    # поэтому оно разрешено всем пользователям без role/permission. Для чужих аккаунтов
+    # требуется permission 'user:update' (есть у admin/teacher).
     if current_user.id != user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions",
-        )
+        permissions = await auth_service.get_all_user_permissions(current_user)
+        if "user:update" not in permissions:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not enough permissions",
+            )
 
     def _check_user_exists_or_raise_not_found() -> None:
         if not user:
