@@ -67,11 +67,15 @@ class FixtureService:
         await self._role_service.get_or_create(
             {"name": "member", "description": "Доступ к проектам и учебным материалам"}
         )
+        await self._role_service.get_or_create(
+            {"name": "manager", "description": "Руководитель проекта: создаёт проекты и наполняет их данными"}
+        )
         await role_repo.uow.commit()
 
         role_admin = await role_repo.get_by_name("admin")
         role_teacher = await role_repo.get_by_name("teacher")
         role_member = await role_repo.get_by_name("member")
+        role_manager = await role_repo.get_by_name("manager")
 
         admin_matrix = {
             "project": {"create": True, "read": True, "update": True, "delete": True},
@@ -88,6 +92,11 @@ class FixtureService:
             "resume": {"create": True, "read": True, "update": True, "delete": False},
             "user": {"create": False, "read": True, "update": False, "delete": False},
         }
+        manager_matrix = {
+            "project": {"create": True, "read": True, "update": True, "delete": False},
+            "resume": {"create": True, "read": True, "update": True, "delete": False},
+            "user": {"create": False, "read": True, "update": True, "delete": False},
+        }
 
         await self._role_service.remap_role_permission(role_admin.id, PermissionMatrix(permissions_matrix=admin_matrix))
         await self._role_service.remap_role_permission(
@@ -95,6 +104,9 @@ class FixtureService:
         )
         await self._role_service.remap_role_permission(
             role_member.id, PermissionMatrix(permissions_matrix=member_matrix)
+        )
+        await self._role_service.remap_role_permission(
+            role_manager.id, PermissionMatrix(permissions_matrix=manager_matrix)
         )
 
     # ─── admin user ────────────────────────────────────────────────────────

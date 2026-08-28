@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict
 
 
 class InviteLinkCreate(BaseModel):
-    role_id: int | None = None
+    role_id: int
 
 
 class InviteLinkResponse(BaseModel):

@@ -4,7 +4,9 @@ from unittest.mock import AsyncMock, Mock  # Добавили AsyncMock
 
 import pytest
 
+from src.core.exceptions import PermissionError
 from src.model.project import Project
+from src.model.user import Role
 from src.repository.project_repository import ProjectRepository
 from src.schema.project import ProjectCreate, ProjectUpdate
 from src.services.project_service import ProjectService
@@ -46,6 +48,55 @@ class TestProjectService:
         payload = project_data.model_dump(exclude_none=True)
         payload.pop("tags", None)
         mock_repository.create.assert_called_once_with(payload)
+
+    @pytest.mark.asyncio
+    async def test_should_deny_create_project_in_workspace_for_non_manager(self):
+        # given
+        mock_repository = self._setup_mock_repo()
+        mock_uow = Mock()
+        mock_session = Mock()
+        mock_result = Mock()
+        mock_result.first.return_value = None
+        mock_session.execute = AsyncMock(return_value=mock_result)
+        mock_uow.session = mock_session
+        mock_repository.uow = mock_uow
+
+        project_service = ProjectService(mock_repository)
+        project_data = ProjectCreate(name="Test", author_id=1, workspace_id=5)
+
+        # when / then
+        with pytest.raises(PermissionError):
+            await project_service.create_project(project_data, author_id=1)
+        mock_repository.create.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_should_allow_create_project_in_workspace_for_manager(self):
+        # given
+        mock_repository = self._setup_mock_repo()
+        manager_role = Role(id=4, name="manager")
+        mock_project = Project(id=1, name="Test Project", author_id=1, workspace_id=5)
+        mock_repository.create.return_value = mock_project
+        mock_repository.get_or_create_tags = AsyncMock(return_value=[])
+
+        mock_uow = Mock()
+        mock_session = Mock()
+        mock_result = Mock()
+        mock_result.first.return_value = (object(), manager_role)
+        mock_session.execute = AsyncMock(return_value=mock_result)
+        mock_session.refresh = AsyncMock()
+        mock_session.flush = AsyncMock()
+        mock_session.add = Mock()
+        mock_uow.session = mock_session
+        mock_repository.uow = mock_uow
+
+        project_service = ProjectService(mock_repository)
+        project_data = ProjectCreate(name="Test", author_id=1, workspace_id=5)
+
+        # when
+        result = await project_service.create_project(project_data, author_id=1)
+
+        # then
+        assert result == mock_project
 
     @pytest.mark.asyncio
     async def test_should_update_project_with_valid_data(self):

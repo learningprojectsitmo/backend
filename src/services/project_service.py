@@ -7,7 +7,7 @@ from sqlalchemy import select
 from src.core.exceptions import NotFoundError, PermissionError, ValidationError
 from src.model.notification import NotificationType
 from src.model.project import Project, ProjectParticipation, ProjectVacancy, Response
-from src.model.user import User
+from src.model.user import Role, User
 from src.model.workspace import WorkSpaceParticipation
 from src.schema.project import (
     MyInvitationItem,
@@ -298,6 +298,22 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         """Создать новый проект"""
         if not project_data.author_id:
             project_data.author_id = author_id
+
+        # Только руководитель проекта (manager) может создавать проекты в workspace
+        if project_data.workspace_id:
+            ws_participation = await self._project_repository.uow.session.execute(
+                select(WorkSpaceParticipation, Role)
+                .join(Role, Role.id == WorkSpaceParticipation.role_id)
+                .where(
+                    WorkSpaceParticipation.workspace_id == project_data.workspace_id,
+                    WorkSpaceParticipation.participant_id == author_id,
+                )
+            )
+            row = ws_participation.first()
+            if not row or row[1].name != "manager":
+                raise PermissionError(
+                    "Only a project manager (role 'manager') can create a project in this workspace"
+                )
 
         # Преобразуем в dict и вырезаем теги и вакансии
         payload = project_data.model_dump(exclude_none=True)

@@ -31,8 +31,7 @@ async def create_invite_link(
     if not workspace:
         raise HTTPException(status_code=404, detail="Workspace not found")
 
-    role_id = link_data.role_id or 2
-    invitation = await invitation_service.create_link(workspace_id, current_user.id, role_id)
+    invitation = await invitation_service.create_link(workspace_id, current_user.id, link_data.role_id)
     url = invitation_service._build_url(invitation.token)
 
     return InviteLinkResponse(

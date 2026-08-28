@@ -65,11 +65,13 @@ class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUp
 
         return workspaces, total
 
-    async def add_participation(self, workspace_id: int, participant_id: int) -> None:
+    async def add_participation(self, workspace_id: int, participant_id: int, role_id: int | None = None) -> None:
         participation = WorkSpaceParticipation(
             workspace_id=workspace_id,
             participant_id=participant_id,
         )
+        if role_id is not None:
+            participation.role_id = role_id
         self.uow.session.add(participation)
 
     async def get_participants_count(self, workspace_id: int) -> int:
