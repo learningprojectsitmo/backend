@@ -331,28 +331,57 @@ async def get_fixtures_service(
     role_service: RoleService = Depends(get_role_service),
     user_service: UserService = Depends(get_user_service),
     workspace_service: WorkSpaceService = Depends(get_workspace_service),
-    project_service: ProjectService = Depends(get_project_service),
-    project_repository: ProjectRepository = Depends(get_project_repository),
-    settings_service: SpaceSettingsService = Depends(get_settings_service),
-    kanban_service: KanbanService = Depends(get_kanban_service),
-    resume_service: ResumeService = Depends(get_resume_service),
-    portfolio_service: PortfolioService = Depends(get_portfolio_service),
-    education_service: EducationService = Depends(get_education_service),
-    language_service: LanguageService = Depends(get_language_service),
-    notification_service: NotificationService = Depends(get_notification_service),
 ) -> FixtureService:
     return FixtureService(
         permission_service,
         role_service,
         user_service,
         workspace_service,
-        project_service,
-        project_repository,
-        settings_service,
-        kanban_service,
-        resume_service,
-        portfolio_service,
-        education_service,
-        language_service,
-        notification_service=notification_service,
     )
+
+
+async def seed_fixtures_on_startup() -> None:
+    """Создать базовые справочные данные + администратора при старте приложения.
+
+    Собирает цепочку зависимостей вручную (без FastAPI DI), так как вызывается
+    из lifespan вне контекста запроса. Шаги идемпотентны — безопасно вызывать
+    на каждом старте.
+    """
+    async with SqlAlchemyUoW() as uow:
+        permission_repository = PermissionRepository(uow)
+        role_repository = RoleRepository(uow)
+        role_permission_repository = RolePermissionRepository(uow)
+        user_repository = UserRepository(uow)
+        newuser_repository = NewUserRepository(uow)
+        user_permission_repository = UserPermissionRepository(uow)
+        password_reset_repository = PasswordResetRepository(uow)
+        session_repository = SessionRepository(uow)
+        workspace_repository = WorkSpaceRepository(uow)
+
+        session_service = SessionService(session_repository)
+        auth_service = AuthService(
+            user_repository,
+            session_service,
+            password_reset_repository,
+            user_permission_repository,
+            role_permission_repository,
+        )
+        user_service = UserService(
+            user_repository,
+            newuser_repository,
+            auth_service,
+            user_permission_repository,
+            permission_repository=permission_repository,
+            role_repository=role_repository,
+        )
+        permission_service = PermissionService(permission_repository)
+        role_service = RoleService(role_repository, role_permission_repository, permission_repository)
+        workspace_service = WorkSpaceService(workspace_repository)
+
+        fixtures_service = FixtureService(
+            permission_service,
+            role_service,
+            user_service,
+            workspace_service,
+        )
+        await fixtures_service.create_fixtures()

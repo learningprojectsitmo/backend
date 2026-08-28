@@ -3,12 +3,12 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 
 import uvicorn
-from fastapi import Depends, FastAPI, Request
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.v1.routes import routers as v1_router
 from src.core.config import settings
-from src.core.container import get_fixtures_service
+from src.core.container import seed_fixtures_on_startup
 from src.core.database import Base, engine
 from src.core.db_seed import seed_project_statuses, seed_settings_types
 from src.core.logging_config import get_logger, setup_logging
@@ -31,6 +31,9 @@ async def lifespan(_app: FastAPI):
         await conn.run_sync(seed_project_statuses)
         await conn.run_sync(seed_settings_types)
         logger.info("Database tables created/verified")
+
+    # Базовые справочные данные + пользователь-администратор
+    await seed_fixtures_on_startup()
 
     logger.info("API startup completed successfully")
     yield
@@ -72,12 +75,6 @@ async def root(
     logger.info(f"Root endpoint accessed - IP: {client_ip}, User-Agent: {user_agent}")
 
     return {"message": "System API", "version": "1.0.0"}
-
-
-@app.get("/init_fixtures")
-async def init_fixture(request: Request, fixtures_service=Depends(get_fixtures_service)):
-    await fixtures_service.create_fixtures()
-    return {"message": "Fixtures initialized"}
 
 
 if __name__ == "__main__":
