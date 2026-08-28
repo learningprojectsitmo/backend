@@ -8,7 +8,7 @@ from src.core.uow import IUnitOfWork
 from src.model.project import Project, ProjectParticipation
 from src.model.resume import Resume, ResumeInterest, ResumeSkill
 from src.model.settings import SpaceSettings
-from src.model.user import User
+from src.model.user import Role, User
 from src.model.workspace import WorkSpace, WorkSpaceCategories, WorkSpaceParticipation
 from src.model.workspace_invitation import WorkspaceInvitation
 from src.repository.base_repository import BaseRepository
@@ -160,9 +160,11 @@ class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUp
                 user_projects.c.project_ids,
                 user_projects.c.project_names,
                 first_resume.c.resume_id,
+                Role.name.label("role_name"),
                 WorkSpaceParticipation.created_at,
             )
             .join(User, User.id == WorkSpaceParticipation.participant_id)
+            .outerjoin(Role, Role.id == WorkSpaceParticipation.role_id)
             .outerjoin(user_projects, user_projects.c.participant_id == WorkSpaceParticipation.participant_id)
             .outerjoin(first_resume, first_resume.c.author_id == WorkSpaceParticipation.participant_id)
             .where(WorkSpaceParticipation.workspace_id == workspace_id)
@@ -219,7 +221,7 @@ class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUp
                     "name": row["name"] or "",
                     "avatar_url": None,
                     "projects": projects_list,
-                    "role": "",
+                    "role": row["role_name"] or "",
                     "contacts": {
                         "telegram": row["tg_nickname"] or None,
                         "email": row["email"] or None,

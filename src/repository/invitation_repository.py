@@ -21,6 +21,17 @@ class InvitationRepository(BaseRepository[WorkspaceInvitation, dict, dict]):
         )
         return result.scalars().first()
 
+    async def get_all_by_workspace(self, workspace_id: int) -> list[WorkspaceInvitation]:
+        result = await self.uow.session.execute(
+            select(WorkspaceInvitation)
+            .where(
+                WorkspaceInvitation.workspace_id == workspace_id,
+                WorkspaceInvitation.is_active.is_(True),
+            )
+            .order_by(WorkspaceInvitation.created_at)
+        )
+        return list(result.scalars().all())
+
     async def get_by_token(self, token: str) -> WorkspaceInvitation | None:
         result = await self.uow.session.execute(select(WorkspaceInvitation).where(WorkspaceInvitation.token == token))
         return result.scalars().first()
@@ -36,6 +47,16 @@ class InvitationRepository(BaseRepository[WorkspaceInvitation, dict, dict]):
             update(WorkspaceInvitation)
             .where(
                 WorkspaceInvitation.workspace_id == workspace_id,
+                WorkspaceInvitation.is_active.is_(True),
+            )
+            .values(is_active=False)
+        )
+
+    async def deactivate_by_token(self, token: str) -> None:
+        await self.uow.session.execute(
+            update(WorkspaceInvitation)
+            .where(
+                WorkspaceInvitation.token == token,
                 WorkspaceInvitation.is_active.is_(True),
             )
             .values(is_active=False)

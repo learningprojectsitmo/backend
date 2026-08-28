@@ -20,6 +20,10 @@ class InviteLinkResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class InviteLinkListResponse(BaseModel):
+    links: list[InviteLinkResponse]
+
+
 class JoinByLinkInput(BaseModel):
     token: str
 
@@ -27,5 +31,6 @@ class JoinByLinkInput(BaseModel):
 class JoinByLinkResponse(BaseModel):
     message: str
     workspace_id: int
+    already_member: bool = False
 
     model_config = ConfigDict(from_attributes=True)

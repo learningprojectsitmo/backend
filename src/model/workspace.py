@@ -68,6 +68,7 @@ class WorkSpaceParticipation(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     workspace_id: Mapped[int] = mapped_column(ForeignKey("workspace.id"), nullable=False)
     participant_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
+    role_id: Mapped[int] = mapped_column(ForeignKey("role.id"), nullable=True, default=2)
     created_at: Mapped[TIMESTAMP] = mapped_column(TIMESTAMP, server_default=func.now(), nullable=False)
 
     participant: Mapped[User] = relationship(back_populates="workspace_participations")
