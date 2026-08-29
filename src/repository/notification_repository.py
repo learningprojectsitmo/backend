@@ -30,7 +30,7 @@ class NotificationRepository(BaseRepository[Notification, dict, dict]):
         unread_query = (
             select(func.count())
             .select_from(Notification)
-            .where(Notification.user_id == user_id, Notification.read == False)
+.where(Notification.user_id == user_id, not Notification.read)
         )
         unread_result = await self.uow.session.execute(unread_query)
         unread_count = unread_result.scalar() or 0
@@ -62,7 +62,7 @@ class NotificationRepository(BaseRepository[Notification, dict, dict]):
 
     async def mark_all_read(self, user_id: int) -> int:
         result = await self.uow.session.execute(
-            update(Notification).where(Notification.user_id == user_id, Notification.read == False).values(read=True)
+            update(Notification).where(Notification.user_id == user_id, not Notification.read).values(read=True)
         )
         await self.uow.session.flush()
         return result.rowcount

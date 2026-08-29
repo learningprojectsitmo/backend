@@ -313,9 +313,7 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
             )
             row = ws_participation.first()
             if not row or row[1].name != "manager":
-                raise PermissionError(
-                    "Only a project manager (role 'manager') can create a project in this workspace"
-                )
+                raise PermissionError("Only a project manager (role 'manager') can create a project in this workspace")
 
             existing_count = await self._project_repository.uow.session.execute(
                 select(func.count())
@@ -326,9 +324,7 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
                 )
             )
             if existing_count.scalar_one() > 0:
-                raise PermissionError(
-                    "Вы уже создали проект в этом пространстве. Можно создать только один проект."
-                )
+                raise PermissionError("Вы уже создали проект в этом пространстве. Можно создать только один проект.")
 
         # Преобразуем в dict и вырезаем теги и вакансии
         payload = project_data.model_dump(exclude_none=True)

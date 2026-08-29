@@ -93,9 +93,7 @@ class TestProjectService:
         draft_query_result.scalar_one_or_none.return_value = AsyncMock(id=99, name="draft")
         ws_sync_result = Mock()
         ws_sync_result.scalar_one_or_none.return_value = None
-        mock_session.execute = AsyncMock(
-            side_effect=[mock_result, count_result, draft_query_result, ws_sync_result]
-        )
+        mock_session.execute = AsyncMock(side_effect=[mock_result, count_result, draft_query_result, ws_sync_result])
         mock_session.refresh = AsyncMock()
         mock_session.flush = AsyncMock()
         mock_session.add = Mock()

@@ -46,9 +46,7 @@ class WorkSpaceService(BaseService[WorkSpace, WorkSpaceCreate, WorkSpaceUpdate])
             workspace_data.status_id = 1
         workspace = await self._workspace_repository.create(workspace_data)
 
-        manager = await self._workspace_repository.uow.session.execute(
-            select(Role).where(Role.name == "manager")
-        )
+        manager = await self._workspace_repository.uow.session.execute(select(Role).where(Role.name == "manager"))
         manager_role = manager.scalar_one_or_none()
         await self._workspace_repository.add_participation(
             workspace.id, author_id, manager_role.id if manager_role else None

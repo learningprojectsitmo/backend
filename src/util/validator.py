@@ -13,9 +13,7 @@ class NameValidator:
     """
 
     # Первый символ — буква любого алфавита; далее буквы, дефис, апостроф, точка.
-    TOKEN_PATTERN: ClassVar[re.Pattern] = re.compile(
-        r"^[^\W\d_](?:[^\W\d_]|['\-\.])*$", re.UNICODE
-    )
+    TOKEN_PATTERN: ClassVar[re.Pattern] = re.compile(r"^[^\W\d_](?:[^\W\d_]|['\-\.])*$", re.UNICODE)
 
     @classmethod
     def _clean(cls, value: Any | None) -> str | None:
@@ -37,8 +35,7 @@ class NameValidator:
         for token in value.split():
             if not cls.TOKEN_PATTERN.match(token):
                 raise ValueError(
-                    f"{field} может содержать только буквы, дефис, апостроф и точку. "
-                    f"Ошибка в части «{token}»"
+                    f"{field} может содержать только буквы, дефис, апостроф и точку. Ошибка в части «{token}»"
                 )
         return value
 

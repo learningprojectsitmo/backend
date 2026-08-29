@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
-
-from unittest.mock import Mock
-
 from datetime import UTC, datetime
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 
@@ -16,6 +14,9 @@ from src.services.user_service import UserService
 
 EXPECTED_USERS_COUNT = 2
 EXPECTED_PAGE_LIMIT = 10
+CODE_MIN = 100000
+CODE_MAX = 999999
+CODE_LENGTH = 6
 
 _DT = datetime.now(UTC)
 
@@ -238,6 +239,6 @@ class TestUserService:
 
         # then
         assert isinstance(code, int)
-        assert 100000 <= code <= 999999
-        assert len(str(code)) == 6
+        assert CODE_MIN <= code <= CODE_MAX
+        assert len(str(code)) == CODE_LENGTH
         assert expires_at > _DT
