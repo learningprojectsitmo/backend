@@ -268,6 +268,7 @@ class ProjectListItem(BaseModel):
     progress: int
     tags: list[str] = []
     participants_preview: list[ParticipantPreview] = []
+    author_id: int
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -82,7 +82,13 @@ class TestProjectService:
         mock_session = Mock()
         mock_result = Mock()
         mock_result.first.return_value = (object(), manager_role)
-        mock_session.execute = AsyncMock(return_value=mock_result)
+        count_result = Mock()
+        count_result.scalar_one.return_value = 0
+        ws_sync_result = Mock()
+        ws_sync_result.scalar_one_or_none.return_value = None
+        mock_session.execute = AsyncMock(
+            side_effect=[mock_result, count_result, ws_sync_result]
+        )
         mock_session.refresh = AsyncMock()
         mock_session.flush = AsyncMock()
         mock_session.add = Mock()
@@ -97,6 +103,34 @@ class TestProjectService:
 
         # then
         assert result == mock_project
+
+    @pytest.mark.asyncio
+    async def test_should_block_manager_from_creating_second_project_in_workspace(self):
+        # given
+        mock_repository = self._setup_mock_repo()
+        manager_role = Role(id=4, name="manager")
+        mock_repository.create.return_value = Project(id=1, name="Test", author_id=1, workspace_id=5)
+        mock_repository.get_or_create_tags = AsyncMock(return_value=[])
+
+        mock_uow = Mock()
+        mock_session = Mock()
+        mock_result = Mock()
+        mock_result.first.return_value = (object(), manager_role)
+        count_result = Mock()
+        count_result.scalar_one.return_value = 1
+        mock_session.execute = AsyncMock(side_effect=[mock_result, count_result])
+        mock_session.refresh = AsyncMock()
+        mock_session.flush = AsyncMock()
+        mock_session.add = Mock()
+        mock_uow.session = mock_session
+        mock_repository.uow = mock_uow
+
+        project_service = ProjectService(mock_repository)
+        project_data = ProjectCreate(name="Test", author_id=1, workspace_id=5)
+
+        # when / then
+        with pytest.raises(PermissionError):
+            await project_service.create_project(project_data, author_id=1)
 
     @pytest.mark.asyncio
     async def test_should_update_project_with_valid_data(self):
@@ -177,10 +211,9 @@ class TestProjectService:
 
     @pytest.mark.asyncio
     async def test_should_delete_project_successfully(self):
-        """Тест должен успешно удалить проект"""
+        """Тест должен успешно удалить проект при наличии права project:delete"""
         # given
         mock_repository = Mock(spec=ProjectRepository)
-        # Мокаем проект с правильным author_id для проверки авторства
         mock_project = Project(id=1, name="Test Project", description="Test Description", author_id=1)
         mock_repository.get_by_id.return_value = mock_project
         mock_repository.delete.return_value = True
@@ -188,12 +221,62 @@ class TestProjectService:
         project_service = ProjectService(mock_repository)
 
         # when
-        result = await project_service.delete_project(1, current_user_id=1)
+        result = await project_service.delete_project(1, is_admin=True)
 
         # then
         assert result is True
         mock_repository.get_by_id.assert_called_once_with(1)
         mock_repository.delete.assert_called_once_with(1)
+
+    @pytest.mark.asyncio
+    async def test_should_allow_admin_to_delete_others_project(self):
+        """Админ (is_admin=True) может удалить проект, автором которого не является"""
+        # given
+        mock_repository = Mock(spec=ProjectRepository)
+        mock_project = Project(id=1, name="Test Project", description="Test Description", author_id=99)
+        mock_repository.get_by_id.return_value = mock_project
+        mock_repository.delete.return_value = True
+
+        project_service = ProjectService(mock_repository)
+
+        # when
+        result = await project_service.delete_project(1, is_admin=True)
+
+        # then
+        assert result is True
+        mock_repository.delete.assert_called_once_with(1)
+
+    @pytest.mark.asyncio
+    async def test_should_deny_delete_project_for_non_author_non_admin(self):
+        """Пользователь без права project:delete не может удалить проект"""
+        # given
+        mock_repository = Mock(spec=ProjectRepository)
+        mock_project = Project(id=1, name="Test Project", description="Test Description", author_id=99)
+        mock_repository.get_by_id.return_value = mock_project
+        mock_repository.delete.return_value = True
+
+        project_service = ProjectService(mock_repository)
+
+        # when / then
+        with pytest.raises(PermissionError):
+            await project_service.delete_project(1, is_admin=False)
+        mock_repository.delete.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_should_deny_author_without_permission_to_delete_own_project(self):
+        """Автор проекта без права project:delete (галочки «Удалить») не может удалить даже свой проект"""
+        # given
+        mock_repository = Mock(spec=ProjectRepository)
+        mock_project = Project(id=1, name="Test Project", description="Test Description", author_id=1)
+        mock_repository.get_by_id.return_value = mock_project
+        mock_repository.delete.return_value = True
+
+        project_service = ProjectService(mock_repository)
+
+        # when / then
+        with pytest.raises(PermissionError):
+            await project_service.delete_project(1, is_admin=False)
+        mock_repository.delete.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_should_get_projects_by_author(self):

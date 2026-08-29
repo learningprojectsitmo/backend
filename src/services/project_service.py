@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from src.core.exceptions import NotFoundError, PermissionError, ValidationError
 from src.model.notification import NotificationType
@@ -292,6 +292,7 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
             progress=project.progress or 0,
             tags=tags,
             participants_preview=preview,
+            author_id=project.author_id,
         )
 
     async def create_project(self, project_data: ProjectCreate, author_id: int) -> Project:
@@ -313,6 +314,19 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
             if not row or row[1].name != "manager":
                 raise PermissionError(
                     "Only a project manager (role 'manager') can create a project in this workspace"
+                )
+
+            existing_count = await self._project_repository.uow.session.execute(
+                select(func.count())
+                .select_from(Project)
+                .where(
+                    Project.workspace_id == project_data.workspace_id,
+                    Project.author_id == author_id,
+                )
+            )
+            if existing_count.scalar_one() > 0:
+                raise PermissionError(
+                    "Вы уже создали проект в этом пространстве. Можно создать только один проект."
                 )
 
         # Преобразуем в dict и вырезаем теги и вакансии
@@ -601,13 +615,13 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
             raise PermissionError("Only project author can view responses")
         return await self._project_repository.get_responses_by_project_id(project_id)
 
-    async def delete_project(self, project_id: int, current_user_id: int) -> bool:
-        """Удалить проект (только автор может удалять)"""
+    async def delete_project(self, project_id: int, is_admin: bool = False) -> bool:
+        """Удалить проект (только при наличии права project:delete)"""
         project = await self.get_project_by_id(project_id)
         if not project:
             return False
 
-        if project.author_id != current_user_id:
-            raise PermissionError("Only project author can delete project")
+        if not is_admin:
+            raise PermissionError("You don't have permission to delete this project")
 
         return await self._project_repository.delete(project_id)

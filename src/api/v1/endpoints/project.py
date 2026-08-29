@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from src.core.container import get_kanban_service, get_project_service
+from src.core.container import get_auth_service, get_kanban_service, get_project_service
 from src.core.dependencies import get_current_user, setup_audit
+from src.core.exceptions import PermissionError
 from src.model.user import User
 from src.schema.project import (
     ApplyRequest,
@@ -16,6 +17,7 @@ from src.schema.project import (
     ProjectListResponse,
     ProjectUpdate,
 )
+from src.services.auth_service import AuthService
 from src.services.kanban_service import KanbanService
 from src.services.project_service import ProjectService
 
@@ -168,7 +170,10 @@ async def create_project(
 ) -> ProjectFull:
     """Создать новый проект"""
 
-    project = await project_service.create_project(project_data, current_user.id)
+    try:
+        project = await project_service.create_project(project_data, current_user.id)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
     await kanban_service.create_default_columns(project.id)
     return ProjectFull.from_orm(project, current_user.id)
 
@@ -260,10 +265,14 @@ async def delete_project(
     project_id: int,
     project_service: ProjectService = Depends(get_project_service),
     current_user: User = Depends(get_current_user),
+    auth_service: AuthService = Depends(get_auth_service),
 ) -> dict[str, str]:
-    """Удалить проект (только автор может удалять)"""
+    """Удалить проект (только при наличии права project:delete)"""
 
-    success = await project_service.delete_project(project_id, current_user.id)
+    permissions = await auth_service.get_all_user_permissions(current_user)
+    is_admin = "project:delete" in permissions
+
+    success = await project_service.delete_project(project_id, is_admin=is_admin)
     if not success:
         raise HTTPException(status_code=404, detail="Project not found")
 
