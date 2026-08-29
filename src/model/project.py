@@ -30,6 +30,7 @@ class Project(Base):
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     author_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
     workspace_id: Mapped[int | None] = mapped_column(ForeignKey("workspace.id"), nullable=True)
+    theme: Mapped[str | None] = mapped_column(nullable=True)
     description: Mapped[str | None] = mapped_column(nullable=True)
     max_participants: Mapped[int | None] = mapped_column(nullable=True)
 

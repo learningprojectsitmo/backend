@@ -19,6 +19,7 @@ def seed_project_statuses(connection) -> None:
     print(f"Existing: {existing}")
 
     statuses = [
+        {"name": "draft", "color": "#999999"},
         {"name": "planned", "color": "#6A7282"},
         {"name": "in_progress", "color": "#2B7FFF"},
         {"name": "completed", "color": "#00C950"},

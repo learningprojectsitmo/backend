@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 
 from src.core.exceptions import NotFoundError, PermissionError, ValidationError
 from src.model.notification import NotificationType
-from src.model.project import Project, ProjectParticipation, ProjectVacancy, Response
+from src.model.project import Project, ProjectParticipation, ProjectStatus, ProjectVacancy, Response
 from src.model.user import Role, User
 from src.model.workspace import WorkSpaceParticipation
 from src.schema.project import (
@@ -287,6 +287,7 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
             name=project.name,
             status=status_data,
             deadline=project.deadline,
+            theme=project.theme,
             description=project.description,
             participants_count=len(participants),
             progress=project.progress or 0,
@@ -333,6 +334,15 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         payload = project_data.model_dump(exclude_none=True)
         tags_names = payload.pop("tags", None)
         vacancies_data = payload.pop("vacancies", None)
+
+        # Черновик по умолчанию: если статус не указан, помечаем проект как draft
+        if not payload.get("status_id"):
+            draft_status = await self._project_repository.uow.session.execute(
+                select(ProjectStatus).where(ProjectStatus.name == "draft")
+            )
+            draft = draft_status.scalar_one_or_none()
+            if draft:
+                payload["status_id"] = draft.id
 
         # 1. Создаем основной объект проекта
         project = await self._project_repository.create(payload)

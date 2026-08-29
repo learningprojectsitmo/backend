@@ -69,6 +69,7 @@ class ProjectCreate(BaseModel):
 
     name: str
     author_id: int | None = None
+    theme: str | None = None
     description: str | None = None
     max_participants: int | None = None
     status_id: int | None = None
@@ -95,6 +96,7 @@ class ProjectUpdate(BaseModel):
 
     name: str | None = None
     author_id: int | None = None
+    theme: str | None = None
     description: str | None = None
     max_participants: int | None = None
     status_id: int | None = None
@@ -111,6 +113,7 @@ class ProjectFull(ProjectCreate):
     id: int
     workspace_id: int | None = None
     created_at: datetime | None = None
+    theme: str | None = None
     status: ProjectStatusItem | None = None
     tags: list[str] = []
     participants_count: int | None = None
@@ -229,6 +232,7 @@ class ProjectFull(ProjectCreate):
             author_id=project.author_id,
             author_name=author_name,
             author_email=author_email,
+            theme=project.theme,
             description=project.description,
             max_participants=project.max_participants,
             status_id=project.status_id,
@@ -263,6 +267,7 @@ class ProjectListItem(BaseModel):
     name: str
     status: ProjectStatusItem
     deadline: datetime | None = None
+    theme: str | None = None
     description: str | None = None
     participants_count: int
     progress: int

@@ -36,6 +36,10 @@ class TestProjectService:
         mock_repository.create.return_value = mock_project
         mock_repository.get_or_create_tags = AsyncMock(return_value=[])
 
+        draft_query_result = Mock()
+        draft_query_result.scalar_one_or_none.return_value = AsyncMock(id=99, name="draft")
+        mock_repository.uow.session.execute = AsyncMock(return_value=draft_query_result)
+
         project_service = ProjectService(mock_repository)
         project_data = ProjectCreate(name="Test Project", author_id=1)
 
@@ -46,6 +50,7 @@ class TestProjectService:
         assert result == mock_project
 
         payload = project_data.model_dump(exclude_none=True)
+        payload["status_id"] = 99
         payload.pop("tags", None)
         mock_repository.create.assert_called_once_with(payload)
 
@@ -84,10 +89,12 @@ class TestProjectService:
         mock_result.first.return_value = (object(), manager_role)
         count_result = Mock()
         count_result.scalar_one.return_value = 0
+        draft_query_result = Mock()
+        draft_query_result.scalar_one_or_none.return_value = AsyncMock(id=99, name="draft")
         ws_sync_result = Mock()
         ws_sync_result.scalar_one_or_none.return_value = None
         mock_session.execute = AsyncMock(
-            side_effect=[mock_result, count_result, ws_sync_result]
+            side_effect=[mock_result, count_result, draft_query_result, ws_sync_result]
         )
         mock_session.refresh = AsyncMock()
         mock_session.flush = AsyncMock()
