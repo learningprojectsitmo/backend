@@ -33,7 +33,7 @@ from src.schema.resume import (
 )
 from src.services.resume_service import ResumeService
 
-resume_router = APIRouter(prefix="/resumes", tags=["resume"])
+resume_router = APIRouter(prefix="/resumes", tags=["resume"], dependencies=[Depends(setup_audit)])
 
 
 @resume_router.get("/{resume_id}", response_model=ResumeFull)

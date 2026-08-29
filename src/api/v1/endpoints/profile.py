@@ -3,24 +3,27 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 
 from src.core.container import (
+    get_audit_service,
     get_education_service,
     get_language_service,
     get_portfolio_service,
     get_profile_service,
 )
-from src.core.dependencies import get_current_user
+from src.core.dependencies import get_current_user, setup_audit
 from src.core.exceptions import PermissionError
 from src.model.user import User
+from src.schema.audit import ActivityResponse
 from src.schema.education import EducationCreate, EducationFull, EducationUpdate
 from src.schema.language import LanguageCreate, LanguageFull, LanguageUpdate
 from src.schema.portfolio import PortfolioCreate, PortfolioFull, PortfolioUpdate
 from src.schema.profile import ProfileResponse
+from src.services.audit_service import AuditService
 from src.services.education_service import EducationService
 from src.services.language_service import LanguageService
 from src.services.portfolio_service import PortfolioService
 from src.services.profile_service import ProfileService
 
-profile_router = APIRouter(prefix="/profile", tags=["profile"])
+profile_router = APIRouter(prefix="/profile", tags=["profile"], dependencies=[Depends(setup_audit)])
 
 
 @profile_router.get("/", response_model=ProfileResponse)
@@ -33,6 +36,15 @@ async def fetch_profile(
         return await profile_service.get_profile(current_user.id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
+
+
+@profile_router.get("/activity", response_model=ActivityResponse)
+async def fetch_profile_activity(
+    current_user: User = Depends(get_current_user),
+    audit_service: AuditService = Depends(get_audit_service),
+) -> ActivityResponse:
+    """Получить активность текущего пользователя (heatmap + лента действий)"""
+    return await audit_service.get_activity(current_user.id)
 
 
 # ─── Portfolio CRUD ──────────────────────────────────────────────────────

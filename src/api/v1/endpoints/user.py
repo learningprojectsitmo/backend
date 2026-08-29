@@ -9,7 +9,7 @@ from src.schema.permission import PermissionMatrix
 from src.schema.user import UserCreate, UserFull, UserListResponse, UserUpdate
 from src.services.user_service import UserService
 
-user_router = APIRouter(prefix="/users", tags=["users"])
+user_router = APIRouter(prefix="/users", tags=["users"], dependencies=[Depends(setup_audit)])
 user_permission_router = APIRouter(prefix="/user_permissions", tags=["users"])
 
 

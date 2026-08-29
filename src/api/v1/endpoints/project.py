@@ -21,10 +21,10 @@ from src.services.auth_service import AuthService
 from src.services.kanban_service import KanbanService
 from src.services.project_service import ProjectService
 
-project_router = APIRouter(prefix="/projects", tags=["project"])
+project_router = APIRouter(prefix="/projects", tags=["project"], dependencies=[Depends(setup_audit)])
 
-response_router = APIRouter(prefix="/responses", tags=["response"])
-invitation_router = APIRouter(prefix="/invitations", tags=["invitation"])
+response_router = APIRouter(prefix="/responses", tags=["response"], dependencies=[Depends(setup_audit)])
+invitation_router = APIRouter(prefix="/invitations", tags=["invitation"], dependencies=[Depends(setup_audit)])
 
 
 @project_router.get("/created", response_model=MyProjectListResponse)

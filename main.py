@@ -7,6 +7,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.v1.routes import routers as v1_router
+from src.core.audit_listeners import setup_audit_listeners
 from src.core.config import settings
 from src.core.container import seed_fixtures_on_startup
 from src.core.database import Base, engine
@@ -25,6 +26,9 @@ async def lifespan(_app: FastAPI):
     logger.info(f"Environment: {settings.ENVIRONMENT}")
     logger.info(f"Debug mode: {settings.DEBUG}")
     logger.info(f"Database URL: {settings.DATABASE_URL}")
+
+    # Регистрация SQLAlchemy event listener'ов для журнала аудита
+    setup_audit_listeners()
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

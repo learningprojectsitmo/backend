@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict
@@ -20,3 +20,27 @@ class AuditLogResponse(BaseModel):
     performed_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class ActivityDay(BaseModel):
+    """Количество действий за день (для heatmap)"""
+
+    date: date
+    count: int
+
+
+class ActivityItem(BaseModel):
+    """Отдельное действие пользователя (для ленты)"""
+
+    id: int
+    kind: str  # например "project:INSERT", "response:UPDATE"
+    description: str
+    performed_at: datetime
+
+
+class ActivityResponse(BaseModel):
+    """Активность пользователя: агрегат по дням + лента действий"""
+
+    total: int
+    summary: list[ActivityDay]
+    items: list[ActivityItem]
