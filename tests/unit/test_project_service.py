@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, Mock  # Добавили AsyncMock
 
 import pytest
 
 from src.core.exceptions import PermissionError
 from src.model.project import Project
+from src.model.settings import SpaceSettings
 from src.model.user import Role
 from src.repository.project_repository import ProjectRepository
 from src.schema.project import ProjectCreate, ProjectUpdate
@@ -89,11 +91,15 @@ class TestProjectService:
         mock_result.first.return_value = (object(), manager_role)
         count_result = Mock()
         count_result.scalar_one.return_value = 0
+        settings_result = Mock()
+        settings_result.scalar_one_or_none.return_value = None
         draft_query_result = Mock()
         draft_query_result.scalar_one_or_none.return_value = AsyncMock(id=99, name="draft")
         ws_sync_result = Mock()
         ws_sync_result.scalar_one_or_none.return_value = None
-        mock_session.execute = AsyncMock(side_effect=[mock_result, count_result, draft_query_result, ws_sync_result])
+        mock_session.execute = AsyncMock(
+            side_effect=[mock_result, count_result, settings_result, draft_query_result, ws_sync_result]
+        )
         mock_session.refresh = AsyncMock()
         mock_session.flush = AsyncMock()
         mock_session.add = Mock()
@@ -303,3 +309,94 @@ class TestProjectService:
         assert result == mock_projects
         assert len(result) == EXPECTED_PROJECTS_COUNT
         mock_repository.get_by_author_id.assert_called_once_with(1)
+
+    @pytest.mark.asyncio
+    async def test_should_apply_workspace_deadline_to_created_project(self):
+        """Дедлайн из настроек пространства применяется при создании проекта"""
+        # given
+        mock_repository = self._setup_mock_repo()
+        manager_role = Role(id=4, name="manager")
+        deadline = datetime(2026, 12, 31, tzinfo=UTC)
+        mock_project = Project(id=1, name="Test", author_id=1, workspace_id=5)
+        mock_repository.create.return_value = mock_project
+        mock_repository.get_or_create_tags = AsyncMock(return_value=[])
+
+        mock_session = mock_repository.uow.session
+        ws_result = Mock()
+        ws_result.first.return_value = (object(), manager_role)
+        count_result = Mock()
+        count_result.scalar_one.return_value = 0
+        settings_result = Mock()
+        settings_result.scalar_one_or_none.return_value = SpaceSettings(
+            id=1, space_id=5, settings_type_id=1, default_project_deadline=deadline
+        )
+        draft_result = Mock()
+        draft_result.scalar_one_or_none.return_value = AsyncMock(id=99, name="draft")
+        ws_sync_result = Mock()
+        ws_sync_result.scalar_one_or_none.return_value = None
+        mock_session.execute = AsyncMock(
+            side_effect=[ws_result, count_result, settings_result, draft_result, ws_sync_result]
+        )
+        mock_session.refresh = AsyncMock()
+        mock_session.flush = AsyncMock()
+        mock_session.add = Mock()
+
+        project_service = ProjectService(mock_repository)
+        project_data = ProjectCreate(name="Test", author_id=1, workspace_id=5)
+
+        # when
+        result = await project_service.create_project(project_data, author_id=1)
+
+        # then
+        assert result == mock_project
+        payload = project_data.model_dump(exclude_none=True)
+        payload.pop("tags", None)
+        payload.pop("vacancies", None)
+        payload["status_id"] = 99
+        payload["deadline"] = deadline
+        mock_repository.create.assert_called_once_with(payload)
+
+    @pytest.mark.asyncio
+    async def test_should_not_set_deadline_when_workspace_setting_absent(self):
+        """Без дедлайна в настройках пространства проект создаётся без дедлайна"""
+        # given
+        mock_repository = self._setup_mock_repo()
+        manager_role = Role(id=4, name="manager")
+        mock_project = Project(id=1, name="Test", author_id=1, workspace_id=5)
+        mock_repository.create.return_value = mock_project
+        mock_repository.get_or_create_tags = AsyncMock(return_value=[])
+
+        mock_session = mock_repository.uow.session
+        ws_result = Mock()
+        ws_result.first.return_value = (object(), manager_role)
+        count_result = Mock()
+        count_result.scalar_one.return_value = 0
+        settings_result = Mock()
+        settings_result.scalar_one_or_none.return_value = SpaceSettings(
+            id=1, space_id=5, settings_type_id=1, default_project_deadline=None
+        )
+        draft_result = Mock()
+        draft_result.scalar_one_or_none.return_value = AsyncMock(id=99, name="draft")
+        ws_sync_result = Mock()
+        ws_sync_result.scalar_one_or_none.return_value = None
+        mock_session.execute = AsyncMock(
+            side_effect=[ws_result, count_result, settings_result, draft_result, ws_sync_result]
+        )
+        mock_session.refresh = AsyncMock()
+        mock_session.flush = AsyncMock()
+        mock_session.add = Mock()
+
+        project_service = ProjectService(mock_repository)
+        project_data = ProjectCreate(name="Test", author_id=1, workspace_id=5)
+
+        # when
+        result = await project_service.create_project(project_data, author_id=1)
+
+        # then
+        assert result == mock_project
+        payload = project_data.model_dump(exclude_none=True)
+        payload.pop("tags", None)
+        payload.pop("vacancies", None)
+        payload["status_id"] = 99
+        assert "deadline" not in payload
+        mock_repository.create.assert_called_once_with(payload)

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import selectinload
 
@@ -144,6 +146,16 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         )
         result = await self.uow.session.execute(query)
         return list(result.scalars().all())
+
+    async def update_deadline_by_workspace(self, workspace_id: int, deadline: datetime | None) -> None:
+        """Обновить дедлайн всех проектов пространства (ретроактивно)."""
+        stmt = (
+            update(Project)
+            .where(Project.workspace_id == workspace_id)
+            .values(deadline=deadline)
+            .execution_options(synchronize_session="fetch")
+        )
+        await self.uow.session.execute(stmt)
 
     async def count_by_workspace(self, workspace_id: int) -> int:
         result = await self.uow.session.execute(

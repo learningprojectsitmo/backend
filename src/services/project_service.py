@@ -7,6 +7,7 @@ from sqlalchemy import func, select
 from src.core.exceptions import NotFoundError, PermissionError, ValidationError
 from src.model.notification import NotificationType
 from src.model.project import Project, ProjectParticipation, ProjectStatus, ProjectVacancy, Response
+from src.model.settings import SpaceSettings
 from src.model.user import Role, User
 from src.model.workspace import WorkSpaceParticipation
 from src.schema.project import (
@@ -296,6 +297,16 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
             author_id=project.author_id,
         )
 
+    async def _resolve_workspace_deadline(self, workspace_id: int | None):
+        """Получить дедлайн по умолчанию из настроек пространства (или None)."""
+        if not workspace_id:
+            return None
+        space_settings = await self._project_repository.uow.session.execute(
+            select(SpaceSettings).where(SpaceSettings.space_id == workspace_id)
+        )
+        settings = space_settings.scalar_one_or_none()
+        return settings.default_project_deadline if settings else None
+
     async def create_project(self, project_data: ProjectCreate, author_id: int) -> Project:
         """Создать новый проект"""
         if not project_data.author_id:
@@ -330,6 +341,11 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         payload = project_data.model_dump(exclude_none=True)
         tags_names = payload.pop("tags", None)
         vacancies_data = payload.pop("vacancies", None)
+
+        # Дедлайн берётся из настроек пространства и всегда имеет приоритет
+        workspace_deadline = await self._resolve_workspace_deadline(project_data.workspace_id)
+        if workspace_deadline:
+            payload["deadline"] = workspace_deadline
 
         # Черновик по умолчанию: если статус не указан, помечаем проект как draft
         if not payload.get("status_id"):

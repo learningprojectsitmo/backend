@@ -233,8 +233,9 @@ async def get_workspace_service(
 
 async def get_settings_service(
     settings_repository: SpaceSettingsRepository = Depends(get_space_settings_repository),
+    project_repository: ProjectRepository = Depends(get_project_repository),
 ) -> SpaceSettingsService:
-    return SpaceSettingsService(settings_repository)
+    return SpaceSettingsService(settings_repository, project_repository=project_repository)
 
 
 async def get_invitation_service(
