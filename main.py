@@ -11,7 +11,7 @@ from src.core.audit_listeners import setup_audit_listeners
 from src.core.config import settings
 from src.core.container import seed_fixtures_on_startup
 from src.core.database import Base, engine
-from src.core.db_seed import seed_project_statuses, seed_settings_types
+from src.core.db_seed import seed_project_statuses, seed_project_types, seed_settings_types
 from src.core.logging_config import get_logger, setup_logging
 from src.core.middleware.logging_middleware import setup_logging_middleware
 
@@ -33,6 +33,7 @@ async def lifespan(_app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await conn.run_sync(seed_project_statuses)
+        await conn.run_sync(seed_project_types)
         await conn.run_sync(seed_settings_types)
         logger.info("Database tables created/verified")
 

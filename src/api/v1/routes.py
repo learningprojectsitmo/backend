@@ -16,6 +16,7 @@ from src.api.v1.endpoints.resume import resume_router
 from src.api.v1.endpoints.role import role_permission_router, role_router
 from src.api.v1.endpoints.sessions import sessions_router
 from src.api.v1.endpoints.settings import settings_router
+from src.api.v1.endpoints.stage import stage_router, type_router
 from src.api.v1.endpoints.user import user_permission_router, user_router
 from src.api.v1.endpoints.workspace import workspace_router
 
@@ -40,6 +41,8 @@ router_list = [
     response_router,
     project_invitation_router,
     signup_router,
+    type_router,
+    stage_router,
 ]
 
 for router in router_list:

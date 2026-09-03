@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from src.core.container import get_settings_service, get_workspace_service
+from src.core.container import get_settings_service, get_stage_service, get_workspace_service
 from src.core.dependencies import get_current_user, setup_audit
 from src.core.exceptions import PermissionError
 from src.model.user import User
@@ -21,6 +21,7 @@ from src.schema.workspace import (
     WorkSpaceUpdate,
 )
 from src.services.settings_service import SpaceSettingsService
+from src.services.stage_service import ProjectStageService
 from src.services.workspace_service import WorkSpaceService
 
 workspace_router = APIRouter(prefix="/workspaces", tags=["workspace"])
@@ -86,12 +87,14 @@ async def create_workspace(
     workspace_data: WorkSpaceCreate,
     workspace_service: WorkSpaceService = Depends(get_workspace_service),
     settings_service: SpaceSettingsService = Depends(get_settings_service),
+    stage_service: ProjectStageService = Depends(get_stage_service),
     current_user: User = Depends(get_current_user),
     _audit=Depends(setup_audit),
 ) -> WorkSpaceFull:
     """Создать новый workspace"""
     workspace = await workspace_service.create_workspace(workspace_data, current_user.id)
     await settings_service.create_defaults(workspace.id)
+    await stage_service.copy_system_types_to_workspace(workspace.id)
     return WorkSpaceFull.model_validate(workspace)
 
 

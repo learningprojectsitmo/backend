@@ -9,7 +9,7 @@ from sqlalchemy.sql import func
 from src.core.database import Base
 
 if TYPE_CHECKING:
-    from src.model.project import Project
+    from src.model.project import Project, ProjectType
     from src.model.user import User
 
 
@@ -43,6 +43,7 @@ class WorkSpace(Base):
     # Отношения
     category: Mapped[WorkSpaceCategories | None] = relationship(back_populates="workspaces")
     projects: Mapped[list[Project]] = relationship(back_populates="workspace")
+    project_types: Mapped[list[ProjectType]] = relationship(back_populates="workspace")
 
     def __repr__(self) -> str:
         return (

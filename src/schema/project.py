@@ -5,6 +5,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict
 
 from src.model.project import Project
+from src.schema.stage import ProjectStageInfo
 
 
 class ParticipantPreview(BaseModel):
@@ -78,6 +79,7 @@ class ProjectCreate(BaseModel):
     tags: list[str] | None = None
     workspace_id: int | None = None
     vacancies: list[VacancyCreate] | None = None
+    project_type_id: int | None = None
 
 
 class ApplyRequest(BaseModel):
@@ -105,6 +107,7 @@ class ProjectUpdate(BaseModel):
     tags: list[str] | None = None
     workspace_id: int | None = None
     vacancies: list[VacancyCreate] | None = None
+    project_type_id: int | None = None
 
 
 class ProjectFull(ProjectCreate):
@@ -124,6 +127,10 @@ class ProjectFull(ProjectCreate):
     author_name: str = ""
     author_email: str | None = None
     has_user_applied: bool = False
+    project_type_id: int | None = None
+    current_stage_id: int | None = None
+    stage_pending_approval: bool = False
+    stages: list[ProjectStageInfo] = []
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -226,6 +233,24 @@ class ProjectFull(ProjectCreate):
                 r.respondent_id == current_user_id and r.status == "pending" for r in all_responses if r.respondent
             )
 
+        stages: list[ProjectStageInfo] = []
+        try:
+            project_type = project.project_type
+            type_stages = getattr(project_type, "stages", []) or [] if project_type else []
+        except Exception:
+            type_stages = []
+        current_stage_id = getattr(project, "current_stage_id", None)
+        stages = [
+            ProjectStageInfo(
+                id=s.id,
+                name=s.name,
+                order=s.order,
+                requires_approval=s.requires_approval,
+                is_current=(s.id == current_stage_id),
+            )
+            for s in type_stages
+        ]
+
         return ProjectFull(
             id=project.id,
             name=project.name,
@@ -248,6 +273,10 @@ class ProjectFull(ProjectCreate):
             replycants=replycants,
             vacancies=vacancies,
             has_user_applied=has_user_applied,
+            project_type_id=project.project_type_id,
+            current_stage_id=current_stage_id,
+            stage_pending_approval=getattr(project, "stage_pending_approval", False),
+            stages=stages,
         )
 
 

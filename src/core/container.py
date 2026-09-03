@@ -20,6 +20,7 @@ from src.repository.resume_repository import ResumeRepository
 from src.repository.role_repository import RolePermissionRepository, RoleRepository
 from src.repository.session_repository import SessionRepository
 from src.repository.settings_repository import SpaceSettingsRepository
+from src.repository.stage_repository import ProjectTypeRepository, StageTransitionRepository
 from src.repository.user_repository import NewUserRepository, UserPermissionRepository, UserRepository
 from src.repository.workspace_repository import WorkSpaceRepository
 from src.services.audit_service import AuditService
@@ -39,6 +40,7 @@ from src.services.resume_service import ResumeService
 from src.services.role_service import RoleService
 from src.services.session_service import SessionService
 from src.services.settings_service import SpaceSettingsService
+from src.services.stage_service import ProjectStageService
 from src.services.user_service import UserService
 from src.services.workspace_service import WorkSpaceService
 
@@ -123,6 +125,14 @@ async def get_notification_repository(uow: IUnitOfWork = Depends(get_uow)) -> No
     return NotificationRepository(uow)
 
 
+async def get_project_type_repository(uow: IUnitOfWork = Depends(get_uow)) -> ProjectTypeRepository:
+    return ProjectTypeRepository(uow)
+
+
+async def get_stage_transition_repository(uow: IUnitOfWork = Depends(get_uow)) -> StageTransitionRepository:
+    return StageTransitionRepository(uow)
+
+
 # Service
 async def get_kanban_column_repository(uow: IUnitOfWork = Depends(get_uow)) -> KanbanColumnRepository:
     return KanbanColumnRepository(uow)
@@ -175,6 +185,13 @@ async def get_project_service(
         resume_repository=resume_repository,
         notification_service=notification_service,
     )
+
+
+async def get_stage_service(
+    type_repository: ProjectTypeRepository = Depends(get_project_type_repository),
+    transition_repository: StageTransitionRepository = Depends(get_stage_transition_repository),
+) -> ProjectStageService:
+    return ProjectStageService(type_repository, transition_repository)
 
 
 async def get_auth_service(

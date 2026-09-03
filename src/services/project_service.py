@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 
 from src.core.exceptions import NotFoundError, PermissionError, ValidationError
 from src.model.notification import NotificationType
-from src.model.project import Project, ProjectParticipation, ProjectStatus, ProjectVacancy, Response
+from src.model.project import Project, ProjectParticipation, ProjectStage, ProjectStatus, ProjectVacancy, Response
 from src.model.settings import SpaceSettings
 from src.model.user import Role, User
 from src.model.workspace import WorkSpaceParticipation
@@ -307,6 +307,23 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         settings = space_settings.scalar_one_or_none()
         return settings.default_project_deadline if settings else None
 
+    async def _assign_initial_stage(self, project: Project) -> None:
+        """Если у проекта выбран тип — ставим текущий этап = первый (или ожидание утверждения)."""
+        if not project.project_type_id:
+            return
+        first_stage = await self._project_repository.uow.session.execute(
+            select(ProjectStage)
+            .where(ProjectStage.project_type_id == project.project_type_id)
+            .order_by(ProjectStage.order)
+            .limit(1)
+        )
+        stage = first_stage.scalar_one_or_none()
+        if not stage:
+            return
+        project.current_stage_id = stage.id
+        project.stage_pending_approval = stage.requires_approval
+        await self._project_repository.uow.session.flush()
+
     async def create_project(self, project_data: ProjectCreate, author_id: int) -> Project:
         """Создать новый проект"""
         if not project_data.author_id:
@@ -360,6 +377,9 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         project = await self._project_repository.create(payload)
         await self._project_repository.uow.session.flush()
 
+        # Если выбран тип проекта — автоматически ставим текущий этап = первый
+        await self._assign_initial_stage(project)
+
         # Подгружаем и теги, и статус сразу, чтобы Pydantic не спотыкался
         await self._project_repository.uow.session.refresh(project, ["tags", "status"])
 
@@ -403,7 +423,9 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
                 await self._project_repository.uow.session.flush()
 
         # Чтобы Pydantic увидел обновленные связи после flush
-        await self._project_repository.uow.session.refresh(project, ["tags", "status", "vacancies", "participants"])
+        await self._project_repository.uow.session.refresh(
+            project, ["tags", "status", "vacancies", "participants", "project_type", "current_stage"]
+        )
 
         return project
 
@@ -457,7 +479,9 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
                     self._project_repository.uow.session.add(vacancy)
                 await self._project_repository.uow.session.flush()
 
-            await self._project_repository.uow.session.refresh(project, ["tags", "status", "participants", "vacancies"])
+            await self._project_repository.uow.session.refresh(
+                project, ["tags", "status", "participants", "vacancies", "project_type", "current_stage"]
+            )
 
         return project
 

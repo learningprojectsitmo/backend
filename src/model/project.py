@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Table, func
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Table, UniqueConstraint, func
 from sqlalchemy import Column as SAColumn
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -38,6 +38,17 @@ class Project(Base):
     status: Mapped[ProjectStatus | None] = relationship(back_populates="projects")
     progress: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     deadline: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    project_type_id: Mapped[int | None] = mapped_column(ForeignKey("project_type.id"), nullable=True)
+    current_stage_id: Mapped[int | None] = mapped_column(ForeignKey("project_stage.id"), nullable=True)
+    stage_pending_approval: Mapped[bool] = mapped_column(default=False, nullable=False, server_default="0")
+
+    project_type: Mapped[ProjectType | None] = relationship(back_populates="projects")
+    current_stage: Mapped[ProjectStage | None] = relationship(foreign_keys=[current_stage_id])
+    stage_transitions: Mapped[list[StageTransition]] = relationship(
+        back_populates="project",
+        cascade="all, delete-orphan",
+    )
 
     tags: Mapped[list[Tag]] = relationship(
         secondary=project_tag,
@@ -171,4 +182,72 @@ class ProjectVacancy(Base):
         return (
             f"ProjectVacancy(id={self.id!r}, project_id={self.project_id!r}, "
             f"title={self.title!r}, required_count={self.required_count!r})"
+        )
+
+
+class ProjectType(Base):
+    __tablename__ = "project_type"
+    __table_args__ = (UniqueConstraint("workspace_id", "name", name="uq_project_type_workspace_name"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    workspace_id: Mapped[int | None] = mapped_column(ForeignKey("workspace.id"), nullable=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    description: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    workspace: Mapped[WorkSpace | None] = relationship(back_populates="project_types")
+    stages: Mapped[list[ProjectStage]] = relationship(
+        back_populates="project_type",
+        cascade="all, delete-orphan",
+        order_by="ProjectStage.order",
+    )
+    projects: Mapped[list[Project]] = relationship(back_populates="project_type")
+
+    def __repr__(self) -> str:
+        return f"ProjectType(id={self.id!r}, name={self.name!r})"
+
+
+class ProjectStage(Base):
+    __tablename__ = "project_stage"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    order: Mapped[int] = mapped_column(Integer, nullable=False)
+    requires_approval: Mapped[bool] = mapped_column(default=False, nullable=False)
+    project_type_id: Mapped[int] = mapped_column(ForeignKey("project_type.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    project_type: Mapped[ProjectType] = relationship(back_populates="stages")
+
+    def __repr__(self) -> str:
+        return (
+            f"ProjectStage(id={self.id!r}, name={self.name!r}, order={self.order!r}, "
+            f"requires_approval={self.requires_approval!r})"
+        )
+
+
+class StageTransition(Base):
+    __tablename__ = "stage_transition"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("project.id"), nullable=False)
+    stage_id: Mapped[int] = mapped_column(ForeignKey("project_stage.id"), nullable=False)
+    from_stage_id: Mapped[int | None] = mapped_column(ForeignKey("project_stage.id"), nullable=True)
+    action: Mapped[str] = mapped_column(String(20), nullable=False)  # advance, approve, reject
+    comment: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    actor_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    project: Mapped[Project] = relationship(back_populates="stage_transitions")
+    stage: Mapped[ProjectStage] = relationship(foreign_keys=[stage_id])
+    from_stage: Mapped[ProjectStage | None] = relationship(foreign_keys=[from_stage_id])
+    actor: Mapped[User] = relationship(foreign_keys=[actor_id])
+
+    def __repr__(self) -> str:
+        return (
+            f"StageTransition(id={self.id!r}, project_id={self.project_id!r}, "
+            f"stage_id={self.stage_id!r}, action={self.action!r})"
         )
