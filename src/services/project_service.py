@@ -322,6 +322,17 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
             return
         project.current_stage_id = stage.id
         project.stage_pending_approval = stage.requires_approval
+
+        all_stages = await self._project_repository.uow.session.execute(
+            select(ProjectStage)
+            .where(ProjectStage.project_type_id == project.project_type_id)
+            .order_by(ProjectStage.order)
+        )
+        stage_list = list(all_stages.scalars().all())
+        if stage_list:
+            idx = next((i for i, s in enumerate(stage_list) if s.id == stage.id), 0)
+            project.progress = round(((idx + 1) / len(stage_list)) * 100)
+
         await self._project_repository.uow.session.flush()
 
     async def create_project(self, project_data: ProjectCreate, author_id: int) -> Project:

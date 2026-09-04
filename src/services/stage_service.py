@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, ClassVar
 
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from src.core.exceptions import NotFoundError, PermissionError, ValidationError
 from src.model.project import Project, ProjectParticipation, ProjectType, StageTransition
@@ -182,13 +183,27 @@ class ProjectStageService(BaseService[Project, dict, dict]):
     # ====== Workflow: advance / approve / reject ======
 
     async def _get_project(self, project_id: int) -> Project:
-        return await self._type_repository.uow.session.get(Project, project_id)
+        result = await self._type_repository.uow.session.execute(
+            select(Project)
+            .where(Project.id == project_id)
+            .options(selectinload(Project.project_type).selectinload(ProjectType.stages))
+        )
+        return result.scalar_one_or_none()
 
     async def _get_ordered_stages(self, project: Project) -> list:
         ptype = project.project_type
         if not ptype:
             raise ValidationError("Project has no type set; stages are not available")
         return sorted(ptype.stages or [], key=lambda s: s.order)
+
+    def _compute_progress(self, project: Project, stages: list) -> int:
+        """Прогресс в процентах по текущему этапу (последний этап = 100%)."""
+        if not project.current_stage_id or not stages:
+            return 0
+        for i, s in enumerate(stages):
+            if s.id == project.current_stage_id:
+                return round(((i + 1) / len(stages)) * 100)
+        return 0
 
     async def _ensure_can_advance(self, project: Project, user_id: int) -> None:
         if project.author_id != user_id:
@@ -265,6 +280,7 @@ class ProjectStageService(BaseService[Project, dict, dict]):
             project.stage_pending_approval = True
         else:
             project.stage_pending_approval = False
+        project.progress = self._compute_progress(project, await self._get_ordered_stages(project))
         await self._type_repository.uow.session.flush()
         return project
 
@@ -288,6 +304,7 @@ class ProjectStageService(BaseService[Project, dict, dict]):
             action="approve",
         )
         project.stage_pending_approval = False
+        project.progress = self._compute_progress(project, await self._get_ordered_stages(project))
         await self._type_repository.uow.session.flush()
         return project
 
@@ -322,6 +339,7 @@ class ProjectStageService(BaseService[Project, dict, dict]):
         if current_order > 0:
             project.current_stage_id = stages[current_order - 1].id
         project.stage_pending_approval = False
+        project.progress = self._compute_progress(project, stages)
         await self._type_repository.uow.session.flush()
         return project
 
