@@ -104,6 +104,7 @@ class WorkspaceParticipantItem(BaseModel):
     avatar_url: str | None = None
     projects: list[ProjectRef] = []
     role: str = ""
+    workspace_role: str = ""
     contacts: ParticipantContact = ParticipantContact()
     resume_url: str = ""
     created_at: str

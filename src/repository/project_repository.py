@@ -6,7 +6,14 @@ from sqlalchemy import func, select, update
 from sqlalchemy.orm import selectinload
 
 from src.core.uow import IUnitOfWork
-from src.model.project import Project, ProjectParticipation, ProjectStage, ProjectVacancy, Response, Tag
+from src.model.project import (
+    Project,
+    ProjectParticipation,
+    ProjectType,
+    ProjectVacancy,
+    Response,
+    Tag,
+)
 from src.repository.base_repository import BaseRepository
 from src.schema.project import ProjectCreate, ProjectUpdate
 
@@ -30,7 +37,7 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
                 selectinload(Project.responses).selectinload(Response.respondent),
                 selectinload(Project.responses).selectinload(Response.inviter),
                 selectinload(Project.responses).selectinload(Response.resume),
-                selectinload(Project.project_type).selectinload(ProjectStage.stages),
+                selectinload(Project.project_type).selectinload(ProjectType.stages),
                 selectinload(Project.current_stage),
             )
         )

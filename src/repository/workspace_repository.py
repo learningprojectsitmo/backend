@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from sqlalchemy import Date, cast, func, or_, select
 from sqlalchemy import delete as sa_delete
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import aliased, selectinload
 
 from src.core.uow import IUnitOfWork
 from src.model.project import Project, ProjectParticipation
@@ -151,6 +151,8 @@ class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUp
             .subquery()
         )
 
+        global_role = aliased(Role)
+
         base_query = (
             select(
                 WorkSpaceParticipation.id,
@@ -163,10 +165,12 @@ class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUp
                 user_projects.c.project_names,
                 first_resume.c.resume_id,
                 Role.name.label("role_name"),
+                global_role.name.label("global_role_name"),
                 WorkSpaceParticipation.created_at,
             )
             .join(User, User.id == WorkSpaceParticipation.participant_id)
             .outerjoin(Role, Role.id == WorkSpaceParticipation.role_id)
+            .outerjoin(global_role, global_role.id == User.role_id)
             .outerjoin(user_projects, user_projects.c.participant_id == WorkSpaceParticipation.participant_id)
             .outerjoin(first_resume, first_resume.c.author_id == WorkSpaceParticipation.participant_id)
             .where(WorkSpaceParticipation.workspace_id == workspace_id)
@@ -223,7 +227,8 @@ class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUp
                     "name": row["name"] or "",
                     "avatar_url": None,
                     "projects": projects_list,
-                    "role": row["role_name"] or "",
+                    "role": row["global_role_name"] or "",
+                    "workspace_role": row["role_name"] or "",
                     "contacts": {
                         "telegram": row["tg_nickname"] or None,
                         "email": row["email"] or None,

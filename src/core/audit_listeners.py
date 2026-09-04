@@ -109,9 +109,9 @@ def audit_user_insert(mapper, connection, target: User) -> None:
             action="INSERT",
             old_values=None,
             new_values=dumps(new_values),
-            performed_by=context_data.user_id,
-            ip_address=context_data.ip_address,
-            user_agent=context_data.user_agent,
+            performed_by=context_data.user_id if context_data else None,
+            ip_address=context_data.ip_address if context_data else None,
+            user_agent=context_data.user_agent if context_data else None,
             performed_at=datetime.now(UTC),
         )
         connection.execute(stmt)
