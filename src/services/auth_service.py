@@ -533,7 +533,7 @@ class AuthService:
 
         await self._password_reset_repository.create(reset_data)
 
-        reset_url = f"{settings.FRONTEND_URL}/auth/reset-password?token={token}"
+        reset_url = f"{settings.FRONTEND_URL}/auth/resetpassword?token={token}"
         await self._mail_service.send_password_reset(email, reset_url)
         self._logger.info(f"Password reset requested for user {user.id}")
         return True
