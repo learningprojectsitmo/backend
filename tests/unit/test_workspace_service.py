@@ -217,6 +217,53 @@ class TestWorkSpaceService:
             await workspace_service.delete_workspace(1, current_user_id=999)
 
     @pytest.mark.asyncio
+    async def test_should_remove_workspace_participant_as_author(self):
+        """Тест должен удалить участника из workspace автором"""
+        # given
+        mock_repository = Mock(spec=WorkSpaceRepository)
+        mock_workspace = WorkSpace(id=1, name="Test Workspace", author_id=1, status_id=1)
+        mock_repository.get_by_id.return_value = mock_workspace
+        mock_repository.remove_participant.return_value = True
+
+        workspace_service = WorkSpaceService(mock_repository)
+
+        # when
+        result = await workspace_service.remove_workspace_participant(1, 42, current_user_id=1)
+
+        # then
+        assert result is True
+        mock_repository.remove_participant.assert_called_once_with(1, 42)
+
+    @pytest.mark.asyncio
+    async def test_should_raise_permission_error_when_removing_participant_not_as_author(self):
+        """Тест должен запретить удаление участника не автором"""
+        # given
+        mock_repository = Mock(spec=WorkSpaceRepository)
+        mock_workspace = WorkSpace(id=1, name="Test Workspace", author_id=1, status_id=1)
+        mock_repository.get_by_id.return_value = mock_workspace
+
+        workspace_service = WorkSpaceService(mock_repository)
+
+        # when / then
+        with pytest.raises(PermissionError, match="Only workspace author can remove participants"):
+            await workspace_service.remove_workspace_participant(1, 42, current_user_id=999)
+
+    @pytest.mark.asyncio
+    async def test_should_return_false_when_removing_participant_in_missing_workspace(self):
+        """Тест должен вернуть False при удалении участника в несуществующем workspace"""
+        # given
+        mock_repository = Mock(spec=WorkSpaceRepository)
+        mock_repository.get_by_id.return_value = None
+
+        workspace_service = WorkSpaceService(mock_repository)
+
+        # when
+        result = await workspace_service.remove_workspace_participant(999, 42, current_user_id=1)
+
+        # then
+        assert result is False
+
+    @pytest.mark.asyncio
     async def test_should_get_workspaces_by_author(self):
         """Тест должен получить workspace по автору"""
         # given

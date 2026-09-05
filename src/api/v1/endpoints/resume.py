@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from src.core.container import get_resume_service
-from src.core.dependencies import get_current_user, setup_audit
+from src.core.dependencies import get_current_user, permission_required, setup_audit
 from src.core.exceptions import PermissionError
 from src.model.user import User
 from src.schema.resume import (
@@ -89,7 +89,7 @@ async def fetch_resumes(
 async def create_resume(
     resume_data: ResumeCreate,
     resume_service: ResumeService = Depends(get_resume_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("resume:create")),
     _audit=Depends(setup_audit),
 ) -> ResumeFull:
     """Создать новое резюме"""
@@ -103,7 +103,7 @@ async def update_resume(
     resume_id: int,
     resume_data: ResumeUpdate,
     resume_service: ResumeService = Depends(get_resume_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("resume:update")),
     _audit=Depends(setup_audit),
 ) -> ResumeFull:
     """Обновить резюме (только автор может обновлять)"""
@@ -127,7 +127,7 @@ async def update_resume(
 async def delete_resume(
     resume_id: int,
     resume_service: ResumeService = Depends(get_resume_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("resume:delete")),
 ) -> dict[str, str]:
     """Удалить резюме (только автор может удалять)"""
 
@@ -172,7 +172,7 @@ async def create_resume_link(
     resume_id: int,
     link_data: ResumeLinkCreate,
     resume_service: ResumeService = Depends(get_resume_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("resume:update")),
 ) -> ResumeLinkFull:
     """Создать ссылку портфолио в резюме"""
     try:
@@ -188,7 +188,7 @@ async def update_resume_link(
     link_id: int,
     link_data: ResumeLinkUpdate,
     resume_service: ResumeService = Depends(get_resume_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("resume:update")),
 ) -> ResumeLinkFull:
     """Обновить ссылку портфолио в резюме"""
     try:
@@ -204,7 +204,7 @@ async def update_resume_link(
 async def delete_resume_link(
     link_id: int,
     resume_service: ResumeService = Depends(get_resume_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("resume:delete")),
 ) -> dict[str, str]:
     """Удалить ссылку портфолио из резюме"""
     try:
@@ -224,7 +224,7 @@ async def create_resume_education(
     resume_id: int,
     edu_data: ResumeEducationCreate,
     resume_service: ResumeService = Depends(get_resume_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("resume:update")),
 ) -> ResumeEducationFull:
     """Создать запись об образовании в резюме"""
     try:
@@ -240,7 +240,7 @@ async def update_resume_education(
     edu_id: int,
     edu_data: ResumeEducationUpdate,
     resume_service: ResumeService = Depends(get_resume_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("resume:update")),
 ) -> ResumeEducationFull:
     """Обновить запись об образовании в резюме"""
     try:
@@ -256,7 +256,7 @@ async def update_resume_education(
 async def delete_resume_education(
     edu_id: int,
     resume_service: ResumeService = Depends(get_resume_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("resume:delete")),
 ) -> dict[str, str]:
     """Удалить запись об образовании из резюме"""
     try:
@@ -276,7 +276,7 @@ async def create_resume_language(
     resume_id: int,
     lang_data: ResumeLanguageCreate,
     resume_service: ResumeService = Depends(get_resume_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("resume:update")),
 ) -> ResumeLanguageFull:
     """Создать язык в резюме"""
     try:
@@ -292,7 +292,7 @@ async def update_resume_language(
     lang_id: int,
     lang_data: ResumeLanguageUpdate,
     resume_service: ResumeService = Depends(get_resume_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("resume:update")),
 ) -> ResumeLanguageFull:
     """Обновить язык в резюме"""
     try:
@@ -312,7 +312,7 @@ async def create_resume_experience(
     resume_id: int,
     exp_data: ResumeExperienceCreate,
     resume_service: ResumeService = Depends(get_resume_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("resume:update")),
 ) -> ResumeExperienceFull:
     """Создать запись об опыте в резюме"""
     try:
@@ -328,7 +328,7 @@ async def update_resume_experience(
     exp_id: int,
     exp_data: ResumeExperienceUpdate,
     resume_service: ResumeService = Depends(get_resume_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("resume:update")),
 ) -> ResumeExperienceFull:
     """Обновить запись об опыте в резюме"""
     try:
@@ -344,7 +344,7 @@ async def update_resume_experience(
 async def delete_resume_experience(
     exp_id: int,
     resume_service: ResumeService = Depends(get_resume_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("resume:delete")),
 ) -> dict[str, str]:
     """Удалить запись об опыте из резюме"""
     try:
@@ -364,7 +364,7 @@ async def create_resume_skill(
     resume_id: int,
     skill_data: ResumeSkillCreate,
     resume_service: ResumeService = Depends(get_resume_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("resume:update")),
 ) -> ResumeSkillFull:
     """Добавить навык в резюме"""
     try:
@@ -380,7 +380,7 @@ async def update_resume_skill(
     skill_id: int,
     skill_data: ResumeSkillUpdate,
     resume_service: ResumeService = Depends(get_resume_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("resume:update")),
 ) -> ResumeSkillFull:
     """Обновить навык в резюме"""
     try:
@@ -396,7 +396,7 @@ async def update_resume_skill(
 async def delete_resume_skill(
     skill_id: int,
     resume_service: ResumeService = Depends(get_resume_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("resume:delete")),
 ) -> dict[str, str]:
     """Удалить навык из резюме"""
     try:
@@ -416,7 +416,7 @@ async def create_resume_interest(
     resume_id: int,
     interest_data: ResumeInterestCreate,
     resume_service: ResumeService = Depends(get_resume_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("resume:update")),
 ) -> ResumeInterestFull:
     """Добавить интерес в резюме"""
     try:
@@ -432,7 +432,7 @@ async def update_resume_interest(
     interest_id: int,
     interest_data: ResumeInterestUpdate,
     resume_service: ResumeService = Depends(get_resume_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("resume:update")),
 ) -> ResumeInterestFull:
     """Обновить интерес в резюме"""
     try:
@@ -448,7 +448,7 @@ async def update_resume_interest(
 async def delete_resume_interest(
     interest_id: int,
     resume_service: ResumeService = Depends(get_resume_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("resume:delete")),
 ) -> dict[str, str]:
     """Удалить интерес из резюме"""
     try:
@@ -464,7 +464,7 @@ async def delete_resume_interest(
 async def delete_resume_language(
     lang_id: int,
     resume_service: ResumeService = Depends(get_resume_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("resume:delete")),
 ) -> dict[str, str]:
     """Удалить язык из резюме"""
     try:

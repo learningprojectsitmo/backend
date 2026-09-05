@@ -61,6 +61,21 @@ def permission_required(permission: str):
     return permission_dependency
 
 
+async def admin_required(current_user: User = Depends(get_current_user)) -> User:
+    """Зависимость для админ-панели: доступ только у пользователя с ролью admin"""
+    if not current_user.role or current_user.role.name != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required",
+        )
+    return current_user
+
+
+def is_admin_user(current_user: User) -> bool:
+    """Проверить, что пользователь имеет роль admin (role загружается через get_by_email)"""
+    return bool(current_user.role and current_user.role.name == "admin")
+
+
 async def get_current_user_no_exception(
     token: str = Depends(oauth2_scheme),
     auth_service: AuthService = Depends(get_auth_service),

@@ -1,16 +1,33 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, Mock
+from zoneinfo import ZoneInfo
 
 import pytest
 
 from src.core.exceptions import NotFoundError, PermissionError, ValidationError
-from src.model.project import Project, ProjectStage, ProjectType
+from src.model.project import Project, ProjectStage, ProjectType, StageTransition
+from src.schema.project import ProjectFull
 from src.services.stage_service import ProjectStageService
 
 
 def _stage(id: int, order: int, requires_approval: bool = False) -> ProjectStage:
     return ProjectStage(id=id, name=f"stage{id}", order=order, requires_approval=requires_approval)
+
+
+def _mock_project_fetch(session, project: Project | None) -> None:
+    """Проект в сервисе достаётся через session.execute(select(Project)...)."""
+    exec_result = Mock()
+    exec_result.scalar_one_or_none.return_value = project
+    session.execute = AsyncMock(return_value=exec_result)
+
+
+def _mock_teacher(session, teacher: Mock, model_cls_name: str = "User") -> None:
+    """Пользователь-преподаватель достаётся через session.get(User, user_id)."""
+    session.get = AsyncMock(
+        side_effect=lambda model_cls, _user_id: teacher if model_cls.__name__ == model_cls_name else None
+    )
 
 
 class TestProjectStageService:
@@ -50,7 +67,7 @@ class TestProjectStageService:
         # given
         service, type_repo, transition_repo = self._make_service()
         project = self._project_with_stages(current_stage_id=1)
-        type_repo.uow.session.get = AsyncMock(return_value=project)
+        _mock_project_fetch(type_repo.uow.session, project)
         type_repo.uow.session.flush = AsyncMock()
 
         # when
@@ -68,7 +85,7 @@ class TestProjectStageService:
         # given
         service, type_repo, _ = self._make_service()
         project = self._project_with_stages(current_stage_id=1)
-        type_repo.uow.session.get = AsyncMock(return_value=project)
+        _mock_project_fetch(type_repo.uow.session, project)
 
         # when / then
         with pytest.raises(PermissionError):
@@ -79,7 +96,7 @@ class TestProjectStageService:
         # given
         service, type_repo, _ = self._make_service()
         project = self._project_with_stages(current_stage_id=1, pending=True)
-        type_repo.uow.session.get = AsyncMock(return_value=project)
+        _mock_project_fetch(type_repo.uow.session, project)
 
         # when / then
         with pytest.raises(ValidationError):
@@ -98,10 +115,8 @@ class TestProjectStageService:
         teacher_role = Mock()
         teacher_role.name = "teacher"
         teacher.role = teacher_role
-        # session.get(User, user_id) -> teacher, session.get(Project, project_id) -> project
-        type_repo.uow.session.get = AsyncMock(
-            side_effect=lambda model_cls, _user_id: project if model_cls.__name__ == "Project" else teacher
-        )
+        _mock_project_fetch(type_repo.uow.session, project)
+        _mock_teacher(type_repo.uow.session, teacher)
 
         # when
         result = await service.reject_stage(10, 200, comment="Тема отклонена")
@@ -124,9 +139,8 @@ class TestProjectStageService:
         teacher_role = Mock()
         teacher_role.name = "teacher"
         teacher.role = teacher_role
-        type_repo.uow.session.get = AsyncMock(
-            side_effect=lambda model_cls, _user_id: project if model_cls.__name__ == "Project" else teacher
-        )
+        _mock_project_fetch(type_repo.uow.session, project)
+        _mock_teacher(type_repo.uow.session, teacher)
 
         # when
         result = await service.approve_stage(10, 200)
@@ -141,7 +155,7 @@ class TestProjectStageService:
         # given
         service, type_repo, _ = self._make_service()
         project = Project(id=10, name="Test", author_id=100)
-        type_repo.uow.session.get = AsyncMock(return_value=project)
+        _mock_project_fetch(type_repo.uow.session, project)
 
         # when / then
         with pytest.raises(ValidationError):
@@ -151,7 +165,7 @@ class TestProjectStageService:
     async def test_should_raise_when_project_not_found(self):
         # given
         service, type_repo, _ = self._make_service()
-        type_repo.uow.session.get = AsyncMock(return_value=None)
+        _mock_project_fetch(type_repo.uow.session, None)
 
         # when / then
         with pytest.raises(NotFoundError):
@@ -235,9 +249,7 @@ class TestProjectTypeCRUDWorkspaceScoped:
 
         # when / then: тип принадлежит workspace 42, но запрос идёт за workspace 7
         with pytest.raises(PermissionError):
-            await service.update_project_type(
-                9, workspace_id=7, data=Mock(name="Другое"), user_id=1
-            )
+            await service.update_project_type(9, workspace_id=7, data=Mock(name="Другое"), user_id=1)
 
     @pytest.mark.asyncio
     async def test_should_list_only_workspace_types(self):
@@ -250,3 +262,109 @@ class TestProjectTypeCRUDWorkspaceScoped:
 
         # then
         type_repo.list_with_stages.assert_awaited_once_with(42)
+
+    @pytest.mark.asyncio
+    async def test_should_pass_duration_days_to_create_stage(self):
+        # given
+        service, type_repo = self._make_service()
+        admin = self._global_admin()
+        await self._mock_session_user(type_repo, admin)
+        ptype = ProjectType(id=5, name="Курсовая", workspace_id=42)
+        ptype.stages = []
+        type_repo.get_by_id = AsyncMock(return_value=ptype)
+        type_repo.get_by_id_with_stages = AsyncMock(return_value=ptype)
+        type_repo.create_stage = AsyncMock(
+            return_value=ProjectStage(id=1, name="Тема", order=0, requires_approval=False, duration_days=7)
+        )
+
+        # when
+        await service.add_stage(
+            type_id=5,
+            workspace_id=42,
+            data=Mock(name="Тема", order=0, requires_approval=False, duration_days=7),
+            user_id=1,
+        )
+
+        # then
+        type_id_arg, data_arg = type_repo.create_stage.await_args.args
+        assert type_id_arg == 5  # noqa: PLR2004
+        assert data_arg.duration_days == 7  # noqa: PLR2004
+
+    @pytest.mark.asyncio
+    async def test_should_include_duration_in_stage_info(self):
+        # given
+        service, type_repo = self._make_service()
+        ptype = ProjectType(id=5, name="Курсовая")
+        ptype.stages = [ProjectStage(id=1, name="Тема", order=0, requires_approval=False, duration_days=10)]
+        type_repo.list_with_stages = AsyncMock(return_value=[ptype])
+
+        # when
+        types = await service.list_project_types(workspace_id=None)
+
+        # then
+        assert types[0].stages[0].duration_days == 10  # noqa: PLR2004
+
+
+class TestProjectStageDeadline:
+    """Дедлайны этапов в ProjectFull — отсчёт от входа в этап + duration_days"""
+
+    def _project(self, stages: list[ProjectStage], entered: datetime | None, created: datetime) -> Project:
+        ptype = ProjectType(id=1, name="Курсовая")
+        ptype.stages = stages
+        project = Project(
+            id=10, name="Test", author_id=100, current_stage_id=stages[-1].id, stage_pending_approval=False
+        )
+        project.project_type = ptype
+        project.created_at = created
+        if entered is not None:
+            project.stage_transitions = [
+                StageTransition(
+                    id=1,
+                    project_id=10,
+                    stage_id=stages[0].id,
+                    from_stage_id=None,
+                    action="advance",
+                    actor_id=100,
+                    created_at=entered,
+                )
+            ]
+        else:
+            project.stage_transitions = []
+        return project
+
+    def test_should_compute_deadline_from_advance_entry(self):
+        # given
+        tz = ZoneInfo("UTC")
+        entered = datetime(2026, 9, 1, 12, 0, 0, tzinfo=tz)
+        project = self._project(
+            stages=[
+                ProjectStage(id=1, name="Тема", order=0, requires_approval=False, duration_days=10),
+                ProjectStage(id=2, name="Решение", order=1, requires_approval=False, duration_days=None),
+            ],
+            entered=entered,
+            created=entered,
+        )
+
+        # when
+        full = ProjectFull.from_orm(project)
+
+        # then
+        assert full.stages[0].deadline == entered + timedelta(days=10)
+        assert full.stages[0].duration_days == 10  # noqa: PLR2004
+        assert full.stages[1].deadline is None
+
+    def test_should_fall_back_to_project_created_at_without_transitions(self):
+        # given
+        tz = ZoneInfo("UTC")
+        created = datetime(2026, 9, 2, 9, 0, 0, tzinfo=tz)
+        project = self._project(
+            stages=[ProjectStage(id=1, name="Тема", order=0, requires_approval=False, duration_days=5)],
+            entered=None,
+            created=created,
+        )
+
+        # when
+        full = ProjectFull.from_orm(project)
+
+        # then
+        assert full.stages[0].deadline == datetime(2026, 9, 7, 9, 0, 0, tzinfo=tz)

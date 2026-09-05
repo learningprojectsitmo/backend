@@ -37,6 +37,7 @@ class ProjectTypeRepository(BaseRepository[ProjectType, ProjectTypeCreate, Proje
             name=data.name,
             order=data.order,
             requires_approval=data.requires_approval,
+            duration_days=data.duration_days,
         )
         self.uow.session.add(stage)
         await self.uow.session.flush()
@@ -89,6 +90,7 @@ class ProjectTypeRepository(BaseRepository[ProjectType, ProjectTypeCreate, Proje
                         name=stage.name,
                         order=idx,
                         requires_approval=stage.requires_approval,
+                        duration_days=stage.duration_days,
                     )
                 )
             await self.uow.session.flush()

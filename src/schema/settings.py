@@ -20,7 +20,7 @@ class SpaceSettingsCreate(BaseModel):
 
     space_id: int
     settings_type_id: int = 1
-    visibility: str = "public"
+    visibility: str = "private"
     join_policy: str = "open"
     default_role_id: int | None = None
     icon_url: str | None = None

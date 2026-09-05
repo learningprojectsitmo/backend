@@ -217,6 +217,7 @@ class ProjectStage(Base):
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     order: Mapped[int] = mapped_column(Integer, nullable=False)
     requires_approval: Mapped[bool] = mapped_column(default=False, nullable=False)
+    duration_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
     project_type_id: Mapped[int] = mapped_column(ForeignKey("project_type.id"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 

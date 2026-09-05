@@ -100,7 +100,12 @@ class ProjectStageService(BaseService[Project, dict, dict]):
     @staticmethod
     def _stage_info(s) -> ProjectStageInfo:
         return ProjectStageInfo(
-            id=s.id, name=s.name, order=s.order, requires_approval=s.requires_approval, is_current=False
+            id=s.id,
+            name=s.name,
+            order=s.order,
+            requires_approval=s.requires_approval,
+            is_current=False,
+            duration_days=s.duration_days,
         )
 
     async def create_project_type(
@@ -163,9 +168,7 @@ class ProjectStageService(BaseService[Project, dict, dict]):
             raise ValidationError("Stage does not belong to this project type")
         return await self.get_project_type(type_id)
 
-    async def remove_stage(
-        self, type_id: int, stage_id: int, workspace_id: int | None, user_id: int
-    ) -> bool:
+    async def remove_stage(self, type_id: int, stage_id: int, workspace_id: int | None, user_id: int) -> bool:
         ptype = await self._type_repository.get_by_id(type_id)
         if not ptype:
             raise NotFoundError("Project type not found")

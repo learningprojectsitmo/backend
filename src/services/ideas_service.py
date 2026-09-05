@@ -9,6 +9,7 @@ from src.schema.ideas import (
     IdeaFullResponse,
     IdeaListItem,
     IdeaTagResponse,
+    IdeaUpdate,
 )
 from src.services.base_service import BaseService
 
@@ -117,17 +118,40 @@ class IdeaService(BaseService[Idea, IdeaCreate, IdeaCreate]):
         await self._idea_repository.uow.session.flush()
         return idea
 
-    async def delete_idea(self, idea_id: int, user_id: int) -> bool:
+    async def delete_idea(self, idea_id: int, user_id: int, *, is_admin: bool = False) -> bool:
         idea = await self._idea_repository.get_by_id(idea_id)
         if not idea:
             return False
-        if idea.author_id != user_id:
+        if idea.author_id != user_id and not is_admin:
             raise PermissionError("You can only delete your own ideas")
 
         for tag in idea.tags:
             tag.count -= 1
 
         return await self._idea_repository.delete(idea_id)
+
+    async def update_idea(
+        self,
+        idea_id: int,
+        data: IdeaUpdate,
+        user_id: int,
+        *,
+        is_admin: bool = False,
+    ) -> Idea | None:
+        """Обновить идею: автор или админ (статус, заголовок, описание)"""
+
+        idea = await self._idea_repository.get_by_id(idea_id)
+        if not idea:
+            return None
+        if idea.author_id != user_id and not is_admin:
+            raise PermissionError("You can only update your own ideas")
+
+        fields = data.model_dump(exclude_unset=True)
+        for field, value in fields.items():
+            setattr(idea, field, value)
+
+        await self._idea_repository.uow.session.flush()
+        return idea
 
     async def get_comments(self, idea_id: int) -> list[IdeaCommentResponse]:
         comments = await self._comment_repository.get_by_idea_id(idea_id)

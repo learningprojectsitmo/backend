@@ -26,6 +26,7 @@ class ProjectStageCreate(BaseModel):
     name: str
     order: int
     requires_approval: bool = False
+    duration_days: int | None = None
 
 
 class ProjectStageUpdate(BaseModel):
@@ -34,6 +35,7 @@ class ProjectStageUpdate(BaseModel):
     name: str | None = None
     order: int | None = None
     requires_approval: bool | None = None
+    duration_days: int | None = None
 
 
 class ProjectStageItem(BaseModel):
@@ -41,6 +43,7 @@ class ProjectStageItem(BaseModel):
     name: str
     order: int
     requires_approval: bool
+    duration_days: int | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -62,6 +65,8 @@ class ProjectStageInfo(BaseModel):
     order: int
     requires_approval: bool
     is_current: bool
+    duration_days: int | None = None
+    deadline: datetime | None = None
 
 
 class StageTransitionItem(BaseModel):

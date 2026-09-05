@@ -41,13 +41,15 @@ class SpaceSettingsService(BaseService[SpaceSettings, SpaceSettingsCreate, Space
         # Ретроактивно применяем дедлайн ко всем проектам пространства
         data = settings_data.model_dump(exclude_unset=True)
         if "default_project_deadline" in data and self._project_repository is not None:
-            await self._project_repository.update_deadline_by_workspace(
-                space_id, settings.default_project_deadline
-            )
+            await self._project_repository.update_deadline_by_workspace(space_id, settings.default_project_deadline)
 
         return settings
 
     async def create_defaults(self, space_id: int) -> SpaceSettings:
-        """Создать настройки со значениями по умолчанию"""
-        create_data = SpaceSettingsCreate(space_id=space_id, settings_type_id=1)
+        """Создать настройки со значениями по умолчанию (пространство приватное)"""
+        create_data = SpaceSettingsCreate(
+            space_id=space_id,
+            settings_type_id=1,
+            visibility="private",
+        )
         return await self._settings_repository.create(create_data)

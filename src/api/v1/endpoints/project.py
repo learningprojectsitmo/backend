@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from src.core.container import get_auth_service, get_kanban_service, get_project_service
-from src.core.dependencies import get_current_user, setup_audit
+from src.core.dependencies import get_current_user, permission_required, setup_audit
 from src.core.exceptions import PermissionError
 from src.model.user import User
 from src.schema.project import (
@@ -165,7 +165,7 @@ async def create_project(
     project_data: ProjectCreate,
     project_service: ProjectService = Depends(get_project_service),
     kanban_service: KanbanService = Depends(get_kanban_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("project:create")),
     _audit=Depends(setup_audit),
 ) -> ProjectFull:
     """Создать новый проект"""
@@ -183,7 +183,7 @@ async def update_project(
     project_id: int,
     project_data: ProjectUpdate,
     project_service: ProjectService = Depends(get_project_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("project:update")),
     _audit=Depends(setup_audit),
 ) -> ProjectFull:
     """Обновить проект (только автор может обновлять)"""
@@ -212,7 +212,7 @@ async def invite_to_project(
     project_id: int,
     body: InviteRequest,
     project_service: ProjectService = Depends(get_project_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("project:update")),
 ) -> dict[str, str]:
     """Пригласить пользователя в проект (только автор)"""
     await project_service.invite_to_project(project_id, current_user.id, body.user_id, body.vacancy_id, body.resume_id)
@@ -224,7 +224,7 @@ async def accept_response(
     project_id: int,
     response_id: int,
     project_service: ProjectService = Depends(get_project_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("project:update")),
     _audit=Depends(setup_audit),
 ) -> dict[str, str]:
     """Принять отклик (только автор)"""
@@ -237,7 +237,7 @@ async def reject_response(
     project_id: int,
     response_id: int,
     project_service: ProjectService = Depends(get_project_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("project:update")),
     _audit=Depends(setup_audit),
 ) -> dict[str, str]:
     """Отклонить отклик (только автор)"""
@@ -250,7 +250,7 @@ async def remove_participant(
     project_id: int,
     user_id: int,
     project_service: ProjectService = Depends(get_project_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("project:update")),
     _audit=Depends(setup_audit),
 ) -> dict[str, str]:
     """Удалить участника из проекта (только автор)"""
@@ -264,7 +264,7 @@ async def remove_participant(
 async def delete_project(
     project_id: int,
     project_service: ProjectService = Depends(get_project_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("project:delete")),
     auth_service: AuthService = Depends(get_auth_service),
 ) -> dict[str, str]:
     """Удалить проект (только при наличии права project:delete)"""

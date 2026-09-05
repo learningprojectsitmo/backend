@@ -28,7 +28,7 @@ class SpaceSettings(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     settings_type_id: Mapped[int] = mapped_column(ForeignKey("settings_type.id"), nullable=False)
     space_id: Mapped[int] = mapped_column(ForeignKey("workspace.id"), nullable=False, unique=True)
-    visibility: Mapped[str] = mapped_column(String(20), nullable=False, default="public")
+    visibility: Mapped[str] = mapped_column(String(20), nullable=False, default="private")
     join_policy: Mapped[str] = mapped_column(String(20), nullable=False, default="open")
     default_role_id: Mapped[int | None] = mapped_column(ForeignKey("role.id"), nullable=True)
     icon_url: Mapped[str | None] = mapped_column(Text, nullable=True)

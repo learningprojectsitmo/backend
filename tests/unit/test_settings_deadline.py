@@ -26,7 +26,11 @@ class TestSpaceSettingsServiceDeadline:
         existing = SpaceSettings(id=1, space_id=10, settings_type_id=1, visibility="public", join_policy="open")
         settings_repo.get_by_space_id.return_value = existing
         updated = SpaceSettings(
-            id=1, space_id=10, settings_type_id=1, visibility="public", join_policy="open",
+            id=1,
+            space_id=10,
+            settings_type_id=1,
+            visibility="public",
+            join_policy="open",
             default_project_deadline=DEADLINE,
         )
         settings_repo.update.return_value = updated
@@ -75,7 +79,11 @@ class TestSpaceSettingsServiceDeadline:
 
         settings_repo.get_by_space_id.return_value = None
         created = SpaceSettings(
-            id=2, space_id=10, settings_type_id=1, visibility="public", join_policy="open",
+            id=2,
+            space_id=10,
+            settings_type_id=1,
+            visibility="public",
+            join_policy="open",
             default_project_deadline=DEADLINE,
         )
         settings_repo.create.return_value = created

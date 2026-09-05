@@ -5,15 +5,19 @@ from unittest.mock import AsyncMock, Mock  # Добавили AsyncMock
 
 import pytest
 
-from src.core.exceptions import PermissionError
+from src.core.exceptions import PermissionError, ValidationError
 from src.model.project import Project
+from src.model.resume import Resume
 from src.model.settings import SpaceSettings
 from src.model.user import Role
 from src.repository.project_repository import ProjectRepository
+from src.repository.resume_repository import ResumeRepository
 from src.schema.project import ProjectCreate, ProjectUpdate
 from src.services.project_service import ProjectService
 
 EXPECTED_PROJECTS_COUNT = 2
+RESPONSE_ID = 10
+RESUME_ID = 7
 
 
 class TestProjectService:
@@ -400,3 +404,105 @@ class TestProjectService:
         payload["status_id"] = 99
         assert "deadline" not in payload
         mock_repository.create.assert_called_once_with(payload)
+
+    @pytest.mark.asyncio
+    async def test_should_require_resume_when_applying(self):
+        """Отклик на проект без резюме должен отклоняться"""
+        # given
+        mock_repository = self._setup_mock_repo()
+        mock_repository.get_by_id = AsyncMock(return_value=Project(id=1, name="P", author_id=2))
+        mock_repository.is_user_in_project = AsyncMock(return_value=False)
+        mock_repository.has_pending_response = AsyncMock(return_value=False)
+        mock_repository.has_pending_invitation = AsyncMock(return_value=False)
+
+        project_service = ProjectService(mock_repository, resume_repository=Mock(spec=ResumeRepository))
+
+        # when
+        with pytest.raises(ValidationError, match="Resume is required"):
+            await project_service.apply_for_project(project_id=1, user_id=1, resume_id=None)
+
+    @pytest.mark.asyncio
+    async def test_should_reject_apply_with_foreign_resume(self):
+        """Отклик с чужим резюме должен отклоняться"""
+        # given
+        mock_repository = self._setup_mock_repo()
+        mock_repository.get_by_id = AsyncMock(return_value=Project(id=1, name="P", author_id=2))
+        mock_repository.is_user_in_project = AsyncMock(return_value=False)
+        mock_repository.has_pending_response = AsyncMock(return_value=False)
+        mock_repository.has_pending_invitation = AsyncMock(return_value=False)
+
+        mock_resume_repository = Mock(spec=ResumeRepository)
+        mock_resume_repository.get_by_id = AsyncMock(return_value=Resume(id=5, author_id=99, header="Чужое резюме"))
+
+        project_service = ProjectService(mock_repository, resume_repository=mock_resume_repository)
+
+        # when
+        with pytest.raises(ValidationError, match="your own resume"):
+            await project_service.apply_for_project(project_id=1, user_id=1, vacancy_id=None, resume_id=5)
+
+    @pytest.mark.asyncio
+    async def test_should_reject_apply_with_nonexistent_resume(self):
+        """Отклик с несуществующим резюме должен отклоняться"""
+        # given
+        mock_repository = self._setup_mock_repo()
+        mock_repository.get_by_id = AsyncMock(return_value=Project(id=1, name="P", author_id=2))
+        mock_repository.is_user_in_project = AsyncMock(return_value=False)
+        mock_repository.has_pending_response = AsyncMock(return_value=False)
+        mock_repository.has_pending_invitation = AsyncMock(return_value=False)
+
+        mock_resume_repository = Mock(spec=ResumeRepository)
+        mock_resume_repository.get_by_id = AsyncMock(return_value=None)
+
+        project_service = ProjectService(mock_repository, resume_repository=mock_resume_repository)
+
+        # when
+        with pytest.raises(ValidationError, match="Resume not found"):
+            await project_service.apply_for_project(project_id=1, user_id=1, vacancy_id=None, resume_id=999)
+
+    @pytest.mark.asyncio
+    async def test_should_apply_with_own_resume(self):
+        """Отклик со своим резюме должен создаваться"""
+        # given
+        mock_repository = self._setup_mock_repo()
+        mock_repository.get_by_id = AsyncMock(return_value=Project(id=1, name="P", author_id=2))
+        mock_repository.is_user_in_project = AsyncMock(return_value=False)
+        mock_repository.has_pending_response = AsyncMock(return_value=False)
+        mock_repository.has_pending_invitation = AsyncMock(return_value=False)
+        mock_repository.create_response = AsyncMock(return_value=Mock(id=RESPONSE_ID, vacancy=Mock(title=None)))
+
+        mock_resume_repository = Mock(spec=ResumeRepository)
+        mock_resume_repository.get_by_id = AsyncMock(
+            return_value=Resume(id=RESUME_ID, author_id=1, header="Моё резюме")
+        )
+
+        project_service = ProjectService(mock_repository, resume_repository=mock_resume_repository)
+
+        # when
+        result = await project_service.apply_for_project(project_id=1, user_id=1, vacancy_id=None, resume_id=RESUME_ID)
+
+        # then
+        assert result.id == RESPONSE_ID
+        mock_repository.create_response.assert_awaited_once_with(
+            respondent_id=1, project_id=1, vacancy_id=None, resume_id=RESUME_ID, type="response"
+        )
+
+    @pytest.mark.asyncio
+    async def test_should_reject_apply_for_participant(self):
+        """Участник проекта не должен иметь возможность откликнуться"""
+        # given
+        mock_repository = self._setup_mock_repo()
+        mock_repository.get_by_id = AsyncMock(return_value=Project(id=1, name="P", author_id=2))
+        mock_repository.is_user_in_project = AsyncMock(return_value=True)
+        mock_repository.has_pending_response = AsyncMock(return_value=False)
+        mock_repository.has_pending_invitation = AsyncMock(return_value=False)
+
+        mock_resume_repository = Mock(spec=ResumeRepository)
+        mock_resume_repository.get_by_id = AsyncMock(
+            return_value=Resume(id=RESUME_ID, author_id=1, header="Моё резюме")
+        )
+
+        project_service = ProjectService(mock_repository, resume_repository=mock_resume_repository)
+
+        # when
+        with pytest.raises(ValidationError, match="already a participant"):
+            await project_service.apply_for_project(project_id=1, user_id=1, vacancy_id=None, resume_id=RESUME_ID)

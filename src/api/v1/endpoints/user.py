@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from src.core.container import get_auth_service, get_user_service
-from src.core.dependencies import get_current_user, permission_required, setup_audit
+from src.core.dependencies import get_current_user, is_admin_user, permission_required, setup_audit
 from src.model.user import User
 from src.schema.permission import PermissionMatrix
 from src.schema.user import UserCreate, UserFull, UserListResponse, UserUpdate
@@ -18,7 +18,7 @@ async def remap_user_permission(
     user_id: int,
     user_permission_matrix: PermissionMatrix,
     user_service: UserService = Depends(get_user_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("perm:update")),
 ) -> PermissionMatrix:
     try:
         user_permission = await user_service.remap_user_permission(user_id, user_permission_matrix)
@@ -35,7 +35,7 @@ async def remap_user_permission(
 async def get_permissions(
     user_id: int,
     user_service: UserService = Depends(get_user_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("perm:read")),
 ) -> PermissionMatrix:
     return await user_service.get_user_permissions(user_id=user_id)
 
@@ -109,8 +109,8 @@ async def delete_user(
     user_service: UserService = Depends(get_user_service),
     current_user: User = Depends(permission_required("user:delete")),
 ) -> dict[str, str]:
-    """Удалить пользователя (только сам пользователь или админ)"""
-    if current_user.id != user_id:
+    """Удалить пользователя (свой аккаунт; чужой — только админ или при permission 'user:delete')"""
+    if current_user.id != user_id and not is_admin_user(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions",

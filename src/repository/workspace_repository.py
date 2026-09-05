@@ -382,7 +382,7 @@ class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUp
             .outerjoin(WorkSpaceCategories, WorkSpace.category_id == WorkSpaceCategories.id)
             .outerjoin(SpaceSettings, WorkSpace.id == SpaceSettings.space_id)
             .where(visible_filter)
-            .order_by(WorkSpace.id)
+            .order_by(WorkSpace.id.desc())
             .offset(skip)
             .limit(limit)
         )

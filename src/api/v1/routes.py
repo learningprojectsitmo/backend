@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
+from src.api.v1.endpoints.admin import admin_router
 from src.api.v1.endpoints.audit import audit_router
 from src.api.v1.endpoints.auth import auth_router
 from src.api.v1.endpoints.auth import router as signup_router
@@ -43,6 +44,7 @@ router_list = [
     signup_router,
     type_router,
     stage_router,
+    admin_router,
 ]
 
 for router in router_list:

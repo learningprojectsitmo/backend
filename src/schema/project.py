@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from pydantic import BaseModel, ConfigDict
 
@@ -84,7 +84,7 @@ class ProjectCreate(BaseModel):
 
 class ApplyRequest(BaseModel):
     vacancy_id: int | None = None
-    resume_id: int | None = None
+    resume_id: int
 
 
 class InviteRequest(BaseModel):
@@ -108,6 +108,20 @@ class ProjectUpdate(BaseModel):
     workspace_id: int | None = None
     vacancies: list[VacancyCreate] | None = None
     project_type_id: int | None = None
+
+
+def _stage_entry_times(project: Project) -> dict[int, datetime]:
+    """Время входа в каждый этап — момент последнего перехода action="advance" в него."""
+    entry_by_stage: dict[int, datetime] = {}
+    try:
+        for t in project.stage_transitions or []:
+            if t.action == "advance" and t.stage_id and (
+                t.stage_id not in entry_by_stage or t.created_at > entry_by_stage[t.stage_id]
+            ):
+                entry_by_stage[t.stage_id] = t.created_at
+    except Exception:
+        entry_by_stage = {}
+    return entry_by_stage
 
 
 class ProjectFull(ProjectCreate):
@@ -240,6 +254,9 @@ class ProjectFull(ProjectCreate):
         except Exception:
             type_stages = []
         current_stage_id = getattr(project, "current_stage_id", None)
+        entry_by_stage = _stage_entry_times(project)
+        project_created_at = getattr(project, "created_at", None)
+
         stages = [
             ProjectStageInfo(
                 id=s.id,
@@ -247,6 +264,12 @@ class ProjectFull(ProjectCreate):
                 order=s.order,
                 requires_approval=s.requires_approval,
                 is_current=(s.id == current_stage_id),
+                duration_days=s.duration_days,
+                deadline=(
+                    (entry_by_stage.get(s.id) or project_created_at) + timedelta(days=s.duration_days)
+                    if s.duration_days
+                    else None
+                ),
             )
             for s in type_stages
         ]

@@ -538,6 +538,27 @@ class AuthService:
         self._logger.info(f"Password reset requested for user {user.id}")
         return True
 
+    async def get_reset_email_by_token(self, token: str) -> str | None:
+        """Получить email пользователя по валидному и неистёкшему токену сброса пароля"""
+
+        reset = await self._password_reset_repository.get_by_token(token)
+
+        if not reset:
+            self._logger.warning("Password reset validate: token not found")
+            return None
+
+        if datetime.now(UTC) > reset.expires_at:
+            self._logger.warning(f"Password reset validate: expired token for user {reset.user_id}")
+            await self._password_reset_repository.delete(reset.id)
+            return None
+
+        user = await self._user_repository.get_by_id_with_role(reset.user_id)
+        if not user:
+            self._logger.warning(f"Password reset validate: user {reset.user_id} not found")
+            return None
+
+        return user.email
+
     async def confirm_password_reset(self, token: str, new_password: str) -> bool:
         """Подтвердить сброс пароля"""
 

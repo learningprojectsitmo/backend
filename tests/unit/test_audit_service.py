@@ -111,16 +111,28 @@ class TestAuditService:
         now = datetime.now(UTC)
         logs = [
             _make_log(
-                "response", "INSERT", 10, now,
-                new_values={"project_id": 7, "type": "response", "status": "pending"}, log_id=1,
+                "response",
+                "INSERT",
+                10,
+                now,
+                new_values={"project_id": 7, "type": "response", "status": "pending"},
+                log_id=1,
             ),
             _make_log(
-                "response", "UPDATE", 11, now,
-                new_values={"project_id": 7, "type": "invitation", "status": "accepted"}, log_id=2,
+                "response",
+                "UPDATE",
+                11,
+                now,
+                new_values={"project_id": 7, "type": "invitation", "status": "accepted"},
+                log_id=2,
             ),
             _make_log(
-                "response", "UPDATE", 12, now,
-                new_values={"project_id": 7, "type": "response", "status": "withdrawn"}, log_id=3,
+                "response",
+                "UPDATE",
+                12,
+                now,
+                new_values={"project_id": 7, "type": "response", "status": "withdrawn"},
+                log_id=3,
             ),
         ]
         mock_repo = _setup_mock_repo(logs)
@@ -158,8 +170,12 @@ class TestAuditService:
         now = datetime.now(UTC)
         logs = [
             _make_log(
-                "response", "INSERT", 10, now,
-                new_values=json.dumps({"project_id": 7, "type": "response", "status": "pending"}), log_id=1,
+                "response",
+                "INSERT",
+                10,
+                now,
+                new_values=json.dumps({"project_id": 7, "type": "response", "status": "pending"}),
+                log_id=1,
             ),
         ]
         mock_repo = _setup_mock_repo(logs)
@@ -180,8 +196,13 @@ class TestAuditService:
         new_values = {"name": "ваывавыа2", "description": "новое описание"}
         logs = [
             _make_log(
-                "project", "UPDATE", 1, now,
-                new_values=new_values, old_values=old_values, log_id=1,
+                "project",
+                "UPDATE",
+                1,
+                now,
+                new_values=new_values,
+                old_values=old_values,
+                log_id=1,
             ),
         ]
         mock_repo = _setup_mock_repo(logs)
@@ -214,18 +235,24 @@ class TestAuditService:
         result = await service.get_activity(1)
 
         # then
-        assert result.items[0].description == 'Обновил проект «Проект»: Тема: — → «Исследование космоса»'
+        assert result.items[0].description == "Обновил проект «Проект»: Тема: — → «Исследование космоса»"
 
     @pytest.mark.asyncio
     async def test_should_limit_diff_to_three_fields_and_skip_updates_at(self):
         # given
         now = datetime.now(UTC)
         old_values = {
-            "name": "A", "theme": None, "description": "old", "progress": 10,
+            "name": "A",
+            "theme": None,
+            "description": "old",
+            "progress": 10,
             "updated_at": "2026-08-01T10:00:00+00:00",
         }
         new_values = {
-            "name": "B", "theme": "Тема", "description": "new", "progress": 50,
+            "name": "B",
+            "theme": "Тема",
+            "description": "new",
+            "progress": 50,
             "updated_at": "2026-08-02T10:00:00+00:00",
         }
         logs = [
@@ -261,9 +288,7 @@ class TestAuditService:
         result = await service.get_activity(1)
 
         # then
-        assert result.items[0].description == (
-            "Принял приглашение в проект «Cosmos»: Статус: «pending» → «accepted»"
-        )
+        assert result.items[0].description == ("Принял приглашение в проект «Cosmos»: Статус: «pending» → «accepted»")
 
     @pytest.mark.asyncio
     async def test_should_show_profile_update_diff(self):

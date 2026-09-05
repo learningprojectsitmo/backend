@@ -28,9 +28,7 @@ class NotificationRepository(BaseRepository[Notification, dict, dict]):
         total = count_result.scalar() or 0
 
         unread_query = (
-            select(func.count())
-            .select_from(Notification)
-.where(Notification.user_id == user_id, not Notification.read)
+            select(func.count()).select_from(Notification).where(Notification.user_id == user_id, not Notification.read)
         )
         unread_result = await self.uow.session.execute(unread_query)
         unread_count = unread_result.scalar() or 0

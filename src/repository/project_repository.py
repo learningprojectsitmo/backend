@@ -39,6 +39,7 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
                 selectinload(Project.responses).selectinload(Response.resume),
                 selectinload(Project.project_type).selectinload(ProjectType.stages),
                 selectinload(Project.current_stage),
+                selectinload(Project.stage_transitions),
             )
         )
         result = await self.uow.session.execute(query)

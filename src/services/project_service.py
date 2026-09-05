@@ -515,6 +515,14 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         project = await self._project_repository.get_by_id(project_id)
         if not project:
             raise NotFoundError("Project not found")
+        if not resume_id:
+            raise ValidationError("Resume is required to apply for a project")
+        if self._resume_repository:
+            resume = await self._resume_repository.get_by_id(resume_id)
+            if not resume:
+                raise ValidationError("Resume not found")
+            if resume.author_id != user_id:
+                raise ValidationError("You can only attach your own resume")
         if project.author_id == user_id:
             raise ValidationError("You cannot apply to your own project")
         if await self._project_repository.is_user_in_project(project_id, user_id):

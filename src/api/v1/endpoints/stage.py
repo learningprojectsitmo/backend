@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 
 from src.core.container import get_stage_service
-from src.core.dependencies import get_current_user, setup_audit
+from src.core.dependencies import get_current_user, permission_required, setup_audit
 from src.core.exceptions import BaseAppException
 from src.model.user import User
 from src.schema.project import ProjectFull
@@ -54,7 +54,7 @@ async def create_project_type(
     data: ProjectTypeCreate,
     workspace_id: int | None = Query(None, description="ID пространства, которому принадлежит тип"),
     stage_service: ProjectStageService = Depends(get_stage_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("workspace:update")),
 ) -> ProjectTypeFull:
     """Создать тип проекта (автор/админ/преподаватель пространства)"""
     data.workspace_id = data.workspace_id or workspace_id
@@ -70,7 +70,7 @@ async def update_project_type(
     data: ProjectTypeUpdate,
     workspace_id: int | None = Query(None, description="Пространство, к которому привязан тип"),
     stage_service: ProjectStageService = Depends(get_stage_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("workspace:update")),
 ) -> ProjectTypeFull:
     """Обновить тип проекта (админ/преподаватель пространства)"""
     try:
@@ -84,7 +84,7 @@ async def delete_project_type(
     type_id: int,
     workspace_id: int | None = Query(None, description="Пространство, к которому привязан тип"),
     stage_service: ProjectStageService = Depends(get_stage_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("workspace:update")),
 ) -> dict[str, str]:
     """Удалить тип проекта (админ/преподаватель пространства)"""
     try:
@@ -100,7 +100,7 @@ async def add_stage(
     data: ProjectStageCreate,
     workspace_id: int | None = Query(None, description="Пространство, к которому привязан тип"),
     stage_service: ProjectStageService = Depends(get_stage_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("workspace:update")),
 ) -> ProjectTypeFull:
     """Добавить этап к типу проекта"""
     try:
@@ -116,7 +116,7 @@ async def update_stage(
     data: ProjectStageUpdate,
     workspace_id: int | None = Query(None, description="Пространство, к которому привязан тип"),
     stage_service: ProjectStageService = Depends(get_stage_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("workspace:update")),
 ) -> ProjectTypeFull:
     """Обновить этап (админ/преподаватель пространства)"""
     try:
@@ -131,7 +131,7 @@ async def remove_stage(
     stage_id: int,
     workspace_id: int | None = Query(None, description="Пространство, к которому привязан тип"),
     stage_service: ProjectStageService = Depends(get_stage_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("workspace:update")),
 ) -> dict[str, str]:
     """Удалить этап (админ/преподаватель пространства)"""
     try:
@@ -145,7 +145,7 @@ async def remove_stage(
 async def advance_stage(
     project_id: int,
     stage_service: ProjectStageService = Depends(get_stage_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("project:update")),
 ) -> ProjectFull:
     """Автор инициирует переход на следующий этап"""
     try:
@@ -159,7 +159,7 @@ async def advance_stage(
 async def approve_stage(
     project_id: int,
     stage_service: ProjectStageService = Depends(get_stage_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("project:update")),
 ) -> ProjectFull:
     """Преподаватель утверждает текущий этап"""
     try:
@@ -174,7 +174,7 @@ async def reject_stage(
     project_id: int,
     body: RejectStageRequest = Body(default_factory=RejectStageRequest),
     stage_service: ProjectStageService = Depends(get_stage_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("project:update")),
 ) -> ProjectFull:
     """Преподаватель отклоняет этап с возвратом на предыдущий"""
     try:

@@ -147,9 +147,7 @@ class AuditService:
             return self._with_diff(f"Обновил проект «{name}»", self._diff_fields(old_values, new_values))
 
         if log.entity_type == "resume":
-            header = (
-                new_values.get("header") or old_values.get("header") or resume_names.get(log.entity_id)
-            )
+            header = new_values.get("header") or old_values.get("header") or resume_names.get(log.entity_id)
             label = f"«{header}»" if header else f"резюме #{log.entity_id}"
             if action == "INSERT":
                 return f"Создал резюме {label}"
@@ -252,5 +250,5 @@ class AuditService:
             return str(value)
         text = str(value)
         if len(text) > VALUE_MAX_LENGTH:
-            text = f"{text[:VALUE_MAX_LENGTH - 3]}…"
+            text = f"{text[: VALUE_MAX_LENGTH - 3]}…"
         return f"«{text}»"

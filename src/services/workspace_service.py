@@ -107,8 +107,15 @@ class WorkSpaceService(BaseService[WorkSpace, WorkSpaceCreate, WorkSpaceUpdate])
             workspace_id, skip, limit, search, project_id, date_from, date_to
         )
 
-    async def remove_workspace_participant(self, workspace_id: int, user_id: int) -> bool:
-        """Удалить участника из workspace"""
+    async def remove_workspace_participant(self, workspace_id: int, user_id: int, current_user_id: int) -> bool:
+        """Удалить участника из workspace (только автор или админ/менеджер)"""
+        workspace = await self._workspace_repository.get_by_id(workspace_id)
+        if not workspace:
+            return False
+
+        if workspace.author_id != current_user_id:
+            raise PermissionError("Only workspace author can remove participants")
+
         return await self._workspace_repository.remove_participant(workspace_id, user_id)
 
     async def get_workspace_resumes(self, workspace_id: int) -> list[dict]:

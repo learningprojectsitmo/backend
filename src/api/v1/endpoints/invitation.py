@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 
 from src.core.container import get_invitation_service, get_workspace_service
-from src.core.dependencies import get_current_user
+from src.core.dependencies import get_current_user, permission_required
 from src.model.user import User
 from src.schema.workspace_invitation import (
     InviteLinkCreate,
@@ -24,12 +24,15 @@ async def create_invite_link(
     link_data: InviteLinkCreate,
     invitation_service: InvitationService = Depends(get_invitation_service),
     workspace_service: WorkSpaceService = Depends(get_workspace_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("invitation:create")),
 ) -> InviteLinkResponse:
-    """Создать новую ссылку-приглашение"""
+    """Создать новую ссылку-приглашение (только автор workspace)"""
     workspace = await workspace_service.get_workspace_by_id(workspace_id)
     if not workspace:
         raise HTTPException(status_code=404, detail="Workspace not found")
+
+    if workspace.author_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Only workspace author can create invite link")
 
     invitation = await invitation_service.create_link(workspace_id, current_user.id, link_data.role_id)
     url = invitation_service._build_url(invitation.token)
@@ -49,12 +52,15 @@ async def get_invite_links(
     workspace_id: int,
     invitation_service: InvitationService = Depends(get_invitation_service),
     workspace_service: WorkSpaceService = Depends(get_workspace_service),
-    _current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("invitation:read")),
 ) -> InviteLinkListResponse:
-    """Получить все активные ссылки-приглашения"""
+    """Получить все активные ссылки-приглашения (только автор workspace)"""
     workspace = await workspace_service.get_workspace_by_id(workspace_id)
     if not workspace:
         raise HTTPException(status_code=404, detail="Workspace not found")
+
+    if workspace.author_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Only workspace author can view invite links")
 
     invitations = await invitation_service.get_links(workspace_id)
 
@@ -79,7 +85,7 @@ async def revoke_invite_link(
     token: str,
     invitation_service: InvitationService = Depends(get_invitation_service),
     workspace_service: WorkSpaceService = Depends(get_workspace_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("invitation:update")),
 ) -> dict[str, str]:
     """Отозвать конкретную ссылку-приглашение"""
     workspace = await workspace_service.get_workspace_by_id(workspace_id)
@@ -98,7 +104,7 @@ async def revoke_all_invite_links(
     workspace_id: int,
     invitation_service: InvitationService = Depends(get_invitation_service),
     workspace_service: WorkSpaceService = Depends(get_workspace_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("invitation:update")),
 ) -> dict[str, str]:
     """Отозвать все ссылки-приглашения"""
     workspace = await workspace_service.get_workspace_by_id(workspace_id)

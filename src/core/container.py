@@ -23,6 +23,7 @@ from src.repository.settings_repository import SpaceSettingsRepository
 from src.repository.stage_repository import ProjectTypeRepository, StageTransitionRepository
 from src.repository.user_repository import NewUserRepository, UserPermissionRepository, UserRepository
 from src.repository.workspace_repository import WorkSpaceRepository
+from src.services.admin_service import AdminService
 from src.services.audit_service import AuditService
 from src.services.auth_service import AuthService
 from src.services.education_service import EducationService
@@ -342,6 +343,26 @@ async def get_idea_tag_service(
     tag_repository: IdeaTagRepository = Depends(get_idea_tag_repository),
 ) -> IdeaTagService:
     return IdeaTagService(tag_repository)
+
+
+async def get_admin_service(
+    user_repository: UserRepository = Depends(get_user_repository),
+    role_repository: RoleRepository = Depends(get_role_repository),
+    idea_repository: IdeaRepository = Depends(get_idea_repository),
+    project_repository: ProjectRepository = Depends(get_project_repository),
+    workspace_repository: WorkSpaceRepository = Depends(get_workspace_repository),
+    session_repository: SessionRepository = Depends(get_session_repository),
+    audit_repository: AuditRepository = Depends(get_audit_repository),
+) -> AdminService:
+    return AdminService(
+        user_repository,
+        role_repository,
+        idea_repository,
+        project_repository,
+        workspace_repository,
+        session_repository,
+        audit_repository,
+    )
 
 
 async def get_fixtures_service(
