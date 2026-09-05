@@ -23,6 +23,19 @@ SET default_tablespace = '';
 SET default_table_access_method = heap;
 
 --
+-- Name: notification_type_enum; Type: TYPE; Schema: public; Owner: postgres
+--
+
+CREATE TYPE public.notification_type_enum AS ENUM (
+    'response_received',
+    'response_accepted',
+    'response_rejected',
+    'invitation_received',
+    'invitation_accepted',
+    'invitation_rejected'
+);
+
+--
 -- Name: audit_logs; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -215,10 +228,69 @@ ALTER SEQUENCE public.project_participation_id_seq OWNED BY public.project_parti
 -- Name: response; Type: TABLE; Schema: public; Owner: postgres
 --
 
+CREATE TABLE public.project_vacancy (
+    id integer NOT NULL,
+    project_id integer NOT NULL,
+    title character varying(200) NOT NULL,
+    tasks json DEFAULT '[]'::json NOT NULL,
+    required_count integer DEFAULT 1 NOT NULL
+);
+
+
+ALTER TABLE public.project_vacancy OWNER TO postgres;
+
+
+CREATE SEQUENCE public.project_vacancy_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.project_vacancy_id_seq OWNER TO postgres;
+
+
+ALTER SEQUENCE public.project_vacancy_id_seq OWNED BY public.project_vacancy.id;
+
+
+CREATE TABLE public.notification (
+    id integer NOT NULL,
+    user_id integer NOT NULL,
+    type public.notification_type_enum NOT NULL,
+    data json DEFAULT '{}'::json NOT NULL,
+    read boolean DEFAULT false NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE public.notification OWNER TO postgres;
+
+
+CREATE SEQUENCE public.notification_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.notification_id_seq OWNER TO postgres;
+
+
+ALTER SEQUENCE public.notification_id_seq OWNED BY public.notification.id;
+
 CREATE TABLE public.response (
     id integer NOT NULL,
     respondent_id integer NOT NULL,
     project_id integer NOT NULL,
+    vacancy_id integer,
+    inviter_id integer,
+    resume_id integer,
+    type character varying(20) DEFAULT 'response'::character varying NOT NULL,
+    status character varying(20) DEFAULT 'pending'::character varying NOT NULL,
     note character varying(200),
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL
@@ -395,8 +467,12 @@ CREATE TABLE public."user" (
     email character varying(50),
     isu_number integer,
     tg_nickname character varying(40),
+    phone character varying(20),
+    vk_nickname character varying(40),
     password_hashed character varying NOT NULL,
     role_id integer NOT NULL,
+    lang character varying(10) DEFAULT 'ru'::character varying NOT NULL,
+    push_token character varying(255),
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -500,6 +576,10 @@ ALTER TABLE ONLY public.project_participation ALTER COLUMN id SET DEFAULT nextva
 -- Name: response id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
+ALTER TABLE ONLY public.project_vacancy ALTER COLUMN id SET DEFAULT nextval('public.project_vacancy_id_seq'::regclass);
+
+ALTER TABLE ONLY public.notification ALTER COLUMN id SET DEFAULT nextval('public.notification_id_seq'::regclass);
+
 ALTER TABLE ONLY public.response ALTER COLUMN id SET DEFAULT nextval('public.response_id_seq'::regclass);
 
 
@@ -597,6 +677,12 @@ ALTER TABLE ONLY public.project
 --
 -- Name: response response_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
+
+ALTER TABLE ONLY public.project_vacancy
+    ADD CONSTRAINT project_vacancy_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.notification
+    ADD CONSTRAINT notification_pkey PRIMARY KEY (id);
 
 ALTER TABLE ONLY public.response
     ADD CONSTRAINT response_pkey PRIMARY KEY (id);
@@ -707,11 +793,50 @@ ALTER TABLE ONLY public.project_participation
 
 
 --
+-- Name: response response_vacancy_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.response
+    ADD CONSTRAINT response_vacancy_id_fkey FOREIGN KEY (vacancy_id) REFERENCES public.project_vacancy(id);
+
+
+--
+-- Name: response response_inviter_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.response
+    ADD CONSTRAINT response_inviter_id_fkey FOREIGN KEY (inviter_id) REFERENCES public."user"(id);
+
+
+--
+-- Name: response response_resume_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.response
+    ADD CONSTRAINT response_resume_id_fkey FOREIGN KEY (resume_id) REFERENCES public.resume(id);
+
+
+--
 -- Name: response response_project_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.response
     ADD CONSTRAINT response_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.project(id);
+
+
+--
+-- Name: notification notification_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.project_vacancy
+    ADD CONSTRAINT project_vacancy_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.project(id);
+
+
+ALTER TABLE ONLY public.notification
+    ADD CONSTRAINT notification_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id);
+
+
+CREATE INDEX ix_notification_user_id ON public.notification USING btree (user_id);
 
 
 --

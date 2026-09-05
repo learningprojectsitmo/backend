@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import selectinload
 
 from src.core.uow import IUnitOfWork
@@ -54,3 +54,10 @@ class ResumeRepository(BaseRepository[Resume, ResumeCreate, ResumeUpdate]):
             select(Resume).where(Resume.author_id == author_id).offset(skip).limit(limit)
         )
         return list(result.scalars().all())
+
+    async def increment_views_count(self, resume_id: int) -> None:
+        """Увеличить счётчик просмотров резюме."""
+        await self.uow.session.execute(
+            update(Resume).where(Resume.id == resume_id).values(views_count=Resume.views_count + 1),
+        )
+        await self.uow.session.flush()

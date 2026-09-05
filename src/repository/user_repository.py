@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from pydantic import BaseModel
 from sqlalchemy import delete, select
 from sqlalchemy.orm import selectinload
@@ -31,6 +33,12 @@ class UserRepository(BaseRepository[User, UserCreateHashedPwd, UserUpdate]):
     async def get_multi_by_ids(self, ids: list[int]) -> list[User]:
         result = await self.uow.session.execute(
             select(User).where(User.id.in_(ids)),
+        )
+        return list(result.scalars().all())
+
+    async def get_multi_with_role(self, skip: int = 0, limit: int = 100) -> Sequence[User]:
+        result = await self.uow.session.execute(
+            select(User).options(selectinload(User.role)).offset(skip).limit(limit),
         )
         return list(result.scalars().all())
 

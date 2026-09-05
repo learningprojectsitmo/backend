@@ -1,10 +1,13 @@
 from __future__ import annotations
 
-from sqlalchemy import Sequence, desc, select
+from sqlalchemy import Sequence, desc, func, select
+from sqlalchemy.orm import selectinload
 
 from src.core.logging_config import get_logger
 from src.core.uow import IUnitOfWork
 from src.model.audit import AuditLog
+from src.model.project import Project
+from src.model.resume import Resume
 
 
 class AuditRepository:
@@ -27,3 +30,57 @@ class AuditRepository:
             raise
         else:
             return logs
+
+    async def get_project_names(self, project_ids: set[int]) -> dict[int, str]:
+        """Получить названия проектов по ID (для обогащения ленты)"""
+
+        if not project_ids:
+            return {}
+        try:
+            result = await self.uow.session.execute(select(Project.id, Project.name).where(Project.id.in_(project_ids)))
+            return {row[0]: row[1] for row in result.all()}
+        except Exception:
+            self._logger.exception("Error getting project names for audit enrichment")
+            raise
+
+    async def get_resume_names(self, resume_ids: set[int]) -> dict[int, str]:
+        """Получить заголовки резюме по ID (для обогащения ленты)"""
+
+        if not resume_ids:
+            return {}
+        try:
+            result = await self.uow.session.execute(select(Resume.id, Resume.header).where(Resume.id.in_(resume_ids)))
+            return {row[0]: row[1] for row in result.all()}
+        except Exception:
+            self._logger.exception("Error getting resume names for audit enrichment")
+            raise
+
+    async def get_all_logs(self, skip: int = 0, limit: int = 100) -> Sequence[AuditLog]:
+        """Получить audit логи всех пользователей с пагинацией (для админ-панели)"""
+
+        try:
+            result = await self.uow.session.execute(
+                select(AuditLog)
+                .options(selectinload(AuditLog.user))
+                .order_by(desc(AuditLog.performed_at))
+                .offset(skip)
+                .limit(limit)
+            )
+            logs = result.scalars().all()
+        except Exception:
+            self._logger.exception("Error getting all audit logs for admin")
+            raise
+        else:
+            return logs
+
+    async def count_all(self) -> int:
+        """Подсчитать количество всех audit записей"""
+
+        try:
+            result = await self.uow.session.execute(select(func.count()).select_from(AuditLog))
+            count = result.scalar_one()
+        except Exception:
+            self._logger.exception("Error counting audit logs")
+            raise
+        else:
+            return count

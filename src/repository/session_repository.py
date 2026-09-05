@@ -5,6 +5,7 @@ from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import and_, func, select, update
+from sqlalchemy.orm import selectinload
 
 from src.core.logging_config import get_logger
 from src.core.uow import IUnitOfWork
@@ -292,6 +293,90 @@ class SessionRepository:
             raise
         else:
             self._logger.info(f"User {user_id} has {count} active sessions")
+            return count
+
+    # ─── административные методы (все пользователи) ───────────────────────
+
+    async def get_all(self, skip: int = 0, limit: int = 100, only_active: bool = False) -> list[Session]:
+        """Получить сессии всех пользователей с пагинацией (для админ-панели)"""
+
+        try:
+            query = (
+                select(Session)
+                .options(selectinload(Session.user))
+                .order_by(Session.last_activity.desc())
+                .offset(skip)
+                .limit(limit)
+            )
+            if only_active:
+                query = query.where(Session.is_active)
+            result = await self.uow.session.execute(query)
+            sessions = list(result.scalars().all())
+        except Exception:
+            self._logger.exception("Error getting all sessions for admin")
+            raise
+        else:
+            self._logger.info(f"Retrieved {len(sessions)} sessions for admin panel")
+            return sessions
+
+    async def count_all(self) -> int:
+        """Подсчитать количество всех сессий"""
+
+        try:
+            result = await self.uow.session.execute(select(func.count()).select_from(Session))
+            count = result.scalar_one()
+        except Exception:
+            self._logger.exception("Error counting all sessions")
+            raise
+        else:
+            self._logger.info(f"Total sessions: {count}")
+            return count
+
+    async def count_active_all(self) -> int:
+        """Подсчитать количество активных сессий по всей системе"""
+
+        try:
+            result = await self.uow.session.execute(
+                select(func.count()).select_from(Session).where(Session.is_active)
+            )
+            count = result.scalar_one()
+        except Exception:
+            self._logger.exception("Error counting all active sessions")
+            raise
+        else:
+            self._logger.info(f"Total active sessions: {count}")
+            return count
+
+    async def count_expired_all(self) -> int:
+        """Подсчитать количество сессий, которые активны, но истекли по времени"""
+
+        try:
+            result = await self.uow.session.execute(
+                select(func.count())
+                .select_from(Session)
+                .where(and_(Session.is_active, Session.expires_at < datetime.now(UTC)))
+            )
+            count = result.scalar_one()
+        except Exception:
+            self._logger.exception("Error counting expired sessions")
+            raise
+        else:
+            self._logger.info(f"Total expired sessions: {count}")
+            return count
+
+    async def count_active_users(self) -> int:
+        """Подсчитать количество пользователей с активной сессией"""
+
+        try:
+            result = await self.uow.session.execute(
+                select(func.count(func.distinct(Session.user_id))).select_from(Session).where(Session.is_active)
+            )
+            count = result.scalar_one()
+        except Exception:
+            self._logger.exception("Error counting active users")
+            raise
+        else:
+            self._logger.info(f"Users with active sessions: {count}")
             return count
 
     async def get_by_refresh_token_hash(self, token_hash: str) -> Session | None:

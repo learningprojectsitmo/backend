@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from sqlalchemy import select
+
 from src.core.exceptions import PermissionError
+from src.model.user import Role
 from src.model.workspace import WorkSpace, WorkSpaceCategories
 from src.schema.workspace import WorkSpaceCreate, WorkSpaceUpdate
 from src.services.base_service import BaseService
@@ -36,13 +39,18 @@ class WorkSpaceService(BaseService[WorkSpace, WorkSpaceCreate, WorkSpaceUpdate])
         return workspaces, total
 
     async def create_workspace(self, workspace_data: WorkSpaceCreate, author_id: int) -> WorkSpace:
-        """Создать новый workspace и добавить автора в участники"""
+        """Создать новый workspace и добавить автора в участники как руководителя"""
         if not workspace_data.author_id:
             workspace_data.author_id = author_id
         if not workspace_data.status_id:
             workspace_data.status_id = 1
         workspace = await self._workspace_repository.create(workspace_data)
-        await self._workspace_repository.add_participation(workspace.id, author_id)
+
+        manager = await self._workspace_repository.uow.session.execute(select(Role).where(Role.name == "manager"))
+        manager_role = manager.scalar_one_or_none()
+        await self._workspace_repository.add_participation(
+            workspace.id, author_id, manager_role.id if manager_role else None
+        )
         return workspace
 
     async def update_workspace(
@@ -99,9 +107,20 @@ class WorkSpaceService(BaseService[WorkSpace, WorkSpaceCreate, WorkSpaceUpdate])
             workspace_id, skip, limit, search, project_id, date_from, date_to
         )
 
-    async def remove_workspace_participant(self, workspace_id: int, user_id: int) -> bool:
-        """Удалить участника из workspace"""
+    async def remove_workspace_participant(self, workspace_id: int, user_id: int, current_user_id: int) -> bool:
+        """Удалить участника из workspace (только автор или админ/менеджер)"""
+        workspace = await self._workspace_repository.get_by_id(workspace_id)
+        if not workspace:
+            return False
+
+        if workspace.author_id != current_user_id:
+            raise PermissionError("Only workspace author can remove participants")
+
         return await self._workspace_repository.remove_participant(workspace_id, user_id)
+
+    async def get_workspace_resumes(self, workspace_id: int) -> list[dict]:
+        """Получить все видимые резюме участников workspace"""
+        return await self._workspace_repository.get_workspace_resumes(workspace_id)
 
     async def get_all_categories(self) -> list:
         """Получить все категории workspace"""

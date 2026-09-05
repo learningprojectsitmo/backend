@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from src.core.container import get_kanban_service, get_project_service
-from src.core.dependencies import get_current_user, setup_audit
+from src.core.container import get_auth_service, get_kanban_service, get_project_service
+from src.core.dependencies import get_current_user, permission_required, setup_audit
+from src.core.exceptions import PermissionError
 from src.model.user import User
 from src.schema.project import (
+    ApplyRequest,
+    InviteRequest,
     MyInvitationListResponse,
     MyProjectListResponse,
     MyResponseListResponse,
@@ -14,13 +17,14 @@ from src.schema.project import (
     ProjectListResponse,
     ProjectUpdate,
 )
+from src.services.auth_service import AuthService
 from src.services.kanban_service import KanbanService
 from src.services.project_service import ProjectService
 
-project_router = APIRouter(prefix="/projects", tags=["project"])
+project_router = APIRouter(prefix="/projects", tags=["project"], dependencies=[Depends(setup_audit)])
 
-response_router = APIRouter(prefix="/responses", tags=["response"])
-invitation_router = APIRouter(prefix="/invitations", tags=["invitation"])
+response_router = APIRouter(prefix="/responses", tags=["response"], dependencies=[Depends(setup_audit)])
+invitation_router = APIRouter(prefix="/invitations", tags=["invitation"], dependencies=[Depends(setup_audit)])
 
 
 @project_router.get("/created", response_model=MyProjectListResponse)
@@ -56,14 +60,14 @@ async def fetch_projects_by_ids(
 async def fetch_project(
     project_id: int,
     project_service: ProjectService = Depends(get_project_service),
-    _current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> ProjectFull:
     """Получить проект по ID"""
     project = await project_service.get_project_by_id(project_id)
     if not project:
         raise HTTPException(status_code=404, detail="There is no project with that id!")
 
-    return ProjectFull.from_orm(project)
+    return ProjectFull.from_orm(project, current_user.id)
 
 
 @project_router.get("/", response_model=ProjectListResponse)
@@ -123,6 +127,17 @@ async def withdraw_response(
     return {"message": "Response withdrawn successfully"}
 
 
+@response_router.patch("/{response_id}/confirm-join")
+async def confirm_join(
+    response_id: int,
+    project_service: ProjectService = Depends(get_project_service),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, str]:
+    """Участник подтверждает вступление в проект"""
+    await project_service.confirm_join(response_id, current_user.id)
+    return {"message": "Joined project successfully"}
+
+
 @invitation_router.patch("/{invitation_id}/accept")
 async def accept_invitation(
     invitation_id: int,
@@ -150,14 +165,17 @@ async def create_project(
     project_data: ProjectCreate,
     project_service: ProjectService = Depends(get_project_service),
     kanban_service: KanbanService = Depends(get_kanban_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("project:create")),
     _audit=Depends(setup_audit),
 ) -> ProjectFull:
     """Создать новый проект"""
 
-    project = await project_service.create_project(project_data, current_user.id)
+    try:
+        project = await project_service.create_project(project_data, current_user.id)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
     await kanban_service.create_default_columns(project.id)
-    return ProjectFull.from_orm(project)
+    return ProjectFull.from_orm(project, current_user.id)
 
 
 @project_router.put("/{project_id}", response_model=ProjectFull)
@@ -165,7 +183,7 @@ async def update_project(
     project_id: int,
     project_data: ProjectUpdate,
     project_service: ProjectService = Depends(get_project_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("project:update")),
     _audit=Depends(setup_audit),
 ) -> ProjectFull:
     """Обновить проект (только автор может обновлять)"""
@@ -174,7 +192,57 @@ async def update_project(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    return ProjectFull.from_orm(project)
+    return ProjectFull.from_orm(project, current_user.id)
+
+
+@project_router.post("/{project_id}/apply")
+async def apply_for_project(
+    project_id: int,
+    body: ApplyRequest,
+    project_service: ProjectService = Depends(get_project_service),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, str]:
+    """Откликнуться на проект"""
+    await project_service.apply_for_project(project_id, current_user.id, body.vacancy_id, body.resume_id)
+    return {"message": "Application sent successfully"}
+
+
+@project_router.post("/{project_id}/invite")
+async def invite_to_project(
+    project_id: int,
+    body: InviteRequest,
+    project_service: ProjectService = Depends(get_project_service),
+    current_user: User = Depends(permission_required("project:update")),
+) -> dict[str, str]:
+    """Пригласить пользователя в проект (только автор)"""
+    await project_service.invite_to_project(project_id, current_user.id, body.user_id, body.vacancy_id, body.resume_id)
+    return {"message": "Invitation sent successfully"}
+
+
+@project_router.put("/{project_id}/responses/{response_id}/accept")
+async def accept_response(
+    project_id: int,
+    response_id: int,
+    project_service: ProjectService = Depends(get_project_service),
+    current_user: User = Depends(permission_required("project:update")),
+    _audit=Depends(setup_audit),
+) -> dict[str, str]:
+    """Принять отклик (только автор)"""
+    await project_service.accept_response(response_id, current_user.id)
+    return {"message": "Response accepted successfully"}
+
+
+@project_router.put("/{project_id}/responses/{response_id}/reject")
+async def reject_response(
+    project_id: int,
+    response_id: int,
+    project_service: ProjectService = Depends(get_project_service),
+    current_user: User = Depends(permission_required("project:update")),
+    _audit=Depends(setup_audit),
+) -> dict[str, str]:
+    """Отклонить отклик (только автор)"""
+    await project_service.reject_response(response_id, current_user.id)
+    return {"message": "Response rejected successfully"}
 
 
 @project_router.delete("/{project_id}/participants/{user_id}")
@@ -182,7 +250,7 @@ async def remove_participant(
     project_id: int,
     user_id: int,
     project_service: ProjectService = Depends(get_project_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("project:update")),
     _audit=Depends(setup_audit),
 ) -> dict[str, str]:
     """Удалить участника из проекта (только автор)"""
@@ -196,11 +264,15 @@ async def remove_participant(
 async def delete_project(
     project_id: int,
     project_service: ProjectService = Depends(get_project_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("project:delete")),
+    auth_service: AuthService = Depends(get_auth_service),
 ) -> dict[str, str]:
-    """Удалить проект (только автор может удалять)"""
+    """Удалить проект (только при наличии права project:delete)"""
 
-    success = await project_service.delete_project(project_id, current_user.id)
+    permissions = await auth_service.get_all_user_permissions(current_user)
+    is_admin = "project:delete" in permissions
+
+    success = await project_service.delete_project(project_id, is_admin=is_admin)
     if not success:
         raise HTTPException(status_code=404, detail="Project not found")
 

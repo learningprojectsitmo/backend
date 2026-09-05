@@ -28,12 +28,13 @@ class SpaceSettings(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     settings_type_id: Mapped[int] = mapped_column(ForeignKey("settings_type.id"), nullable=False)
     space_id: Mapped[int] = mapped_column(ForeignKey("workspace.id"), nullable=False, unique=True)
-    visibility: Mapped[str] = mapped_column(String(20), nullable=False, default="public")
+    visibility: Mapped[str] = mapped_column(String(20), nullable=False, default="private")
     join_policy: Mapped[str] = mapped_column(String(20), nullable=False, default="open")
     default_role_id: Mapped[int | None] = mapped_column(ForeignKey("role.id"), nullable=True)
     icon_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     allow_multi_project_participation: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     allow_multi_project_creation: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    default_project_deadline: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False

@@ -11,6 +11,7 @@ from src.repository.ideas_repository import IdeaCommentRepository, IdeaRepositor
 from src.repository.invitation_repository import InvitationRepository
 from src.repository.kanban_repository import KanbanColumnRepository, KanbanSubtaskRepository, KanbanTaskRepository
 from src.repository.language_repository import LanguageRepository
+from src.repository.notification_repository import NotificationRepository
 from src.repository.password_reset_repository import PasswordResetRepository
 from src.repository.permission_repository import PermissionRepository
 from src.repository.portfolio_repository import PortfolioRepository
@@ -19,8 +20,10 @@ from src.repository.resume_repository import ResumeRepository
 from src.repository.role_repository import RolePermissionRepository, RoleRepository
 from src.repository.session_repository import SessionRepository
 from src.repository.settings_repository import SpaceSettingsRepository
+from src.repository.stage_repository import ProjectTypeRepository, StageTransitionRepository
 from src.repository.user_repository import NewUserRepository, UserPermissionRepository, UserRepository
 from src.repository.workspace_repository import WorkSpaceRepository
+from src.services.admin_service import AdminService
 from src.services.audit_service import AuditService
 from src.services.auth_service import AuthService
 from src.services.education_service import EducationService
@@ -29,6 +32,7 @@ from src.services.ideas_service import IdeaService, IdeaTagService
 from src.services.invitation_service import InvitationService
 from src.services.kanban_service import KanbanService
 from src.services.language_service import LanguageService
+from src.services.notification_service import NotificationService
 from src.services.permission_service import PermissionService
 from src.services.portfolio_service import PortfolioService
 from src.services.profile_service import ProfileService
@@ -37,6 +41,7 @@ from src.services.resume_service import ResumeService
 from src.services.role_service import RoleService
 from src.services.session_service import SessionService
 from src.services.settings_service import SpaceSettingsService
+from src.services.stage_service import ProjectStageService
 from src.services.user_service import UserService
 from src.services.workspace_service import WorkSpaceService
 
@@ -117,6 +122,18 @@ async def get_invitation_repository(uow: IUnitOfWork = Depends(get_uow)) -> Invi
     return InvitationRepository(uow)
 
 
+async def get_notification_repository(uow: IUnitOfWork = Depends(get_uow)) -> NotificationRepository:
+    return NotificationRepository(uow)
+
+
+async def get_project_type_repository(uow: IUnitOfWork = Depends(get_uow)) -> ProjectTypeRepository:
+    return ProjectTypeRepository(uow)
+
+
+async def get_stage_transition_repository(uow: IUnitOfWork = Depends(get_uow)) -> StageTransitionRepository:
+    return StageTransitionRepository(uow)
+
+
 # Service
 async def get_kanban_column_repository(uow: IUnitOfWork = Depends(get_uow)) -> KanbanColumnRepository:
     return KanbanColumnRepository(uow)
@@ -153,11 +170,29 @@ async def get_resume_service(
     )
 
 
+async def get_notification_service(
+    notification_repository: NotificationRepository = Depends(get_notification_repository),
+) -> NotificationService:
+    return NotificationService(notification_repository)
+
+
 async def get_project_service(
     project_repository: ProjectRepository = Depends(get_project_repository),
     resume_repository: ResumeRepository = Depends(get_resume_repository),
+    notification_service: NotificationService = Depends(get_notification_service),
 ) -> ProjectService:
-    return ProjectService(project_repository, resume_repository=resume_repository)
+    return ProjectService(
+        project_repository,
+        resume_repository=resume_repository,
+        notification_service=notification_service,
+    )
+
+
+async def get_stage_service(
+    type_repository: ProjectTypeRepository = Depends(get_project_type_repository),
+    transition_repository: StageTransitionRepository = Depends(get_stage_transition_repository),
+) -> ProjectStageService:
+    return ProjectStageService(type_repository, transition_repository)
 
 
 async def get_auth_service(
@@ -182,6 +217,7 @@ async def get_user_service(
     auth_service: AuthService = Depends(get_auth_service),
     user_permission_repository: UserPermissionRepository = Depends(get_user_permission_repository),
     permission_repository: PermissionRepository = Depends(get_permission_repository),
+    role_repository: RoleRepository = Depends(get_role_repository),
 ) -> UserService:
     return UserService(
         user_repository,
@@ -189,6 +225,7 @@ async def get_user_service(
         auth_service,
         user_permission_repository,
         permission_repository=permission_repository,
+        role_repository=role_repository,
     )
 
 
@@ -214,8 +251,9 @@ async def get_workspace_service(
 
 async def get_settings_service(
     settings_repository: SpaceSettingsRepository = Depends(get_space_settings_repository),
+    project_repository: ProjectRepository = Depends(get_project_repository),
 ) -> SpaceSettingsService:
-    return SpaceSettingsService(settings_repository)
+    return SpaceSettingsService(settings_repository, project_repository=project_repository)
 
 
 async def get_invitation_service(
@@ -266,6 +304,7 @@ async def get_profile_service(
     portfolio_repository: PortfolioRepository = Depends(get_portfolio_repository),
     education_repository: EducationRepository = Depends(get_education_repository),
     language_repository: LanguageRepository = Depends(get_language_repository),
+    project_repository: ProjectRepository = Depends(get_project_repository),
 ) -> ProfileService:
     return ProfileService(
         user_repository,
@@ -273,6 +312,7 @@ async def get_profile_service(
         portfolio_repository,
         education_repository,
         language_repository,
+        project_repository,
     )
 
 
@@ -305,31 +345,82 @@ async def get_idea_tag_service(
     return IdeaTagService(tag_repository)
 
 
+async def get_admin_service(
+    user_repository: UserRepository = Depends(get_user_repository),
+    role_repository: RoleRepository = Depends(get_role_repository),
+    idea_repository: IdeaRepository = Depends(get_idea_repository),
+    project_repository: ProjectRepository = Depends(get_project_repository),
+    workspace_repository: WorkSpaceRepository = Depends(get_workspace_repository),
+    session_repository: SessionRepository = Depends(get_session_repository),
+    audit_repository: AuditRepository = Depends(get_audit_repository),
+) -> AdminService:
+    return AdminService(
+        user_repository,
+        role_repository,
+        idea_repository,
+        project_repository,
+        workspace_repository,
+        session_repository,
+        audit_repository,
+    )
+
+
 async def get_fixtures_service(
     permission_service: PermissionService = Depends(get_permission_service),
     role_service: RoleService = Depends(get_role_service),
     user_service: UserService = Depends(get_user_service),
     workspace_service: WorkSpaceService = Depends(get_workspace_service),
-    project_service: ProjectService = Depends(get_project_service),
-    project_repository: ProjectRepository = Depends(get_project_repository),
-    settings_service: SpaceSettingsService = Depends(get_settings_service),
-    kanban_service: KanbanService = Depends(get_kanban_service),
-    resume_service: ResumeService = Depends(get_resume_service),
-    portfolio_service: PortfolioService = Depends(get_portfolio_service),
-    education_service: EducationService = Depends(get_education_service),
-    language_service: LanguageService = Depends(get_language_service),
 ) -> FixtureService:
     return FixtureService(
         permission_service,
         role_service,
         user_service,
         workspace_service,
-        project_service,
-        project_repository,
-        settings_service,
-        kanban_service,
-        resume_service,
-        portfolio_service,
-        education_service,
-        language_service,
     )
+
+
+async def seed_fixtures_on_startup() -> None:
+    """Создать базовые справочные данные + администратора при старте приложения.
+
+    Собирает цепочку зависимостей вручную (без FastAPI DI), так как вызывается
+    из lifespan вне контекста запроса. Шаги идемпотентны — безопасно вызывать
+    на каждом старте.
+    """
+    async with SqlAlchemyUoW() as uow:
+        permission_repository = PermissionRepository(uow)
+        role_repository = RoleRepository(uow)
+        role_permission_repository = RolePermissionRepository(uow)
+        user_repository = UserRepository(uow)
+        newuser_repository = NewUserRepository(uow)
+        user_permission_repository = UserPermissionRepository(uow)
+        password_reset_repository = PasswordResetRepository(uow)
+        session_repository = SessionRepository(uow)
+        workspace_repository = WorkSpaceRepository(uow)
+
+        session_service = SessionService(session_repository)
+        auth_service = AuthService(
+            user_repository,
+            session_service,
+            password_reset_repository,
+            user_permission_repository,
+            role_permission_repository,
+        )
+        user_service = UserService(
+            user_repository,
+            newuser_repository,
+            auth_service,
+            user_permission_repository,
+            permission_repository=permission_repository,
+            role_repository=role_repository,
+        )
+        permission_service = PermissionService(permission_repository)
+        role_service = RoleService(role_repository, role_permission_repository, permission_repository)
+        workspace_service = WorkSpaceService(workspace_repository)
+
+        fixtures_service = FixtureService(
+            permission_service,
+            role_service,
+            user_service,
+            workspace_service,
+        )
+        await fixtures_service.create_fixtures()

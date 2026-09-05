@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from sqlalchemy import Date, cast, func, or_, select
 from sqlalchemy import delete as sa_delete
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import aliased, selectinload
 
 from src.core.uow import IUnitOfWork
 from src.model.project import Project, ProjectParticipation
-from src.model.resume import Resume
+from src.model.resume import Resume, ResumeInterest, ResumeSkill
 from src.model.settings import SpaceSettings
-from src.model.user import User
+from src.model.user import Role, User
 from src.model.workspace import WorkSpace, WorkSpaceCategories, WorkSpaceParticipation
 from src.model.workspace_invitation import WorkspaceInvitation
 from src.repository.base_repository import BaseRepository
@@ -65,11 +65,13 @@ class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUp
 
         return workspaces, total
 
-    async def add_participation(self, workspace_id: int, participant_id: int) -> None:
+    async def add_participation(self, workspace_id: int, participant_id: int, role_id: int | None = None) -> None:
         participation = WorkSpaceParticipation(
             workspace_id=workspace_id,
             participant_id=participant_id,
         )
+        if role_id is not None:
+            participation.role_id = role_id
         self.uow.session.add(participation)
 
     async def get_participants_count(self, workspace_id: int) -> int:
@@ -149,6 +151,8 @@ class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUp
             .subquery()
         )
 
+        global_role = aliased(Role)
+
         base_query = (
             select(
                 WorkSpaceParticipation.id,
@@ -160,9 +164,13 @@ class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUp
                 user_projects.c.project_ids,
                 user_projects.c.project_names,
                 first_resume.c.resume_id,
+                Role.name.label("role_name"),
+                global_role.name.label("global_role_name"),
                 WorkSpaceParticipation.created_at,
             )
             .join(User, User.id == WorkSpaceParticipation.participant_id)
+            .outerjoin(Role, Role.id == WorkSpaceParticipation.role_id)
+            .outerjoin(global_role, global_role.id == User.role_id)
             .outerjoin(user_projects, user_projects.c.participant_id == WorkSpaceParticipation.participant_id)
             .outerjoin(first_resume, first_resume.c.author_id == WorkSpaceParticipation.participant_id)
             .where(WorkSpaceParticipation.workspace_id == workspace_id)
@@ -219,7 +227,8 @@ class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUp
                     "name": row["name"] or "",
                     "avatar_url": None,
                     "projects": projects_list,
-                    "role": "",
+                    "role": row["global_role_name"] or "",
+                    "workspace_role": row["role_name"] or "",
                     "contacts": {
                         "telegram": row["tg_nickname"] or None,
                         "email": row["email"] or None,
@@ -231,6 +240,82 @@ class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUp
             )
 
         return items, total
+
+    async def get_workspace_resumes(self, workspace_id: int) -> list[dict]:
+        """Получить все видимые резюме участников workspace со скиллами и интересами"""
+
+        user_name = func.concat_ws(" ", User.last_name, User.first_name, User.middle_name).label("participant_name")
+
+        skills_subq = (
+            select(
+                ResumeSkill.resume_id,
+                func.array_agg(ResumeSkill.name).label("skills"),
+            )
+            .group_by(ResumeSkill.resume_id)
+            .subquery()
+        )
+
+        interests_subq = (
+            select(
+                ResumeInterest.resume_id,
+                func.array_agg(ResumeInterest.name).label("interests"),
+            )
+            .group_by(ResumeInterest.resume_id)
+            .subquery()
+        )
+
+        in_team_expr = (
+            select(ProjectParticipation.id)
+            .join(Project, Project.id == ProjectParticipation.project_id)
+            .where(
+                Project.workspace_id == workspace_id,
+                ProjectParticipation.participant_id == WorkSpaceParticipation.participant_id,
+            )
+            .exists()
+            .correlate(WorkSpaceParticipation)
+        )
+
+        query = (
+            select(
+                Resume.id,
+                Resume.header,
+                skills_subq.c.skills,
+                interests_subq.c.interests,
+                user_name,
+                WorkSpaceParticipation.participant_id,
+                in_team_expr.label("in_team"),
+            )
+            .select_from(WorkSpaceParticipation)
+            .join(User, User.id == WorkSpaceParticipation.participant_id)
+            .join(Resume, Resume.author_id == WorkSpaceParticipation.participant_id)
+            .outerjoin(skills_subq, skills_subq.c.resume_id == Resume.id)
+            .outerjoin(interests_subq, interests_subq.c.resume_id == Resume.id)
+            .where(
+                WorkSpaceParticipation.workspace_id == workspace_id,
+                Resume.is_visible.is_(True),
+                Resume.header != "",
+            )
+            .order_by(Resume.id)
+        )
+
+        result = await self.uow.session.execute(query)
+        rows = result.mappings().all()
+
+        items = []
+        for row in rows:
+            items.append(
+                {
+                    "id": row["id"],
+                    "header": row["header"],
+                    "skills": [s for s in (row["skills"] or []) if s],
+                    "interests": [i for i in (row["interests"] or []) if i],
+                    "participant_name": row["participant_name"] or "",
+                    "participant_id": row["participant_id"],
+                    "in_team": bool(row["in_team"]),
+                }
+            )
+
+        return items
 
     async def get_workspaces_menu_data(self, user_id: int, skip: int = 0, limit: int = 10) -> tuple[list[dict], int]:
         """Получить workspace с подсчётом участников (только видимые пользователю)"""
@@ -297,7 +382,7 @@ class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUp
             .outerjoin(WorkSpaceCategories, WorkSpace.category_id == WorkSpaceCategories.id)
             .outerjoin(SpaceSettings, WorkSpace.id == SpaceSettings.space_id)
             .where(visible_filter)
-            .order_by(WorkSpace.id)
+            .order_by(WorkSpace.id.desc())
             .offset(skip)
             .limit(limit)
         )

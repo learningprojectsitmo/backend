@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 
 from src.core.container import get_auth_service, get_user_service
@@ -11,13 +11,14 @@ from src.core.logging_config import api_logger
 from src.model.user import User
 from src.schema.auth import (
     PasswordResetConfirm,
+    PasswordResetEmailResponse,
     PasswordResetRequest,
     PasswordResetResponse,
     PasswordResetSuccessfulResponse,
     RefreshRequest,
     Token,
 )
-from src.schema.user import NewUserResponse, UserCreate, UserFull
+from src.schema.user import NewUserResponse, SignupRequest
 from src.services.auth_service import AuthService
 from src.services.user_service import UserService
 
@@ -167,7 +168,7 @@ router = APIRouter(prefix="/signup", tags=["signup"])
 
 @router.post("/request", response_model=NewUserResponse, status_code=status.HTTP_201_CREATED)
 async def create_signup_request(
-    user_data: UserCreate,
+    user_data: SignupRequest,
     user_service: UserService = Depends(get_user_service),
 ) -> NewUserResponse:
     """Создать запрос на регистрацию и отправить код подтверждения"""
@@ -187,15 +188,28 @@ async def resend_signup_code(
     return NewUserResponse(id=newuser_id, email="")
 
 
-@router.post("/{newuser_id}/verify", response_model=UserFull)
+@router.post("/{newuser_id}/verify", response_model=Token)
 async def verify_signup_code(
     newuser_id: int,
     code: int,
+    request: Request,
     user_service: UserService = Depends(get_user_service),
-) -> UserFull:
-    """Подтвердить регистрацию кодом"""
+    auth_service: AuthService = Depends(get_auth_service),
+) -> Response:
+    """Подтвердить регистрацию кодом и выполнить авто-вход (выдать токены)."""
 
-    return await user_service.confirm_signup(newuser_id, code)
+    user = await user_service.confirm_signup(newuser_id, code)
+
+    token, raw_refresh = await auth_service.create_session_and_tokens(user=user, request=request)
+    max_age = 30 * 86400
+
+    response = Response(
+        content=token.model_dump_json(),
+        media_type="application/json",
+        status_code=200,
+    )
+    _set_refresh_cookie(response, raw_refresh, max_age)
+    return response
 
 
 # ───────── logout ─────────
@@ -280,6 +294,9 @@ async def get_current_user_info(
         "first_name": current_user.first_name,
         "middle_name": current_user.middle_name,
         "last_name": current_user.last_name,
+        "tg_nickname": current_user.tg_nickname,
+        "vk_nickname": current_user.vk_nickname,
+        "show_my_contacts": current_user.show_my_contacts,
         "permissions": permissions,
     }
 
@@ -300,6 +317,17 @@ async def request_password_reset(
 ) -> PasswordResetResponse:
     await auth_service.request_password_reset(data.email)
     return PasswordResetResponse()
+
+
+@auth_router.get("/password-reset/validate", response_model=PasswordResetEmailResponse)
+async def validate_password_reset_token(
+    token: str = Query(...),
+    auth_service: AuthService = Depends(get_auth_service),
+) -> PasswordResetEmailResponse:
+    email = await auth_service.get_reset_email_by_token(token)
+    if not email:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired reset token")
+    return PasswordResetEmailResponse(email=email)
 
 
 @auth_router.post("/password-reset/confirm", response_model=PasswordResetSuccessfulResponse)
