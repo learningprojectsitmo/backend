@@ -14,6 +14,10 @@ from src.core.database import Base, engine
 from src.core.db_seed import seed_project_statuses, seed_project_types, seed_settings_types
 from src.core.logging_config import get_logger, setup_logging
 from src.core.middleware.logging_middleware import setup_logging_middleware
+from src.core.sentry import setup_sentry
+
+# Инициализация Sentry/GlitchTip до создания приложения
+setup_sentry()
 
 
 @asynccontextmanager
@@ -26,6 +30,8 @@ async def lifespan(_app: FastAPI):
     logger.info(f"Environment: {settings.ENVIRONMENT}")
     logger.info(f"Debug mode: {settings.DEBUG}")
     logger.info(f"Database URL: {settings.DATABASE_URL}")
+    if settings.SENTRY_DSN:
+        logger.info("Sentry/GlitchTip error tracking enabled")
 
     # Регистрация SQLAlchemy event listener'ов для журнала аудита
     setup_audit_listeners()

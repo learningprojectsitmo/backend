@@ -27,6 +27,7 @@ dependencies = [
     "anyio>=4.11.0",
     "greenlet>=3.2.4",
     "aiosmtplib>=3.0.2",
+    "sentry-sdk[fastapi]>=2.68.1",
 ]
 
 [project.optional-dependencies]

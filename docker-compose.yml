@@ -46,6 +46,9 @@ services:
     restart: unless-stopped
     ports:
       - "8083:8000"
+    environment:
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      - SENTRY_TRACES_SAMPLE_RATE=${SENTRY_TRACES_SAMPLE_RATE:-1.0}
     volumes:
       - ./:/app
     depends_on:
