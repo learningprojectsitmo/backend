@@ -1,0 +1,45 @@
+x-environment: &default-environment
+  DATABASE_URL: postgres://postgres:postgres@glitchtip-db:5432/postgres
+  VALKEY_URL: ""
+  SECRET_KEY: 5b2a707ff97cf1d4a36f93d97aefc3b6c3b7dd9de4f938900a338b6d42769411
+  EMAIL_URL: consolemail://
+  GLITCHTIP_DOMAIN: http://localhost:9090
+  DEFAULT_FROM_EMAIL: glitchtip@localhost
+  ALLOWED_HOSTS: "*"
+  ENABLE_ADMIN: "True"
+  ENABLE_OPENAPI: "True"
+  GLITCHTIP_ENABLE_LOGS: "False"
+  GLITCHTIP_ENABLE_UPTIME: "False"
+  GLITCHTIP_ENABLE_DUCKDB: "False"
+
+services:
+  glitchtip-db:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: "trust"
+    volumes:
+      - glitchtip-pg-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  glitchtip-web:
+    image: glitchtip/glitchtip:6
+    restart: unless-stopped
+    depends_on:
+      glitchtip-db:
+        condition: service_healthy
+    ports:
+      - "9090:8000"
+    environment:
+      <<: *default-environment
+      SERVER_ROLE: all_in_one
+    volumes:
+      - glitchtip-uploads:/code/uploads
+
+volumes:
+  glitchtip-pg-data:
+  glitchtip-uploads:
