@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from json import loads
+
 from src.repository.audit_repository import AuditRepository
 from src.repository.ideas_repository import IdeaRepository
 from src.repository.project_repository import ProjectRepository
@@ -65,14 +67,23 @@ class AdminService:
             expires_at=session.expires_at,
         )
 
+    @staticmethod
+    def _parse_json(value):
+        if isinstance(value, str):
+            try:
+                return loads(value)
+            except Exception:
+                return None
+        return value
+
     def _to_audit_item(self, log) -> AdminAuditItem:
         return AdminAuditItem(
             id=log.id,
             entity_type=log.entity_type,
             entity_id=log.entity_id,
             action=log.action,
-            old_values=log.old_values,
-            new_values=log.new_values,
+            old_values=self._parse_json(log.old_values),
+            new_values=self._parse_json(log.new_values),
             performed_by=log.performed_by,
             performed_at=log.performed_at,
             user_name=self._user_name(getattr(log, "user", None)),
