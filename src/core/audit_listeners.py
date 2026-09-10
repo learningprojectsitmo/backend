@@ -3,6 +3,20 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from json import dumps
 
+
+def _safe_value(value):
+    """Конвертация значений, не поддерживаемых JSON."""
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if hasattr(value, "value"):
+        return value.value
+    return value
+
+
+def _safe_dumps(obj) -> str:
+    """json.dumps с обработкой несериализуемых типов SQLAlchemy."""
+    return dumps(obj, default=_safe_value)
+
 from sqlalchemy import event, insert
 from sqlalchemy.inspection import inspect as sqlalchemy_inspect
 
@@ -79,8 +93,8 @@ def audit_user_update(mapper, connection, target: User) -> None:
             entity_type="user",
             entity_id=target.id,
             action="UPDATE",
-            old_values=dumps(old_values) if old_values else None,
-            new_values=dumps(new_values),
+            old_values=_safe__safe_dumps(old_values) if old_values else None,
+            new_values=_safe__safe_dumps(new_values),
             performed_by=context_data.user_id if context_data else None,
             ip_address=context_data.ip_address if context_data else None,
             user_agent=context_data.user_agent if context_data else None,
@@ -108,7 +122,7 @@ def audit_user_insert(mapper, connection, target: User) -> None:
             entity_id=target.id,
             action="INSERT",
             old_values=None,
-            new_values=dumps(new_values),
+            new_values=_safe_dumps(new_values),
             performed_by=context_data.user_id if context_data else None,
             ip_address=context_data.ip_address if context_data else None,
             user_agent=context_data.user_agent if context_data else None,
@@ -138,8 +152,8 @@ def audit_project_update(mapper, connection, target: Project) -> None:
             entity_type="project",
             entity_id=target.id,
             action="UPDATE",
-            old_values=dumps(old_values) if old_values else None,
-            new_values=dumps(new_values),
+            old_values=_safe__safe_dumps(old_values) if old_values else None,
+            new_values=_safe__safe_dumps(new_values),
             performed_by=context_data.user_id if context_data else None,
             ip_address=context_data.ip_address if context_data else None,
             user_agent=context_data.user_agent if context_data else None,
@@ -166,7 +180,7 @@ def audit_project_insert(mapper, connection, target: Project) -> None:
             entity_id=target.id,
             action="INSERT",
             old_values=None,
-            new_values=dumps(new_values),
+            new_values=_safe_dumps(new_values),
             performed_by=context_data.user_id if context_data else None,
             ip_address=context_data.ip_address if context_data else None,
             user_agent=context_data.user_agent if context_data else None,
@@ -196,8 +210,8 @@ def audit_resume_update(mapper, connection, target: Resume) -> None:
             entity_type="resume",
             entity_id=target.id,
             action="UPDATE",
-            old_values=dumps(old_values) if old_values else None,
-            new_values=dumps(new_values),
+            old_values=_safe__safe_dumps(old_values) if old_values else None,
+            new_values=_safe__safe_dumps(new_values),
             performed_by=context_data.user_id if context_data else None,
             ip_address=context_data.ip_address if context_data else None,
             user_agent=context_data.user_agent if context_data else None,
@@ -225,7 +239,7 @@ def audit_resume_insert(mapper, connection, target: Resume) -> None:
             entity_id=target.id,
             action="INSERT",
             old_values=None,
-            new_values=dumps(new_values),
+            new_values=_safe_dumps(new_values),
             performed_by=context_data.user_id if context_data else None,
             ip_address=context_data.ip_address if context_data else None,
             user_agent=context_data.user_agent if context_data else None,
@@ -253,7 +267,7 @@ def audit_response_insert(mapper, connection, target: Response) -> None:
             entity_id=target.id,
             action="INSERT",
             old_values=None,
-            new_values=dumps(new_values),
+            new_values=_safe_dumps(new_values),
             performed_by=context_data.user_id if context_data else None,
             ip_address=context_data.ip_address if context_data else None,
             user_agent=context_data.user_agent if context_data else None,
@@ -283,8 +297,8 @@ def audit_response_update(mapper, connection, target: Response) -> None:
             entity_type="response",
             entity_id=target.id,
             action="UPDATE",
-            old_values=dumps(old_values) if old_values else None,
-            new_values=dumps(new_values),
+            old_values=_safe__safe_dumps(old_values) if old_values else None,
+            new_values=_safe__safe_dumps(new_values),
             performed_by=context_data.user_id if context_data else None,
             ip_address=context_data.ip_address if context_data else None,
             user_agent=context_data.user_agent if context_data else None,
@@ -311,7 +325,7 @@ def audit_project_delete(mapper, connection, target: Project) -> None:
             entity_type="project",
             entity_id=target.id,
             action="DELETE",
-            old_values=dumps(old_values) if old_values else None,
+            old_values=_safe_dumps(old_values) if old_values else None,
             new_values=None,
             performed_by=context_data.user_id if context_data else None,
             ip_address=context_data.ip_address if context_data else None,
@@ -339,7 +353,7 @@ def audit_resume_delete(mapper, connection, target: Resume) -> None:
             entity_type="resume",
             entity_id=target.id,
             action="DELETE",
-            old_values=dumps(old_values) if old_values else None,
+            old_values=_safe_dumps(old_values) if old_values else None,
             new_values=None,
             performed_by=context_data.user_id if context_data else None,
             ip_address=context_data.ip_address if context_data else None,
@@ -367,7 +381,7 @@ def audit_response_delete(mapper, connection, target: Response) -> None:
             entity_type="response",
             entity_id=target.id,
             action="DELETE",
-            old_values=dumps(old_values) if old_values else None,
+            old_values=_safe_dumps(old_values) if old_values else None,
             new_values=None,
             performed_by=context_data.user_id if context_data else None,
             ip_address=context_data.ip_address if context_data else None,
