@@ -178,6 +178,8 @@ class ResumeUpdate(BaseModel):
 class ResumeFull(ResumeCreate):
     id: int
     author_id: int
+    views_count: int = 0
+    invitations_count: int = 0
     created_at: datetime | None = None
     updated_at: datetime | None = None
 

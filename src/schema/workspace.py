@@ -104,6 +104,7 @@ class WorkspaceParticipantItem(BaseModel):
     avatar_url: str | None = None
     projects: list[ProjectRef] = []
     role: str = ""
+    workspace_role: str = ""
     contacts: ParticipantContact = ParticipantContact()
     resume_url: str = ""
     created_at: str
@@ -119,3 +120,24 @@ class WorkspaceParticipantListResponse(BaseModel):
     page: int
     limit: int
     total_pages: int
+
+
+class WorkspaceResumeItem(BaseModel):
+    """Резюме участника workspace (упрощённое, для карточек)"""
+
+    id: int
+    header: str
+    skills: list[str] = []
+    interests: list[str] = []
+    participant_name: str
+    participant_id: int
+    in_team: bool = False
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class WorkspaceResumeListResponse(BaseModel):
+    """Список резюме участников workspace"""
+
+    items: list[WorkspaceResumeItem]
+    total: int

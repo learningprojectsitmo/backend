@@ -42,6 +42,7 @@ from src.schema.resume import (
 from src.services.base_service import BaseService
 
 if TYPE_CHECKING:
+    from src.model.user import User
     from src.repository.education_repository import EducationRepository
     from src.repository.language_repository import LanguageRepository
     from src.repository.portfolio_repository import PortfolioRepository
@@ -66,10 +67,16 @@ class ResumeService(BaseService[Resume, ResumeCreate, ResumeUpdate]):
         """Получить резюме по ID"""
         return await self._resume_repository.get_by_id(resume_id)
 
-    async def get_resume_detail(self, resume_id: int) -> ResumeDetail | None:
+    async def get_resume_detail(self, resume_id: int, viewer: User | None = None) -> ResumeDetail | None:
         resume = await self._resume_repository.get_by_id_with_all(resume_id)
         if not resume:
             return None
+
+        if viewer and viewer.id != resume.author_id:
+            role_name = viewer.role.name if viewer.role else ""
+            if role_name not in ("admin", "teacher"):
+                await self._resume_repository.increment_views_count(resume_id)
+                await self._resume_repository.uow.session.refresh(resume)
 
         user = resume.user
         return ResumeDetail(

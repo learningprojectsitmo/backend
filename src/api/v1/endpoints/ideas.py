@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from src.core.container import get_idea_service, get_idea_tag_service
-from src.core.dependencies import get_current_user
+from src.core.dependencies import get_current_user, is_admin_user, permission_required
 from src.model.user import User
 from src.schema.ideas import (
     IdeaCommentCreate,
@@ -13,6 +13,7 @@ from src.schema.ideas import (
     IdeaListResponse,
     IdeaTagCreate,
     IdeaTagResponse,
+    IdeaUpdate,
     IdeaVoteRequest,
 )
 from src.services.ideas_service import IdeaService, IdeaTagService
@@ -57,7 +58,7 @@ async def fetch_tags(
 async def create_tag(
     tag_data: IdeaTagCreate,
     tag_service: IdeaTagService = Depends(get_idea_tag_service),
-    _current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("ideas:update")),
 ) -> IdeaTagResponse:
     """Создать новый тег для идей"""
     if not tag_data.name.strip():
@@ -84,7 +85,7 @@ async def fetch_idea(
 async def create_idea(
     idea_data: IdeaCreate,
     idea_service: IdeaService = Depends(get_idea_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("ideas:create")),
 ) -> IdeaFullResponse:
     """Создать новую идею"""
     idea = await idea_service.create_idea(idea_data, author_id=current_user.id)
@@ -94,15 +95,41 @@ async def create_idea(
     return result
 
 
+@ideas_router.put("/{idea_id}", response_model=IdeaFullResponse)
+async def update_idea(
+    idea_id: int,
+    idea_data: IdeaUpdate,
+    idea_service: IdeaService = Depends(get_idea_service),
+    current_user: User = Depends(permission_required("ideas:update")),
+) -> IdeaFullResponse:
+    """Обновить идею (автор или админ): заголовок, описание, статус"""
+    is_admin = is_admin_user(current_user)
+
+    try:
+        updated = await idea_service.update_idea(idea_id, idea_data, current_user.id, is_admin=is_admin)
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="You can only update your own ideas") from None
+
+    if not updated:
+        raise HTTPException(status_code=404, detail="Idea not found")
+
+    result = await idea_service.get_idea_full(idea_id, current_user_id=current_user.id)
+    if not result:
+        raise HTTPException(status_code=404, detail="Idea not found")
+    return result
+
+
 @ideas_router.delete("/{idea_id}", status_code=204)
 async def delete_idea(
     idea_id: int,
     idea_service: IdeaService = Depends(get_idea_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("ideas:delete")),
 ) -> None:
-    """Удалить свою идею"""
+    """Удалить идею (свою или любую для админа)"""
+    is_admin = is_admin_user(current_user)
+
     try:
-        deleted = await idea_service.delete_idea(idea_id, current_user.id)
+        deleted = await idea_service.delete_idea(idea_id, current_user.id, is_admin=is_admin)
     except PermissionError:
         raise HTTPException(status_code=403, detail="You can only delete your own ideas") from None
 
@@ -115,7 +142,7 @@ async def vote_idea(
     idea_id: int,
     vote_data: IdeaVoteRequest,
     idea_service: IdeaService = Depends(get_idea_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("ideas:update")),
 ) -> IdeaFullResponse:
     """Проголосовать за идею (up/down). Повторный вызов того же направления отменяет голос."""
     if vote_data.direction not in ("up", "down"):
@@ -147,7 +174,7 @@ async def add_comment(
     idea_id: int,
     comment_data: IdeaCommentCreate,
     idea_service: IdeaService = Depends(get_idea_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("ideas:update")),
 ) -> IdeaCommentResponse:
     """Добавить комментарий к идее"""
     if not comment_data.text.strip():

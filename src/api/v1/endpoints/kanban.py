@@ -5,7 +5,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 
 from src.core.container import get_kanban_service
-from src.core.dependencies import get_current_user, setup_audit
+from src.core.dependencies import get_current_user, permission_required, setup_audit
 from src.core.exceptions import PermissionError
 from src.model import User
 from src.schema.kanban import (
@@ -67,7 +67,7 @@ async def get_project_columns(
 async def create_column(
     column_data: ColumnCreate,
     kanban_service: KanbanService = Depends(get_kanban_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("kanban:create")),
     _audit=Depends(setup_audit),
 ) -> ColumnResponse:
     """Создать новую колонку"""
@@ -84,7 +84,7 @@ async def update_column(
     column_id: int = Path(..., ge=1, description="ID колонки"),
     column_data: ColumnUpdate = ...,
     kanban_service: KanbanService = Depends(get_kanban_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("kanban:update")),
     _audit=Depends(setup_audit),
 ) -> ColumnResponse:
     """Обновить колонку"""
@@ -100,7 +100,7 @@ async def update_column(
 async def delete_column(
     column_id: int = Path(..., ge=1, description="ID колонки"),
     kanban_service: KanbanService = Depends(get_kanban_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("kanban:delete")),
     _audit=Depends(setup_audit),
 ) -> dict:
     """Удалить колонку"""
@@ -122,7 +122,7 @@ async def reorder_columns(
     project_id: int = Path(..., ge=1, description="ID проекта"),
     column_orders: TaskReorder = ...,
     kanban_service: KanbanService = Depends(get_kanban_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("kanban:update")),
     _audit=Depends(setup_audit),
 ) -> dict:
     """Изменить порядок колонок"""
@@ -157,7 +157,7 @@ async def get_task(
 async def create_task(
     task_data: TaskCreate,
     kanban_service: KanbanService = Depends(get_kanban_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("kanban:create")),
     _audit=Depends(setup_audit),
 ) -> TaskResponse:
     """Создать новую задачу в указанной колонке"""
@@ -172,7 +172,7 @@ async def update_task(
     task_id: int = Path(..., ge=1, description="ID задачи"),
     task_data: TaskUpdate = ...,
     kanban_service: KanbanService = Depends(get_kanban_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("kanban:update")),
     _audit=Depends(setup_audit),
 ) -> TaskResponse:
     """Обновить задачу"""
@@ -187,7 +187,7 @@ async def move_task(
     task_id: int = Path(..., ge=1, description="ID задачи"),
     move_data: TaskMove = ...,
     kanban_service: KanbanService = Depends(get_kanban_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("kanban:update")),
     _audit=Depends(setup_audit),
 ) -> TaskResponse:
     """Переместить задачу (drag-and-drop)"""
@@ -201,7 +201,7 @@ async def move_task(
 async def delete_task(
     task_id: int = Path(..., ge=1, description="ID задачи"),
     kanban_service: KanbanService = Depends(get_kanban_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("kanban:delete")),
     _audit=Depends(setup_audit),
 ) -> dict:
     """Удалить задачу"""
@@ -221,7 +221,7 @@ async def reorder_tasks_in_column(
     column_id: int = Path(..., ge=1, description="ID колонки"),
     task_orders: TaskReorder = ...,
     kanban_service: KanbanService = Depends(get_kanban_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("kanban:update")),
     _audit=Depends(setup_audit),
 ) -> dict:
     """Изменить порядок задач в колонке"""
@@ -267,7 +267,7 @@ async def get_subtask(
 async def create_subtask(
     subtask_data: SubtaskCreate = ...,
     kanban_service: KanbanService = Depends(get_kanban_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("kanban:create")),
     _audit=Depends(setup_audit),
 ) -> SubtaskResponse:
     """Создать новую подзадачу"""
@@ -282,7 +282,7 @@ async def update_subtask(
     subtask_id: int = Path(..., ge=1, description="ID подзадачи"),
     subtask_data: SubtaskUpdate = ...,
     kanban_service: KanbanService = Depends(get_kanban_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("kanban:update")),
     _audit=Depends(setup_audit),
 ) -> SubtaskResponse:
     """Обновить подзадачу"""
@@ -296,7 +296,7 @@ async def update_subtask(
 async def delete_subtask(
     subtask_id: int = Path(..., ge=1, description="ID подзадачи"),
     kanban_service: KanbanService = Depends(get_kanban_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("kanban:delete")),
     _audit=Depends(setup_audit),
 ) -> dict:
     """Удалить подзадачу"""
@@ -315,7 +315,7 @@ async def delete_subtask(
 async def toggle_subtask_completion(
     subtask_id: int = Path(..., ge=1, description="ID подзадачи"),
     kanban_service: KanbanService = Depends(get_kanban_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("kanban:update")),
     _audit=Depends(setup_audit),
 ) -> SubtaskResponse:
     """Переключить статус выполнения подзадачи"""
@@ -330,7 +330,7 @@ async def reorder_subtasks(
     task_id: int = Path(..., ge=1, description="ID задачи"),
     subtask_orders: SubtaskReorder = ...,
     kanban_service: KanbanService = Depends(get_kanban_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("kanban:update")),
     _audit=Depends(setup_audit),
 ) -> dict:
     """Изменить порядок подзадач"""

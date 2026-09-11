@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from pydantic import BaseModel, ConfigDict
 
 from src.model.project import Project
+from src.schema.stage import ProjectStageInfo
 
 
 class ParticipantPreview(BaseModel):
@@ -34,6 +35,10 @@ class ResponseItem(BaseModel):
     contacts: str = ""
     resume_url: str = ""
     response_date: str
+    vacancy_id: int | None = None
+    role: str = ""
+    type: str = "response"
+    status: str = "pending"
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -65,6 +70,7 @@ class ProjectCreate(BaseModel):
 
     name: str
     author_id: int | None = None
+    theme: str | None = None
     description: str | None = None
     max_participants: int | None = None
     status_id: int | None = None
@@ -73,6 +79,18 @@ class ProjectCreate(BaseModel):
     tags: list[str] | None = None
     workspace_id: int | None = None
     vacancies: list[VacancyCreate] | None = None
+    project_type_id: int | None = None
+
+
+class ApplyRequest(BaseModel):
+    vacancy_id: int | None = None
+    resume_id: int
+
+
+class InviteRequest(BaseModel):
+    user_id: int
+    vacancy_id: int | None = None
+    resume_id: int | None = None
 
 
 class ProjectUpdate(BaseModel):
@@ -80,6 +98,7 @@ class ProjectUpdate(BaseModel):
 
     name: str | None = None
     author_id: int | None = None
+    theme: str | None = None
     description: str | None = None
     max_participants: int | None = None
     status_id: int | None = None
@@ -88,6 +107,21 @@ class ProjectUpdate(BaseModel):
     tags: list[str] | None = None
     workspace_id: int | None = None
     vacancies: list[VacancyCreate] | None = None
+    project_type_id: int | None = None
+
+
+def _stage_entry_times(project: Project) -> dict[int, datetime]:
+    """Время входа в каждый этап — момент последнего перехода action="advance" в него."""
+    entry_by_stage: dict[int, datetime] = {}
+    try:
+        for t in project.stage_transitions or []:
+            if t.action == "advance" and t.stage_id and (
+                t.stage_id not in entry_by_stage or t.created_at > entry_by_stage[t.stage_id]
+            ):
+                entry_by_stage[t.stage_id] = t.created_at
+    except Exception:
+        entry_by_stage = {}
+    return entry_by_stage
 
 
 class ProjectFull(ProjectCreate):
@@ -96,6 +130,7 @@ class ProjectFull(ProjectCreate):
     id: int
     workspace_id: int | None = None
     created_at: datetime | None = None
+    theme: str | None = None
     status: ProjectStatusItem | None = None
     tags: list[str] = []
     participants_count: int | None = None
@@ -103,11 +138,18 @@ class ProjectFull(ProjectCreate):
     members: list[ParticipantFull] = []
     replycants: list[ResponseItem] = []
     vacancies: list[VacancyItem] = []
+    author_name: str = ""
+    author_email: str | None = None
+    has_user_applied: bool = False
+    project_type_id: int | None = None
+    current_stage_id: int | None = None
+    stage_pending_approval: bool = False
+    stages: list[ProjectStageInfo] = []
 
     model_config = ConfigDict(from_attributes=True)
 
     @staticmethod
-    def from_orm(project: Project) -> ProjectFull:
+    def from_orm(project: Project, current_user_id: int | None = None) -> ProjectFull:
         try:
             project_tags = project.tags or []
         except Exception:
@@ -135,22 +177,30 @@ class ProjectFull(ProjectCreate):
             if p.participant
         ]
 
+        try:
+            all_responses = project.responses or []
+        except Exception:
+            all_responses = []
+
+        # Build a lookup: participant_id -> vacancy title from accepted response
+        accepted_role_map: dict[int, str] = {}
+        for r in all_responses:
+            if r.status == "accepted" and r.respondent_id:
+                title = getattr(r.vacancy, "title", "") if r.vacancy else ""
+                accepted_role_map[r.respondent_id] = title
+
         members = [
             ParticipantFull(
                 id=p.id,
                 user_id=p.participant_id,
                 name=f"{p.participant.first_name} {p.participant.last_name}",
+                role=accepted_role_map.get(p.participant_id, ""),
                 contacts=getattr(p.participant, "email", ""),
                 date_added=str(p.created_at.date()) if p.created_at else "",
             )
             for p in participants
             if p.participant
         ]
-
-        try:
-            responses = project.responses or []
-        except Exception:
-            responses = []
 
         replycants = [
             ResponseItem(
@@ -159,8 +209,12 @@ class ProjectFull(ProjectCreate):
                 name=f"{r.respondent.first_name} {r.respondent.last_name}",
                 contacts=getattr(r.respondent, "email", ""),
                 response_date=str(r.created_at.date()) if r.created_at else "",
+                vacancy_id=getattr(r.vacancy, "id", None) if r.vacancy else None,
+                role=getattr(r.vacancy, "title", "") if r.vacancy else "",
+                type=r.type,
+                status=r.status,
             )
-            for r in responses
+            for r in all_responses
             if r.respondent
         ]
 
@@ -179,10 +233,54 @@ class ProjectFull(ProjectCreate):
             for v in vacancies_list
         ]
 
+        try:
+            author = project.author
+            author_name = f"{author.first_name} {author.last_name}".strip() if author else ""
+            author_email = author.email if author else None
+        except Exception:
+            author_name = ""
+            author_email = None
+
+        has_user_applied = False
+        if current_user_id is not None:
+            has_user_applied = any(
+                r.respondent_id == current_user_id and r.status == "pending" for r in all_responses if r.respondent
+            )
+
+        stages: list[ProjectStageInfo] = []
+        try:
+            project_type = project.project_type
+            type_stages = getattr(project_type, "stages", []) or [] if project_type else []
+        except Exception:
+            type_stages = []
+        current_stage_id = getattr(project, "current_stage_id", None)
+        entry_by_stage = _stage_entry_times(project)
+        project_created_at = getattr(project, "created_at", None)
+
+        stages = [
+            ProjectStageInfo(
+                id=s.id,
+                name=s.name,
+                order=s.order,
+                requires_approval=s.requires_approval,
+                is_current=(s.id == current_stage_id),
+                duration_days=s.duration_days,
+                deadline=(
+                    (entry_by_stage.get(s.id) or project_created_at) + timedelta(days=s.duration_days)
+                    if s.duration_days
+                    else None
+                ),
+            )
+            for s in type_stages
+        ]
+
         return ProjectFull(
             id=project.id,
             name=project.name,
             author_id=project.author_id,
+            author_name=author_name,
+            author_email=author_email,
+            theme=project.theme,
             description=project.description,
             max_participants=project.max_participants,
             status_id=project.status_id,
@@ -197,6 +295,11 @@ class ProjectFull(ProjectCreate):
             members=members,
             replycants=replycants,
             vacancies=vacancies,
+            has_user_applied=has_user_applied,
+            project_type_id=project.project_type_id,
+            current_stage_id=current_stage_id,
+            stage_pending_approval=getattr(project, "stage_pending_approval", False),
+            stages=stages,
         )
 
 
@@ -216,11 +319,13 @@ class ProjectListItem(BaseModel):
     name: str
     status: ProjectStatusItem
     deadline: datetime | None = None
+    theme: str | None = None
     description: str | None = None
     participants_count: int
     progress: int
     tags: list[str] = []
     participants_preview: list[ParticipantPreview] = []
+    author_id: int
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -243,6 +348,7 @@ class MyResponseItem(BaseModel):
     project_name: str
     description: str = ""
     role: str = ""
+    resume_id: int | None = None
     resume_url: str = ""
     resume_title: str = ""
     date: str
@@ -267,6 +373,7 @@ class MyInvitationItem(BaseModel):
     description: str = ""
     inviter_name: str
     role: str = ""
+    resume_id: int | None = None
     resume_url: str = ""
     resume_title: str = ""
     date: str

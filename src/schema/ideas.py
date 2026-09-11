@@ -70,6 +70,12 @@ class IdeaCreate(BaseModel):
     tags: list[str] = []
 
 
+class IdeaUpdate(BaseModel):
+    title: str | None = None
+    description: str | None = None
+    status: str | None = None
+
+
 class IdeaVoteRequest(BaseModel):
     direction: str  # "up" or "down"
 

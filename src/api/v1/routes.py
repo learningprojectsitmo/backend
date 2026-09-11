@@ -2,12 +2,14 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
+from src.api.v1.endpoints.admin import admin_router
 from src.api.v1.endpoints.audit import audit_router
 from src.api.v1.endpoints.auth import auth_router
 from src.api.v1.endpoints.auth import router as signup_router
 from src.api.v1.endpoints.ideas import ideas_router
 from src.api.v1.endpoints.invitation import invitation_router
 from src.api.v1.endpoints.kanban import kanban_router
+from src.api.v1.endpoints.notification import notification_router
 from src.api.v1.endpoints.profile import profile_router
 from src.api.v1.endpoints.project import invitation_router as project_invitation_router
 from src.api.v1.endpoints.project import project_router, response_router
@@ -15,6 +17,7 @@ from src.api.v1.endpoints.resume import resume_router
 from src.api.v1.endpoints.role import role_permission_router, role_router
 from src.api.v1.endpoints.sessions import sessions_router
 from src.api.v1.endpoints.settings import settings_router
+from src.api.v1.endpoints.stage import stage_router, type_router
 from src.api.v1.endpoints.user import user_permission_router, user_router
 from src.api.v1.endpoints.workspace import workspace_router
 
@@ -35,9 +38,13 @@ router_list = [
     role_permission_router,
     user_permission_router,
     ideas_router,
+    notification_router,
     response_router,
     project_invitation_router,
     signup_router,
+    type_router,
+    stage_router,
+    admin_router,
 ]
 
 for router in router_list:
