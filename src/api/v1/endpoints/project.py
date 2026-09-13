@@ -49,11 +49,11 @@ async def fetch_my_projects(
 async def fetch_projects_by_ids(
     ids: str = Query(..., description="Comma-separated project IDs"),
     project_service: ProjectService = Depends(get_project_service),
-    _current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> MyProjectListResponse:
     """Получить проекты по списку ID"""
     project_ids = [int(x.strip()) for x in ids.split(",") if x.strip()]
-    return await project_service.get_projects_by_ids(project_ids)
+    return await project_service.get_projects_by_ids(project_ids, current_user.id)
 
 
 @project_router.get("/{project_id}", response_model=ProjectFull)
@@ -67,6 +67,13 @@ async def fetch_project(
     if not project:
         raise HTTPException(status_code=404, detail="There is no project with that id!")
 
+    if (
+        project_service.is_draft(project)
+        and project.author_id != current_user.id
+        and not await project_service.is_workspace_admin(current_user.id, project.workspace_id)
+    ):
+        raise HTTPException(status_code=404, detail="There is no project with that id!")
+
     return ProjectFull.from_orm(project, current_user.id)
 
 
@@ -76,14 +83,14 @@ async def fetch_projects(
     limit: int = Query(10, ge=1, le=100, description="Количество проектов на странице"),
     workspace_id: int | None = Query(None, description="ID пространства для фильтрации"),
     project_service: ProjectService = Depends(get_project_service),
-    _current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> ProjectListResponse:
     """Получить список проектов с пагинацией"""
 
     if workspace_id is not None:
-        projects, total = await project_service.get_projects_by_workspace(workspace_id, page, limit)
+        projects, total = await project_service.get_projects_by_workspace(workspace_id, page, limit, current_user.id)
     else:
-        projects, total = await project_service.get_projects_paginated(page, limit)
+        projects, total = await project_service.get_projects_paginated(page, limit, current_user.id)
 
     projects_list = [project_service.to_project_list_item(project) for project in projects]
 

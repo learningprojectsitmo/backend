@@ -30,6 +30,9 @@ if TYPE_CHECKING:
     from src.repository.resume_repository import ResumeRepository
     from src.services.notification_service import NotificationService
 
+# Роли в пространстве, которым разрешено создавать проекты (совпадает с stage_service.MANAGE_ROLES).
+PROJECT_CREATE_ROLES: frozenset[str] = frozenset({"teacher", "admin", "manager"})
+
 
 class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
     def __init__(
@@ -42,6 +45,59 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         self._project_repository = project_repository
         self._resume_repository = resume_repository
         self._notification_service = notification_service
+
+    @staticmethod
+    def is_draft(project: Project) -> bool:
+        """Проект в режиме черновика: на первом этапе своего типа (или ещё не начат)."""
+        stages = (project.project_type.stages if project.project_type else []) or []
+        if not stages:
+            return False
+        if project.current_stage_id is None:
+            return True
+        first_stage = min(stages, key=lambda s: s.order)
+        return project.current_stage_id == first_stage.id
+
+    async def _visible_projects(self, projects: list[Project], viewer_id: int) -> list[Project]:
+        """Скрыть черновики от всех, кроме автора и админа пространства."""
+        admin_workspace_ids: set[int] = set()
+        draft_workspace_ids = {p.workspace_id for p in projects if self.is_draft(p) and p.workspace_id}
+        if draft_workspace_ids:
+            admin_workspace_ids = await self._admin_workspace_ids(viewer_id, draft_workspace_ids)
+        return [
+            p
+            for p in projects
+            if not (self.is_draft(p) and p.author_id != viewer_id and p.workspace_id not in admin_workspace_ids)
+        ]
+
+    async def _admin_workspace_ids(self, user_id: int, workspace_ids: set[int]) -> set[int]:
+        """ID пространств, в которых пользователь имеет роль admin."""
+        if not workspace_ids:
+            return set()
+        result = await self._project_repository.uow.session.execute(
+            select(WorkSpaceParticipation.workspace_id)
+            .join(Role, Role.id == WorkSpaceParticipation.role_id)
+            .where(
+                WorkSpaceParticipation.participant_id == user_id,
+                WorkSpaceParticipation.workspace_id.in_(workspace_ids),
+                Role.name == "admin",
+            )
+        )
+        return set(result.scalars().all())
+
+    async def is_workspace_admin(self, user_id: int, workspace_id: int | None) -> bool:
+        """Является ли пользователь админом в указанном пространстве."""
+        if not workspace_id:
+            return False
+        result = await self._project_repository.uow.session.execute(
+            select(WorkSpaceParticipation)
+            .join(Role, Role.id == WorkSpaceParticipation.role_id)
+            .where(
+                WorkSpaceParticipation.workspace_id == workspace_id,
+                WorkSpaceParticipation.participant_id == user_id,
+                Role.name == "admin",
+            )
+        )
+        return result.first() is not None
 
     async def _get_user_resume_url(self, user_id: int) -> tuple[str, str]:
         """Получить URL и заголовок первого резюме пользователя"""
@@ -102,9 +158,10 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         ]
         return MyInvitationListResponse(items=items, total=len(items))
 
-    async def get_projects_by_ids(self, project_ids: list[int]) -> MyProjectListResponse:
-        """Получить проекты по списку ID"""
+    async def get_projects_by_ids(self, project_ids: list[int], viewer_id: int) -> MyProjectListResponse:
+        """Получить проекты по списку ID (черновики — только для автора)"""
         projects = await self._project_repository.get_projects_by_ids(project_ids)
+        projects = await self._visible_projects(projects, viewer_id)
         items = [
             MyProjectItem(
                 id=p.id,
@@ -139,8 +196,9 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         return MyProjectListResponse(items=items, total=len(items))
 
     async def get_my_projects(self, user_id: int) -> MyProjectListResponse:
-        """Получить проекты, в которых участвует пользователь"""
+        """Получить проекты, в которых участвует пользователь (черновики — только свои)"""
         projects = await self._project_repository.get_projects_by_participant_id(user_id)
+        projects = await self._visible_projects(projects, user_id)
         items = [
             MyProjectItem(
                 id=p.id,
@@ -240,19 +298,25 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         return result
 
     async def get_projects_by_workspace(
-        self, workspace_id: int, page: int = 1, limit: int = 10
+        self, workspace_id: int, page: int = 1, limit: int = 10, viewer_id: int | None = None
     ) -> tuple[list[Project], int]:
         skip = (page - 1) * limit
         projects = await self._project_repository.get_projects_by_workspace(workspace_id, skip=skip, limit=limit)
-        total = await self._project_repository.count_by_workspace(workspace_id)
-        return projects, total
+        if viewer_id is None:
+            return projects, len(projects)
+        projects = await self._visible_projects(projects, viewer_id)
+        return projects, len(projects)
 
-    async def get_projects_paginated(self, page: int = 1, limit: int = 10) -> tuple[list[Project], int]:
-        """Получить проекты с пагинацией"""
+    async def get_projects_paginated(
+        self, page: int = 1, limit: int = 10, viewer_id: int | None = None
+    ) -> tuple[list[Project], int]:
+        """Получить проекты с пагинацией (черновики скрыты от не-авторов)"""
         skip = (page - 1) * limit
         projects = await self._project_repository.get_projects_with_details(skip=skip, limit=limit)
-        total = await self._project_repository.count()
-        return projects, total
+        if viewer_id is None:
+            return projects, len(projects)
+        projects = await self._visible_projects(projects, viewer_id)
+        return projects, len(projects)
 
     def to_project_list_item(self, project: Project) -> ProjectListItem:
         participants = project.participants or []
@@ -340,7 +404,7 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         if not project_data.author_id:
             project_data.author_id = author_id
 
-        # Только руководитель проекта (manager) может создавать проекты в workspace
+        # Только управляющие роли пространства (manager/admin/teacher) могут создавать проекты
         if project_data.workspace_id:
             ws_participation = await self._project_repository.uow.session.execute(
                 select(WorkSpaceParticipation, Role)
@@ -351,8 +415,10 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
                 )
             )
             row = ws_participation.first()
-            if not row or row[1].name != "manager":
-                raise PermissionError("Only a project manager (role 'manager') can create a project in this workspace")
+            if not row or row[1].name not in PROJECT_CREATE_ROLES:
+                raise PermissionError(
+                    "Only a project manager (role in 'manager'/'admin'/'teacher') can create a project in this workspace"
+                )
 
             existing_count = await self._project_repository.uow.session.execute(
                 select(func.count())

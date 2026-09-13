@@ -68,7 +68,7 @@ class ProjectStageService(BaseService[Project, dict, dict]):
         return bool(row and row[1].name in self.MANAGE_ROLES)
 
     def _ensure_type_belongs(self, ptype: ProjectType, workspace_id: int | None) -> None:
-        if ptype.workspace_id != workspace_id:
+        if workspace_id is not None and ptype.workspace_id != workspace_id:
             raise PermissionError("Project type does not belong to this workspace")
 
     # ====== ProjectType CRUD ======
@@ -146,7 +146,7 @@ class ProjectStageService(BaseService[Project, dict, dict]):
         ptype = await self._type_repository.get_by_id(type_id)
         if not ptype:
             raise NotFoundError("Project type not found")
-        if not await self._can_manage_workspace(workspace_id, user_id):
+        if not await self._can_manage_workspace(ptype.workspace_id, user_id):
             raise PermissionError("Only admin/teacher can manage project stages")
         self._ensure_type_belongs(ptype, workspace_id)
         await self._type_repository.create_stage(type_id, data)
@@ -158,7 +158,7 @@ class ProjectStageService(BaseService[Project, dict, dict]):
         ptype = await self._type_repository.get_by_id(type_id)
         if not ptype:
             raise NotFoundError("Project type not found")
-        if not await self._can_manage_workspace(workspace_id, user_id):
+        if not await self._can_manage_workspace(ptype.workspace_id, user_id):
             raise PermissionError("Only admin/teacher can manage project stages")
         self._ensure_type_belongs(ptype, workspace_id)
         stage = await self._type_repository.update_stage(stage_id, data)
@@ -172,7 +172,7 @@ class ProjectStageService(BaseService[Project, dict, dict]):
         ptype = await self._type_repository.get_by_id(type_id)
         if not ptype:
             raise NotFoundError("Project type not found")
-        if not await self._can_manage_workspace(workspace_id, user_id):
+        if not await self._can_manage_workspace(ptype.workspace_id, user_id):
             raise PermissionError("Only admin/teacher can manage project stages")
         self._ensure_type_belongs(ptype, workspace_id)
         stage = await self._type_repository.get_stage_by_id(stage_id)
@@ -189,7 +189,12 @@ class ProjectStageService(BaseService[Project, dict, dict]):
         result = await self._type_repository.uow.session.execute(
             select(Project)
             .where(Project.id == project_id)
-            .options(selectinload(Project.project_type).selectinload(ProjectType.stages))
+            .options(
+                selectinload(Project.project_type).selectinload(ProjectType.stages),
+                selectinload(Project.stage_transitions).selectinload(StageTransition.stage),
+                selectinload(Project.stage_transitions).selectinload(StageTransition.from_stage),
+                selectinload(Project.stage_transitions).selectinload(StageTransition.actor),
+            )
         )
         return result.scalar_one_or_none()
 
@@ -337,6 +342,8 @@ class ProjectStageService(BaseService[Project, dict, dict]):
             action="reject",
             comment=comment,
         )
+        # Перезагружаем историю, чтобы ответ сразу содержал свежий комментарий возврата
+        project.stage_transitions = await self._transition_repository.get_transitions_by_project(project.id)
 
         # Возврат на предыдущий этап (или снятие pending, если это первый)
         if current_order > 0:

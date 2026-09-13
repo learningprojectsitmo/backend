@@ -12,6 +12,7 @@ from src.model.project import (
     ProjectType,
     ProjectVacancy,
     Response,
+    StageTransition,
     Tag,
 )
 from src.repository.base_repository import BaseRepository
@@ -39,7 +40,9 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
                 selectinload(Project.responses).selectinload(Response.resume),
                 selectinload(Project.project_type).selectinload(ProjectType.stages),
                 selectinload(Project.current_stage),
-                selectinload(Project.stage_transitions),
+                selectinload(Project.stage_transitions).selectinload(StageTransition.stage),
+                selectinload(Project.stage_transitions).selectinload(StageTransition.from_stage),
+                selectinload(Project.stage_transitions).selectinload(StageTransition.actor),
             )
         )
         result = await self.uow.session.execute(query)
@@ -73,6 +76,7 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
             select(Project)
             .where(Project.id.in_(project_ids))
             .options(
+                selectinload(Project.project_type).selectinload(ProjectType.stages),
                 selectinload(Project.participants).selectinload(ProjectParticipation.participant),
                 selectinload(Project.tags),
                 selectinload(Project.status),
@@ -88,6 +92,7 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
             select(Project)
             .where(Project.id.in_(subquery))
             .options(
+                selectinload(Project.project_type).selectinload(ProjectType.stages),
                 selectinload(Project.participants).selectinload(ProjectParticipation.participant),
                 selectinload(Project.tags),
                 selectinload(Project.status),
@@ -147,6 +152,7 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
             select(Project)
             .where(Project.workspace_id == workspace_id)
             .options(
+                selectinload(Project.project_type).selectinload(ProjectType.stages),
                 selectinload(Project.participants).selectinload(ProjectParticipation.participant),
                 selectinload(Project.tags),
                 selectinload(Project.status),
@@ -177,6 +183,7 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         query = (
             select(Project)
             .options(
+                selectinload(Project.project_type).selectinload(ProjectType.stages),
                 selectinload(Project.participants).selectinload(ProjectParticipation.participant),
                 selectinload(Project.tags),
                 selectinload(Project.status),

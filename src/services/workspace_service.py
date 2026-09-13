@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 from sqlalchemy import select
 
 from src.core.exceptions import PermissionError
-from src.model.user import Role
+from src.model.user import Role, User
 from src.model.workspace import WorkSpace, WorkSpaceCategories
 from src.schema.workspace import WorkSpaceCreate, WorkSpaceUpdate
 from src.services.base_service import BaseService
@@ -15,6 +15,10 @@ if TYPE_CHECKING:
 
 
 class WorkSpaceService(BaseService[WorkSpace, WorkSpaceCreate, WorkSpaceUpdate]):
+    # Роль автора при создании пространства зависит от глобальной роли:
+    # admin → admin, teacher → teacher, member/manager → manager (автор управляет своим пространством).
+    AUTHOR_ROLE_BY_GLOBAL: ClassVar[dict[str, str]] = {"admin": "admin", "teacher": "teacher"}
+
     def __init__(self, workspace_repository: WorkSpaceRepository):
         super().__init__(workspace_repository)
         self._workspace_repository = workspace_repository
@@ -39,19 +43,30 @@ class WorkSpaceService(BaseService[WorkSpace, WorkSpaceCreate, WorkSpaceUpdate])
         return workspaces, total
 
     async def create_workspace(self, workspace_data: WorkSpaceCreate, author_id: int) -> WorkSpace:
-        """Создать новый workspace и добавить автора в участники как руководителя"""
+        """Создать новый workspace и добавить автора в участники.
+
+        Роль автора в пространстве определяется его глобальной ролью
+        (admin → admin, teacher → teacher, остальные → manager).
+        """
         if not workspace_data.author_id:
             workspace_data.author_id = author_id
         if not workspace_data.status_id:
             workspace_data.status_id = 1
         workspace = await self._workspace_repository.create(workspace_data)
 
-        manager = await self._workspace_repository.uow.session.execute(select(Role).where(Role.name == "manager"))
-        manager_role = manager.scalar_one_or_none()
-        await self._workspace_repository.add_participation(
-            workspace.id, author_id, manager_role.id if manager_role else None
-        )
+        role_name = await self._resolve_author_role_name(author_id)
+        role_result = await self._workspace_repository.uow.session.execute(select(Role).where(Role.name == role_name))
+        role = role_result.scalar_one_or_none()
+        await self._workspace_repository.add_participation(workspace.id, author_id, role.id if role else None)
         return workspace
+
+    async def _resolve_author_role_name(self, author_id: int) -> str:
+        """Вернуть роль в пространстве для автора по его глобальной роли"""
+        result = await self._workspace_repository.uow.session.execute(
+            select(Role.name).join(User, User.role_id == Role.id).where(User.id == author_id)
+        )
+        global_role = result.scalar_one_or_none() or "member"
+        return self.AUTHOR_ROLE_BY_GLOBAL.get(global_role, "manager")
 
     async def update_workspace(
         self,

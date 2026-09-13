@@ -115,13 +115,47 @@ def _stage_entry_times(project: Project) -> dict[int, datetime]:
     entry_by_stage: dict[int, datetime] = {}
     try:
         for t in project.stage_transitions or []:
-            if t.action == "advance" and t.stage_id and (
-                t.stage_id not in entry_by_stage or t.created_at > entry_by_stage[t.stage_id]
+            if (
+                t.action == "advance"
+                and t.stage_id
+                and (t.stage_id not in entry_by_stage or t.created_at > entry_by_stage[t.stage_id])
             ):
                 entry_by_stage[t.stage_id] = t.created_at
     except Exception:
         entry_by_stage = {}
     return entry_by_stage
+
+
+class StageRejectionInfo(BaseModel):
+    """Комментарий преподавателя при возврате этапа"""
+
+    stage_name: str
+    comment: str | None = None
+    actor_name: str = ""
+    created_at: datetime | None = None
+
+
+def _latest_rejection(project: Project) -> StageRejectionInfo | None:
+    """Присутствует ли у проекта возврат этапа с комментарием (последний reject)."""
+    try:
+        transitions = project.stage_transitions or []
+    except Exception:
+        transitions = []
+    latest: StageRejectionInfo | None = None
+    for t in transitions:
+        if getattr(t, "action", None) != "reject":
+            continue
+        if latest and (not t.created_at or (latest.created_at and t.created_at <= latest.created_at)):
+            continue
+        actor = getattr(t, "actor", None)
+        stage = getattr(t, "stage", None) or getattr(t, "from_stage", None)
+        latest = StageRejectionInfo(
+            stage_name=stage.name if stage else "",
+            comment=t.comment,
+            actor_name=f"{actor.first_name} {actor.last_name or ''}".strip() if actor else "",
+            created_at=t.created_at,
+        )
+    return latest
 
 
 class ProjectFull(ProjectCreate):
@@ -145,6 +179,7 @@ class ProjectFull(ProjectCreate):
     current_stage_id: int | None = None
     stage_pending_approval: bool = False
     stages: list[ProjectStageInfo] = []
+    stage_rejection: StageRejectionInfo | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -300,6 +335,7 @@ class ProjectFull(ProjectCreate):
             current_stage_id=current_stage_id,
             stage_pending_approval=getattr(project, "stage_pending_approval", False),
             stages=stages,
+            stage_rejection=_latest_rejection(project),
         )
 
 

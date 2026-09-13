@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from sqlalchemy import select
+from sqlalchemy.orm import aliased
 
-from src.model.workspace import WorkSpaceStatus
+from src.model.user import Role, User
+from src.model.workspace import WorkSpaceParticipation, WorkSpaceStatus
 from src.schema.permission import PermissionMatrix
 from src.schema.user import UserCreate
+from src.services.invitation_service import DEFAULT_WORKSPACE_ROLE_BY_GLOBAL, WORKSPACE_ROLES_BY_GLOBAL
 from src.services.permission_service import PermissionService
 from src.services.role_service import RoleService
 from src.services.user_service import UserService
@@ -34,6 +37,7 @@ class FixtureService:
         await self._seed_users()
         await self._seed_workspace_statuses()
         await self._seed_workspace_categories()
+        await self._remap_workspace_participation_roles()
 
     # ─── permissions ───────────────────────────────────────────────────────
 
@@ -214,6 +218,46 @@ class FixtureService:
                 phone="+7 (999) 123-45-67",
             )
         )
+
+    # ─── персинхронизация ролей в пространствах ────────────────────────────
+
+    async def _remap_workspace_participation_roles(self) -> None:
+        """Привести роли в пространствах в соответствие глобальным ролям.
+
+        Идемпотентный ремэпп: если роль в space нарушает маппинг
+        (admin→admin, teacher→teacher, member/manager→member|manager),
+        она заменяется на допустимую роль по умолчанию.
+        """
+        session = self._workspace_service._repository.uow.session
+
+        global_role = aliased(Role)
+        ws_role = aliased(Role)
+        result = await session.execute(
+            select(WorkSpaceParticipation, global_role.name.label("global_role"), ws_role.name.label("ws_role"))
+            .join(User, User.id == WorkSpaceParticipation.participant_id)
+            .join(global_role, global_role.id == User.role_id)
+            .outerjoin(ws_role, ws_role.id == WorkSpaceParticipation.role_id)
+        )
+
+        roles_by_name: dict[str, int] = {}
+        changed = 0
+        for participation, participant_global_role, current_ws_role in result.all():
+            if participation.role_id is not None and current_ws_role in WORKSPACE_ROLES_BY_GLOBAL.get(
+                participant_global_role, frozenset({"member"})
+            ):
+                continue
+            fallback_name = DEFAULT_WORKSPACE_ROLE_BY_GLOBAL.get(participant_global_role, "member")
+            if fallback_name not in roles_by_name:
+                role_row = await session.execute(select(Role.id).where(Role.name == fallback_name))
+                role_id = role_row.scalar_one_or_none()
+                if role_id is None:
+                    continue
+                roles_by_name[fallback_name] = role_id
+            participation.role_id = roles_by_name[fallback_name]
+            changed += 1
+
+        if changed:
+            await session.commit()
 
     # ─── workspace statuses ────────────────────────────────────────────────
 

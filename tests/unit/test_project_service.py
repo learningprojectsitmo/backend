@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, Mock  # Добавили AsyncMock
 import pytest
 
 from src.core.exceptions import PermissionError, ValidationError
-from src.model.project import Project
+from src.model.project import Project, ProjectStage, ProjectType
 from src.model.resume import Resume
 from src.model.settings import SpaceSettings
 from src.model.user import Role
@@ -32,6 +32,15 @@ class TestProjectService:
         mock_uow.session = mock_session
         mock_repo.uow = mock_uow
         return mock_repo
+
+    @staticmethod
+    def _make_type_with_stages() -> ProjectType:
+        """Проектный тип с двумя этапами (первый — черновик)"""
+        project_type = ProjectType(id=1, name="Type")
+        first = ProjectStage(id=11, name="Initial", order=0, project_type_id=1)
+        second = ProjectStage(id=12, name="Development", order=1, project_type_id=1)
+        project_type.stages = [first, second]
+        return project_type
 
     @pytest.mark.asyncio
     async def test_should_create_project_with_valid_data(self):
@@ -80,11 +89,12 @@ class TestProjectService:
             await project_service.create_project(project_data, author_id=1)
         mock_repository.create.assert_not_called()
 
+    @pytest.mark.parametrize("workspace_role_name", ["manager", "admin", "teacher"])
     @pytest.mark.asyncio
-    async def test_should_allow_create_project_in_workspace_for_manager(self):
+    async def test_should_allow_create_project_in_workspace_for_managing_roles(self, workspace_role_name):
         # given
         mock_repository = self._setup_mock_repo()
-        manager_role = Role(id=4, name="manager")
+        workspace_role = Role(id=4, name=workspace_role_name)
         mock_project = Project(id=1, name="Test Project", author_id=1, workspace_id=5)
         mock_repository.create.return_value = mock_project
         mock_repository.get_or_create_tags = AsyncMock(return_value=[])
@@ -92,7 +102,7 @@ class TestProjectService:
         mock_uow = Mock()
         mock_session = Mock()
         mock_result = Mock()
-        mock_result.first.return_value = (object(), manager_role)
+        mock_result.first.return_value = (object(), workspace_role)
         count_result = Mock()
         count_result.scalar_one.return_value = 0
         settings_result = Mock()
@@ -184,12 +194,212 @@ class TestProjectService:
         project_service = ProjectService(mock_repository)
 
         # when
-        projects, total = await project_service.get_projects_paginated(page=1, limit=10)
+        projects, total = await project_service.get_projects_paginated(page=1, limit=10, viewer_id=1)
 
         # then
         assert len(projects) == EXPECTED_PROJECTS_COUNT
         assert total == EXPECTED_PROJECTS_COUNT
         mock_repository.get_projects_with_details.assert_called_once_with(skip=0, limit=10)
+
+    @pytest.mark.asyncio
+    async def test_should_hide_stage_one_draft_from_participant(self):
+        # given
+        mock_repository = self._setup_mock_repo()
+        draft = Project(
+            id=1, name="Draft", author_id=5, current_stage_id=11, project_type=self._make_type_with_stages()
+        )
+        mock_repository.get_projects_by_participant_id.return_value = [draft]
+
+        project_service = ProjectService(mock_repository)
+
+        # when
+        result = await project_service.get_my_projects(user_id=1)
+
+        # then
+        assert result.items == []
+        assert result.total == 0
+
+    @pytest.mark.asyncio
+    async def test_should_show_stage_one_draft_to_author(self):
+        # given
+        mock_repository = self._setup_mock_repo()
+        draft = Project(
+            id=1, name="Draft", author_id=5, current_stage_id=11, project_type=self._make_type_with_stages()
+        )
+        mock_repository.get_projects_by_participant_id.return_value = [draft]
+
+        project_service = ProjectService(mock_repository)
+
+        # when
+        result = await project_service.get_my_projects(user_id=5)
+
+        # then
+        assert len(result.items) == 1
+        assert result.items[0].id == 1
+
+    @pytest.mark.asyncio
+    async def test_should_show_second_stage_project_to_everyone(self):
+        # given
+        mock_repository = self._setup_mock_repo()
+        published = Project(
+            id=1, name="Published", author_id=5, current_stage_id=12, project_type=self._make_type_with_stages()
+        )
+        mock_repository.get_projects_by_participant_id.return_value = [published]
+
+        project_service = ProjectService(mock_repository)
+
+        # when
+        result = await project_service.get_my_projects(user_id=1)
+
+        # then
+        assert len(result.items) == 1
+        assert result.items[0].id == 1
+
+    @pytest.mark.asyncio
+    async def test_should_filter_drafts_in_paginated_list(self):
+        # given
+        mock_repository = self._setup_mock_repo()
+        project_type = self._make_type_with_stages()
+        draft = Project(id=1, name="Draft", author_id=5, current_stage_id=11, project_type=project_type)
+        published = Project(id=2, name="Published", author_id=6, current_stage_id=12, project_type=project_type)
+        mock_repository.get_projects_with_details.return_value = [draft, published]
+
+        project_service = ProjectService(mock_repository)
+
+        # when
+        projects, total = await project_service.get_projects_paginated(page=1, limit=10, viewer_id=1)
+
+        # then
+        assert [p.id for p in projects] == [2]
+        assert total == 1
+
+    @pytest.mark.asyncio
+    async def test_should_filter_drafts_in_workspace_list(self):
+        # given
+        mock_repository = self._setup_mock_repo()
+        project_type = self._make_type_with_stages()
+        draft = Project(id=1, name="Draft", author_id=5, current_stage_id=11, project_type=project_type)
+        mock_repository.get_projects_by_workspace.return_value = [draft]
+
+        project_service = ProjectService(mock_repository)
+
+        # when
+        projects, total = await project_service.get_projects_by_workspace(workspace_id=1, page=1, limit=10, viewer_id=1)
+
+        # then
+        assert projects == []
+        assert total == 0
+
+    @pytest.mark.asyncio
+    async def test_should_show_draft_to_workspace_admin_in_list(self):
+        # given
+        mock_repository = self._setup_mock_repo()
+        draft = Project(
+            id=1,
+            name="Draft",
+            author_id=5,
+            workspace_id=1,
+            current_stage_id=11,
+            project_type=self._make_type_with_stages(),
+        )
+        mock_repository.get_projects_by_workspace.return_value = [draft]
+
+        admin_query_result = Mock()
+        admin_query_result.scalars.return_value.all.return_value = [1]
+        mock_repository.uow.session.execute.return_value = admin_query_result
+
+        project_service = ProjectService(mock_repository)
+
+        # when
+        projects, total = await project_service.get_projects_by_workspace(workspace_id=1, page=1, limit=10, viewer_id=1)
+
+        # then
+        assert [p.id for p in projects] == [1]
+        assert total == 1
+
+    @pytest.mark.asyncio
+    async def test_should_hide_draft_from_non_admin_in_workspace_list(self):
+        # given
+        mock_repository = self._setup_mock_repo()
+        draft = Project(
+            id=1,
+            name="Draft",
+            author_id=5,
+            workspace_id=1,
+            current_stage_id=11,
+            project_type=self._make_type_with_stages(),
+        )
+        mock_repository.get_projects_by_workspace.return_value = [draft]
+
+        admin_query_result = Mock()
+        admin_query_result.scalars.return_value.all.return_value = []
+        mock_repository.uow.session.execute.return_value = admin_query_result
+
+        project_service = ProjectService(mock_repository)
+
+        # when
+        projects, total = await project_service.get_projects_by_workspace(workspace_id=1, page=1, limit=10, viewer_id=1)
+
+        # then
+        assert projects == []
+        assert total == 0
+
+    @pytest.mark.asyncio
+    async def test_is_workspace_admin_should_return_true_for_admin_role(self):
+        # given
+        mock_repository = self._setup_mock_repo()
+        admin_query_result = Mock()
+        admin_query_result.first.return_value = (42,)
+        mock_repository.uow.session.execute.return_value = admin_query_result
+
+        project_service = ProjectService(mock_repository)
+
+        # when
+        result = await project_service.is_workspace_admin(user_id=1, workspace_id=1)
+
+        # then
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_is_workspace_admin_should_return_false_for_other_roles(self):
+        # given
+        mock_repository = self._setup_mock_repo()
+        admin_query_result = Mock()
+        admin_query_result.first.return_value = None
+        mock_repository.uow.session.execute.return_value = admin_query_result
+
+        project_service = ProjectService(mock_repository)
+
+        # when
+        result = await project_service.is_workspace_admin(user_id=1, workspace_id=1)
+
+        # then
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_is_workspace_admin_should_return_false_without_workspace(self):
+        # given
+        mock_repository = self._setup_mock_repo()
+        project_service = ProjectService(mock_repository)
+
+        # when
+        result = await project_service.is_workspace_admin(user_id=1, workspace_id=None)
+
+        # then
+        assert result is False
+        mock_repository.uow.session.execute.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_should_treat_stage_zero_and_missing_type_consistently(self):
+        # given
+        project_service = ProjectService(self._setup_mock_repo())
+
+        no_type = Project(id=1, name="No Type", author_id=1)
+        not_started = Project(id=2, name="Not Started", author_id=1, project_type=self._make_type_with_stages())
+
+        # when / then
+        assert project_service.is_draft(no_type) is False
+        assert project_service.is_draft(not_started) is True
 
     @pytest.mark.asyncio
     async def test_should_get_project_by_id(self):

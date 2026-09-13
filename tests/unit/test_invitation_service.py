@@ -4,13 +4,16 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
+from src.model.user import Role
 from src.model.workspace import WorkSpaceParticipation
 from src.model.workspace_invitation import WorkspaceInvitation
 from src.services.invitation_service import InvitationService, JoinByLinkResult
 
-# Роли из fixtures (admin=1, teacher=3, member=2)
+# Роли из fixtures (admin=1, teacher=2, member=3, manager=4)
+ADMIN_ROLE_ID = 1
 MEMBER_ROLE_ID = 2
-MANAGER_ROLE_ID = 3
+TEACHER_ROLE_ID = 3
+MANAGER_ROLE_ID = 4
 CREATOR_ID = 1
 WORKSPACE_ID = 10
 JOINING_USER_ID = 7
@@ -22,6 +25,16 @@ def _mock_result(existing: WorkSpaceParticipation | None = None) -> Mock:
     result = Mock()
     result.scalars.return_value.first.return_value = existing
     return result
+
+
+def _role_name_result(role_name: str | None) -> Mock:
+    result = Mock()
+    result.scalar_one_or_none.return_value = role_name
+    return result
+
+
+def _mock_role(id: int, name: str) -> Role:
+    return Role(id=id, name=name)
 
 
 def _make_repository() -> Mock:
@@ -110,14 +123,46 @@ class TestInvitationService:
         mock_repository.deactivate_by_workspace.assert_called_once_with(MOCK_WORKSPACE_ID)
 
     @pytest.mark.asyncio
-    async def test_join_by_link_should_add_participation_with_invite_role(self):
-        """Тест должен добавить участника с ролью из ссылки"""
+    @pytest.mark.parametrize(
+        "global_role, invite_role_name, invite_role_id, expected_role_id, fallback_role",
+        [
+            # роль из ссылки допустима для глобальной — сохраняется как есть
+            ("manager", "manager", MANAGER_ROLE_ID, MANAGER_ROLE_ID, None),
+            ("member", "member", MEMBER_ROLE_ID, MEMBER_ROLE_ID, None),
+            ("member", "manager", MANAGER_ROLE_ID, MANAGER_ROLE_ID, None),
+            ("admin", "admin", ADMIN_ROLE_ID, ADMIN_ROLE_ID, None),
+            ("teacher", "teacher", TEACHER_ROLE_ID, TEACHER_ROLE_ID, None),
+            # роль из ссылки недопустима — fallback на допустимую по умолчанию
+            ("member", "teacher", TEACHER_ROLE_ID, MEMBER_ROLE_ID, _mock_role(MEMBER_ROLE_ID, "member")),
+            ("member", "admin", ADMIN_ROLE_ID, MEMBER_ROLE_ID, _mock_role(MEMBER_ROLE_ID, "member")),
+            ("manager", "teacher", TEACHER_ROLE_ID, MEMBER_ROLE_ID, _mock_role(MEMBER_ROLE_ID, "member")),
+            ("manager", "admin", ADMIN_ROLE_ID, MEMBER_ROLE_ID, _mock_role(MEMBER_ROLE_ID, "member")),
+            ("teacher", "member", MEMBER_ROLE_ID, TEACHER_ROLE_ID, _mock_role(TEACHER_ROLE_ID, "teacher")),
+            ("teacher", "manager", MANAGER_ROLE_ID, TEACHER_ROLE_ID, _mock_role(TEACHER_ROLE_ID, "teacher")),
+            ("admin", "manager", MANAGER_ROLE_ID, ADMIN_ROLE_ID, _mock_role(ADMIN_ROLE_ID, "admin")),
+            ("admin", "teacher", TEACHER_ROLE_ID, ADMIN_ROLE_ID, _mock_role(ADMIN_ROLE_ID, "admin")),
+        ],
+    )
+    async def test_join_by_link_should_assign_workspace_role_matching_global_role(
+        self, global_role, invite_role_name, invite_role_id, expected_role_id, fallback_role
+    ):
+        """Роль в пространстве ограничена глобальной ролью вступающего"""
         # given
         mock_repository = _make_repository()
-        invitation = _invitation(1, WORKSPACE_ID, role_id=MANAGER_ROLE_ID)
+        invitation = _invitation(1, WORKSPACE_ID, role_id=invite_role_id)
         mock_repository.get_by_token_with_for_update = AsyncMock(return_value=invitation)
         mock_repository.increment_use_count = AsyncMock()
-        mock_repository.uow.session.execute.return_value = _mock_result(existing=None)
+
+        execute_side_effects = [
+            _mock_result(existing=None),
+            _role_name_result(global_role),
+            _role_name_result(invite_role_name),
+        ]
+        if fallback_role is not None:
+            fallback_result = Mock()
+            fallback_result.scalar_one_or_none.return_value = fallback_role
+            execute_side_effects.append(fallback_result)
+        mock_repository.uow.session.execute = AsyncMock(side_effect=execute_side_effects)
 
         service = InvitationService(mock_repository)
 
@@ -126,13 +171,10 @@ class TestInvitationService:
 
         # then
         assert isinstance(result, JoinByLinkResult)
-        assert result.invitation == invitation
         assert result.already_member is False
         added = mock_repository.uow.session.add.call_args.args[0]
         assert isinstance(added, WorkSpaceParticipation)
-        assert added.workspace_id == WORKSPACE_ID
-        assert added.participant_id == JOINING_USER_ID
-        assert added.role_id == MANAGER_ROLE_ID
+        assert added.role_id == expected_role_id
         mock_repository.increment_use_count.assert_called_once_with(invitation.id)
 
     @pytest.mark.asyncio

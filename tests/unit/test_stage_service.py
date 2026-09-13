@@ -40,6 +40,7 @@ class TestProjectStageService:
 
         transition_repo = Mock()
         transition_repo.create_transition = AsyncMock()
+        transition_repo.get_transitions_by_project = AsyncMock(return_value=[])
 
         service = ProjectStageService(type_repo, transition_repo)  # type: ignore[arg-type]
         return service, type_repo, transition_repo
@@ -127,6 +128,72 @@ class TestProjectStageService:
         kwargs = transition_repo.create_transition.await_args.kwargs
         assert kwargs["action"] == "reject"
         assert kwargs["comment"] == "Тема отклонена"
+        transition_repo.get_transitions_by_project.assert_awaited_once_with(10)
+
+    @pytest.mark.asyncio
+    async def test_should_expose_latest_reject_comment_in_project_full(self):
+        # given
+        project_type = ProjectType(id=1, name="Курсовая")
+        first = _stage(1, 0)
+        second = _stage(2, 1)
+        actor = Mock()
+        actor.first_name = "Иван"
+        actor.last_name = "Петров"
+
+        now = datetime.now(ZoneInfo("UTC"))
+        old_reject = StageTransition(
+            id=1,
+            project_id=10,
+            stage_id=2,
+            from_stage_id=2,
+            actor_id=200,
+            action="reject",
+            comment="Старый комментарий",
+            created_at=now - timedelta(days=2),
+        )
+        old_reject.stage = second
+        old_reject.from_stage = second
+        old_reject.actor = actor
+        new_reject = StageTransition(
+            id=2,
+            project_id=10,
+            stage_id=1,
+            from_stage_id=1,
+            actor_id=200,
+            action="reject",
+            comment="Тема отклонена",
+            created_at=now - timedelta(days=1),
+        )
+        new_reject.stage = first
+        new_reject.from_stage = first
+        new_reject.actor = actor
+
+        project = Project(id=10, name="Test", author_id=100, current_stage_id=1, stage_pending_approval=False)
+        project.project_type = project_type
+        project.stage_transitions = [old_reject, new_reject]
+
+        # when
+        result = ProjectFull.from_orm(project, 100)
+
+        # then
+        assert result.stage_rejection is not None
+        assert result.stage_rejection.comment == "Тема отклонена"
+        assert result.stage_rejection.stage_name == "stage1"
+        assert result.stage_rejection.actor_name == "Иван Петров"
+
+    @pytest.mark.asyncio
+    async def test_should_not_expose_rejection_when_stage_approved(self):
+        # given
+        project_type = ProjectType(id=1, name="Курсовая")
+        project = Project(id=10, name="Test", author_id=100, stage_pending_approval=False)
+        project.project_type = project_type
+        project.stage_transitions = []
+
+        # when
+        result = ProjectFull.from_orm(project, 100)
+
+        # then
+        assert result.stage_rejection is None
 
     @pytest.mark.asyncio
     async def test_should_approve_current_stage(self):
@@ -154,7 +221,7 @@ class TestProjectStageService:
     async def test_should_raise_when_project_type_missing(self):
         # given
         service, type_repo, _ = self._make_service()
-        project = Project(id=10, name="Test", author_id=100)
+        project = Project(id=10, name="Test", author_id=100, stage_pending_approval=False)
         _mock_project_fetch(type_repo.uow.session, project)
 
         # when / then
@@ -182,6 +249,7 @@ class TestProjectTypeCRUDWorkspaceScoped:
 
         transition_repo = Mock()
         transition_repo.create_transition = AsyncMock()
+        transition_repo.get_transitions_by_project = AsyncMock(return_value=[])
 
         service = ProjectStageService(type_repo, transition_repo)  # type: ignore[arg-type]
         return service, type_repo
@@ -289,6 +357,47 @@ class TestProjectTypeCRUDWorkspaceScoped:
         type_id_arg, data_arg = type_repo.create_stage.await_args.args
         assert type_id_arg == 5  # noqa: PLR2004
         assert data_arg.duration_days == 7  # noqa: PLR2004
+
+    @pytest.mark.asyncio
+    async def test_should_update_workspace_stage_without_workspace_id(self):
+        # given
+        service, type_repo = self._make_service()
+        admin = self._global_admin()
+        await self._mock_session_user(type_repo, admin)
+        ptype = ProjectType(id=5, name="Курсовая", workspace_id=42)
+        ptype.stages = []
+        type_repo.get_by_id = AsyncMock(return_value=ptype)
+        type_repo.get_by_id_with_stages = AsyncMock(return_value=ptype)
+        type_repo.update_stage = AsyncMock(
+            return_value=ProjectStage(
+                id=19, name="Решение", order=1, requires_approval=False, duration_days=None, project_type_id=5
+            )
+        )
+
+        data = Mock()
+        data.name = "Решение"
+
+        # when: workspace_id не передан — сценарий обновления этапа из UI
+        result = await service.update_stage(type_id=5, stage_id=19, workspace_id=None, data=data, user_id=1)
+
+        # then
+        assert result.id == 5  # noqa: PLR2004
+        stage_id_arg, data_arg = type_repo.update_stage.await_args.args
+        assert stage_id_arg == 19  # noqa: PLR2004
+        assert data_arg.name == "Решение"
+
+    @pytest.mark.asyncio
+    async def test_should_deny_update_stage_of_other_workspace(self):
+        # given
+        service, type_repo = self._make_service()
+        admin = self._global_admin()
+        await self._mock_session_user(type_repo, admin)
+        ptype = ProjectType(id=9, name="Диплом", workspace_id=42)
+        type_repo.get_by_id = AsyncMock(return_value=ptype)
+
+        # when / then: тип принадлежит workspace 42, но запрос идёт за workspace 7
+        with pytest.raises(PermissionError):
+            await service.update_stage(type_id=9, stage_id=19, workspace_id=7, data=Mock(name="Другое"), user_id=1)
 
     @pytest.mark.asyncio
     async def test_should_include_duration_in_stage_info(self):

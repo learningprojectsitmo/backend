@@ -6,9 +6,24 @@ from typing import TYPE_CHECKING
 from sqlalchemy import select
 
 from src.core.config import settings
+from src.model.user import Role, User
 from src.model.workspace import WorkSpaceParticipation
 from src.model.workspace_invitation import WorkspaceInvitation
 from src.services.base_service import BaseService
+
+WORKSPACE_ROLES_BY_GLOBAL: dict[str, frozenset[str]] = {
+    "admin": frozenset({"admin"}),
+    "teacher": frozenset({"teacher"}),
+    "member": frozenset({"member", "manager"}),
+    "manager": frozenset({"member", "manager"}),
+}
+
+DEFAULT_WORKSPACE_ROLE_BY_GLOBAL: dict[str, str] = {
+    "admin": "admin",
+    "teacher": "teacher",
+    "member": "member",
+    "manager": "member",
+}
 
 if TYPE_CHECKING:
     from src.repository.invitation_repository import InvitationRepository
@@ -68,10 +83,34 @@ class InvitationService(BaseService[WorkspaceInvitation, dict, dict]):
         participation = WorkSpaceParticipation(
             workspace_id=invitation.workspace_id,
             participant_id=user_id,
-            role_id=invitation.role_id,
+            role_id=await self._resolve_workspace_role_id(invitation.role_id, user_id),
         )
         self._invitation_repository.uow.session.add(participation)
 
         await self._invitation_repository.increment_use_count(invitation.id)
 
         return JoinByLinkResult(invitation=invitation, already_member=False)
+
+    async def _resolve_workspace_role_id(self, invite_role_id: int, user_id: int) -> int:
+        """Роль в пространстве ограничена глобальной ролью вступающего.
+
+        Если роль из ссылки недопустима для глобальной роли — назначается
+        допустимая роль по умолчанию (admin→admin, teacher→teacher, member/manager→member).
+        """
+        session = self._invitation_repository.uow.session
+
+        global_role_result = await session.execute(
+            select(Role.name).join(User, User.role_id == Role.id).where(User.id == user_id)
+        )
+        global_role = global_role_result.scalar_one_or_none() or "member"
+
+        invite_role_result = await session.execute(select(Role.name).where(Role.id == invite_role_id))
+        invite_role = invite_role_result.scalar_one_or_none()
+
+        if invite_role in WORKSPACE_ROLES_BY_GLOBAL.get(global_role, frozenset({"member"})):
+            return invite_role_id
+
+        fallback_name = DEFAULT_WORKSPACE_ROLE_BY_GLOBAL.get(global_role, "member")
+        fallback_result = await session.execute(select(Role).where(Role.name == fallback_name))
+        fallback_role = fallback_result.scalar_one_or_none()
+        return fallback_role.id if fallback_role else invite_role_id
