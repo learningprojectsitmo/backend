@@ -258,6 +258,7 @@ class ProjectFull(ProjectCreate):
                 user_id=r.respondent_id,
                 name=f"{r.respondent.first_name} {r.respondent.last_name}",
                 contacts=getattr(r.respondent, "email", ""),
+                resume_url=f"/resume/{r.resume_id}" if r.resume_id else "",
                 response_date=str(r.created_at.date()) if r.created_at else "",
                 vacancy_id=getattr(r.vacancy, "id", None) if r.vacancy else None,
                 role=getattr(r.vacancy, "title", "") if r.vacancy else "",
