@@ -17,6 +17,7 @@ class NotificationType(str, enum.Enum):
     response_received = "response_received"
     response_accepted = "response_accepted"
     response_rejected = "response_rejected"
+    response_confirmed = "response_confirmed"
     invitation_received = "invitation_received"
     invitation_accepted = "invitation_accepted"
     invitation_rejected = "invitation_rejected"

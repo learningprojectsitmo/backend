@@ -707,6 +707,19 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         await self._project_repository.add_participant(response.project_id, user_id)
         if response.vacancy_id:
             await self._project_repository.decrement_vacancy_count(response.vacancy_id)
+        if self._notification_service and project:
+            user = await self._project_repository.uow.session.get(User, user_id)
+            actor_name = f"{user.first_name} {user.last_name or ''}".strip() if user else "User"
+            await self._notification_service.create_notification(
+                user_id=project.author_id,
+                type=NotificationType.response_confirmed,
+                actor_name=actor_name,
+                actor_id=user_id,
+                project_id=response.project_id,
+                project_name=project.name,
+                vacancy_title=response.vacancy.title if response.vacancy else None,
+                response_id=response_id,
+            )
         return response
 
     async def reject_response(self, response_id: int, author_id: int) -> Response:
