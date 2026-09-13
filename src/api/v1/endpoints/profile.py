@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from src.core.container import (
     get_audit_service,
@@ -17,7 +17,7 @@ from src.schema.education import EducationCreate, EducationFull, EducationUpdate
 from src.schema.language import LanguageCreate, LanguageFull, LanguageUpdate
 from src.schema.portfolio import PortfolioCreate, PortfolioFull, PortfolioUpdate
 from src.schema.profile import ProfileResponse
-from src.services.audit_service import AuditService
+from src.services.audit_service import ACTIVITY_ITEMS_LIMIT, AuditService
 from src.services.education_service import EducationService
 from src.services.language_service import LanguageService
 from src.services.portfolio_service import PortfolioService
@@ -40,11 +40,13 @@ async def fetch_profile(
 
 @profile_router.get("/activity", response_model=ActivityResponse)
 async def fetch_profile_activity(
+    page: int = Query(1, ge=1),
+    limit: int = Query(ACTIVITY_ITEMS_LIMIT, ge=1, le=100),
     current_user: User = Depends(get_current_user),
     audit_service: AuditService = Depends(get_audit_service),
 ) -> ActivityResponse:
     """Получить активность текущего пользователя (heatmap + лента действий)"""
-    return await audit_service.get_activity(current_user.id)
+    return await audit_service.get_activity(current_user.id, page=page, limit=limit)
 
 
 # ─── Portfolio CRUD ──────────────────────────────────────────────────────

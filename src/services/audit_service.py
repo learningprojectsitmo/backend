@@ -62,7 +62,9 @@ class AuditService:
 
         return result
 
-    async def get_activity(self, user_id: int, limit: int = ACTIVITY_ITEMS_LIMIT) -> ActivityResponse:
+    async def get_activity(
+        self, user_id: int, page: int = 1, limit: int = ACTIVITY_ITEMS_LIMIT
+    ) -> ActivityResponse:
         """Активность пользователя за последние 365 дней: агрегат по дням + лента действий"""
 
         logs = await self._audit_repository.get_logs_by_user_id(user_id)
@@ -77,6 +79,9 @@ class AuditService:
             day_counts[day] = day_counts.get(day, 0) + 1
         summary = [ActivityDay(date=day, count=count) for day, count in sorted(day_counts.items())]
 
+        total = len(relevant)
+        offset = (page - 1) * limit
+        page_items = relevant[offset : offset + limit]
         items = [
             ActivityItem(
                 id=log.id,
@@ -84,9 +89,17 @@ class AuditService:
                 description=self._describe(log, project_names, resume_names),
                 performed_at=log.performed_at,
             )
-            for log in relevant[:limit]
+            for log in page_items
         ]
-        return ActivityResponse(total=len(relevant), summary=summary, items=items)
+        total_pages = (total + limit - 1) // limit
+        return ActivityResponse(
+            total=total,
+            page=page,
+            limit=limit,
+            total_pages=total_pages,
+            summary=summary,
+            items=items,
+        )
 
     async def _resolve_names(self, logs: list) -> tuple[dict[int, str], dict[int, str]]:
         """Собрать названия проектов и резюме, которые упоминаются в логах"""

@@ -42,5 +42,8 @@ class ActivityResponse(BaseModel):
     """Активность пользователя: агрегат по дням + лента действий"""
 
     total: int
+    page: int = 1
+    limit: int = 50
+    total_pages: int = 1
     summary: list[ActivityDay]
     items: list[ActivityItem]

@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from src.core.container import get_resume_service
-from src.core.dependencies import get_current_user, permission_required, setup_audit
+from src.core.dependencies import permission_required, setup_audit
 from src.core.exceptions import PermissionError
 from src.model.user import User
 from src.schema.resume import (
@@ -40,7 +40,7 @@ resume_router = APIRouter(prefix="/resumes", tags=["resume"], dependencies=[Depe
 async def fetch_resume(
     resume_id: int,
     resume_service: ResumeService = Depends(get_resume_service),
-    _current_user: User = Depends(get_current_user),
+    _current_user: User = Depends(permission_required("resume:read")),
 ) -> ResumeFull:
     """Получить резюме по ID"""
     resume = await resume_service.get_resume_by_id(resume_id)
@@ -54,7 +54,7 @@ async def fetch_resume(
 async def fetch_resume_detail(
     resume_id: int,
     resume_service: ResumeService = Depends(get_resume_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("resume:read")),
 ) -> ResumeDetail:
     """Получить полное резюме со всеми секциями"""
     detail = await resume_service.get_resume_detail(resume_id, viewer=current_user)
@@ -68,7 +68,7 @@ async def fetch_resumes(
     page: int = Query(1, ge=1, description="Номер страницы"),
     limit: int = Query(10, ge=1, le=100, description="Количество резюме на странице"),
     resume_service: ResumeService = Depends(get_resume_service),
-    _current_user: User = Depends(get_current_user),
+    _current_user: User = Depends(permission_required("resume:read")),
 ) -> ResumeListResponse:
     """Получить список резюме с пагинацией"""
     resumes, total = await resume_service.get_resumes_paginated(page, limit)
@@ -149,7 +149,7 @@ async def fetch_my_resumes(
     page: int = Query(1, ge=1),
     limit: int = Query(10, ge=1, le=100),
     resume_service: ResumeService = Depends(get_resume_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("resume:read")),
 ) -> ResumeListResponse:
     """Получить резюме текущего пользователя с пагинацией"""
     resumes, total = await resume_service.get_user_resumes_paginated(current_user.id, page, limit)
