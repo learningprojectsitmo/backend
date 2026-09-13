@@ -32,6 +32,7 @@ from src.services.ideas_service import IdeaService, IdeaTagService
 from src.services.invitation_service import InvitationService
 from src.services.kanban_service import KanbanService
 from src.services.language_service import LanguageService
+from src.services.mail_service import MailService
 from src.services.notification_service import NotificationService
 from src.services.permission_service import PermissionService
 from src.services.portfolio_service import PortfolioService
@@ -176,15 +177,21 @@ async def get_notification_service(
     return NotificationService(notification_repository)
 
 
+def get_mail_service() -> MailService:
+    return MailService()
+
+
 async def get_project_service(
     project_repository: ProjectRepository = Depends(get_project_repository),
     resume_repository: ResumeRepository = Depends(get_resume_repository),
     notification_service: NotificationService = Depends(get_notification_service),
+    mail_service: MailService = Depends(get_mail_service),
 ) -> ProjectService:
     return ProjectService(
         project_repository,
         resume_repository=resume_repository,
         notification_service=notification_service,
+        mail_service=mail_service,
     )
 
 

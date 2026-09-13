@@ -28,6 +28,7 @@ from src.services.base_service import BaseService
 if TYPE_CHECKING:
     from src.repository.project_repository import ProjectRepository
     from src.repository.resume_repository import ResumeRepository
+    from src.services.mail_service import MailService
     from src.services.notification_service import NotificationService
 
 # Роли в пространстве, которым разрешено создавать проекты (совпадает с stage_service.MANAGE_ROLES).
@@ -40,11 +41,13 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         project_repository: ProjectRepository,
         resume_repository: ResumeRepository | None = None,
         notification_service: NotificationService | None = None,
+        mail_service: MailService | None = None,
     ):
         super().__init__(project_repository)
         self._project_repository = project_repository
         self._resume_repository = resume_repository
         self._notification_service = notification_service
+        self._mail_service = mail_service
 
     @staticmethod
     def is_draft(project: Project) -> bool:
@@ -265,6 +268,16 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
                 vacancy_title=invitation.vacancy.title if invitation.vacancy else None,
                 invitation_id=invitation_id,
             )
+        if self._mail_service and invitation.inviter_id:
+            inviter = await self._project_repository.uow.session.get(User, invitation.inviter_id)
+            if inviter and inviter.email:
+                await self._mail_service.send_invitation_accepted_email(
+                    to=inviter.email,
+                    first_name=inviter.first_name or "Уважаемый автор",
+                    project_name=project.name,
+                    project_id=invitation.project_id,
+                    vacancy_title=invitation.vacancy.title if invitation.vacancy else None,
+                )
         return result
 
     async def reject_invitation(self, invitation_id: int, user_id: int) -> Response:
@@ -295,6 +308,15 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
                 project_name=project_name,
                 invitation_id=invitation_id,
             )
+        if self._mail_service and invitation.inviter_id:
+            inviter = await self._project_repository.uow.session.get(User, invitation.inviter_id)
+            if inviter and inviter.email:
+                await self._mail_service.send_invitation_rejected_email(
+                    to=inviter.email,
+                    first_name=inviter.first_name or "Уважаемый автор",
+                    project_name=project.name if project else "project",
+                    project_id=invitation.project_id,
+                )
         return result
 
     async def get_projects_by_workspace(
@@ -617,6 +639,13 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
                 vacancy_title=response.vacancy.title if response.vacancy else None,
                 response_id=response.id,
             )
+        if self._mail_service and project.author and project.author.email:
+            await self._mail_service.send_response_received_email(
+                to=project.author.email,
+                first_name=project.author.first_name or "Уважаемый автор",
+                project_name=project.name,
+                project_id=project.id,
+            )
         return response
 
     async def invite_to_project(
@@ -657,6 +686,15 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
                 vacancy_title=invitation.vacancy.title if invitation.vacancy else None,
                 invitation_id=invitation.id,
             )
+        if self._mail_service:
+            invitee = await self._project_repository.uow.session.get(User, invitee_id)
+            if invitee and invitee.email:
+                await self._mail_service.send_invitation_received_email(
+                    to=invitee.email,
+                    first_name=invitee.first_name or "Пользователь",
+                    project_name=project.name,
+                    vacancy_title=invitation.vacancy.title if invitation.vacancy else None,
+                )
         return invitation
 
     async def accept_response(self, response_id: int, author_id: int) -> Response:
@@ -688,6 +726,15 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
                 vacancy_title=response.vacancy.title if response.vacancy else None,
                 response_id=response.id,
             )
+        if self._mail_service:
+            respondent = await self._project_repository.uow.session.get(User, response.respondent_id)
+            if respondent and respondent.email:
+                await self._mail_service.send_response_accepted_email(
+                    to=respondent.email,
+                    first_name=respondent.first_name or "Пользователь",
+                    project_name=project.name,
+                    vacancy_title=response.vacancy.title if response.vacancy else None,
+                )
         return result
 
     async def confirm_join(self, response_id: int, user_id: int) -> Response:
@@ -720,6 +767,14 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
                 vacancy_title=response.vacancy.title if response.vacancy else None,
                 response_id=response_id,
             )
+        if self._mail_service and project.author and project.author.email:
+            await self._mail_service.send_response_confirmed_email(
+                to=project.author.email,
+                first_name=project.author.first_name or "Уважаемый автор",
+                project_name=project.name,
+                project_id=project.id,
+                vacancy_title=response.vacancy.title if response.vacancy else None,
+            )
         return response
 
     async def reject_response(self, response_id: int, author_id: int) -> Response:
@@ -748,6 +803,14 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
                 project_name=project.name,
                 response_id=response.id,
             )
+        if self._mail_service:
+            respondent = await self._project_repository.uow.session.get(User, response.respondent_id)
+            if respondent and respondent.email:
+                await self._mail_service.send_response_rejected_email(
+                    to=respondent.email,
+                    first_name=respondent.first_name or "Пользователь",
+                    project_name=project.name,
+                )
         return result
 
     async def get_project_responses(self, project_id: int, author_id: int) -> list[Response]:

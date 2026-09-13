@@ -152,3 +152,115 @@ class MailService:
         """
         html = self._wrap(body, "Сброс пароля")
         return await self.send_html(to, f"Сброс пароля — {_BRAND}", html)
+
+    def _action_button(self, url: str, label: str) -> str:
+        return f"""
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px 0;">
+                        <tr>
+                            <td align="center">
+                                <a class="btn" href="{url}"
+                                   style="display:inline-block;padding:14px 28px;border-radius:12px;background-color:{_BUTTON_BG};color:{_BUTTON_TEXT};font-size:16px;font-weight:600;line-height:1.5;letter-spacing:0.02em;text-decoration:none;">
+                                    {label}
+                                </a>
+                            </td>
+                        </tr>
+                    </table>
+        """
+
+    async def send_response_received_email(self, to: str, first_name: str, project_name: str, project_id: int) -> bool:
+        """Автору проекта: поступил новый отклик."""
+        body = f"""
+                    <p style="margin:0 0 16px 0;font-size:16px;line-height:1.5;color:{_TEXT};">Здравствуйте, {first_name}!</p>
+                    <p style="margin:0 0 24px 0;font-size:16px;line-height:1.5;color:{_MUTED};">
+                        На ваш проект «{project_name}» поступил новый отклик. Загляните на страницу проекта,
+                        чтобы рассмотреть кандидата.
+                    </p>
+        """
+        body += self._action_button(f"{settings.FRONTEND_URL}/app/project?id={project_id}", "Открыть проект")
+        html = self._wrap(body, "Новый отклик на проект")
+        return await self.send_html(to, f"Новый отклик на проект — {_BRAND}", html)
+
+    async def send_invitation_received_email(
+        self, to: str, first_name: str, project_name: str, vacancy_title: str | None = None
+    ) -> bool:
+        """Участнику: автор пригласил его в проект."""
+        role_line = f" на роль «{vacancy_title}»" if vacancy_title else ""
+        body = f"""
+                    <p style="margin:0 0 16px 0;font-size:16px;line-height:1.5;color:{_TEXT};">Здравствуйте, {first_name}!</p>
+                    <p style="margin:0 0 24px 0;font-size:16px;line-height:1.5;color:{_MUTED};">
+                        Вас пригласили в проект «{project_name}»{role_line}. Приглашение ждёт вашего ответа в профиле.
+                    </p>
+        """
+        body += self._action_button(f"{settings.FRONTEND_URL}/app/profile?tab=responses", "Ответить на приглашение")
+        html = self._wrap(body, "Вам пришло приглашение в проект")
+        return await self.send_html(to, f"Приглашение в проект — {_BRAND}", html)
+
+    async def send_response_accepted_email(
+        self, to: str, first_name: str, project_name: str, vacancy_title: str | None = None
+    ) -> bool:
+        """Участнику: его отклик принят, нужно подтвердить вступление."""
+        role_line = f" на роль «{vacancy_title}»" if vacancy_title else ""
+        body = f"""
+                    <p style="margin:0 0 16px 0;font-size:16px;line-height:1.5;color:{_TEXT};">Здравствуйте, {first_name}!</p>
+                    <p style="margin:0 0 24px 0;font-size:16px;line-height:1.5;color:{_MUTED};">
+                        Автор принял ваш отклик на проект «{project_name}»{role_line}. Подтвердите участие, чтобы попасть в команду.
+                    </p>
+        """
+        body += self._action_button(f"{settings.FRONTEND_URL}/app/profile?tab=responses", "Подтвердить участие")
+        html = self._wrap(body, "Ваш отклик принят")
+        return await self.send_html(to, f"Ваш отклик принят — {_BRAND}", html)
+
+    async def send_response_confirmed_email(
+        self, to: str, first_name: str, project_name: str, project_id: int, vacancy_title: str | None = None
+    ) -> bool:
+        """Автору проекта: участник подтвердил вступление."""
+        role_line = f" на роль «{vacancy_title}»" if vacancy_title else ""
+        body = f"""
+                    <p style="margin:0 0 16px 0;font-size:16px;line-height:1.5;color:{_TEXT};">Здравствуйте, {first_name}!</p>
+                    <p style="margin:0 0 24px 0;font-size:16px;line-height:1.5;color:{_MUTED};">
+                        Участник подтвердил вступление в проект «{project_name}»{role_line}. Команда укомплектована чуть ближе к цели.
+                    </p>
+        """
+        body += self._action_button(f"{settings.FRONTEND_URL}/app/project?id={project_id}", "Открыть проект")
+        html = self._wrap(body, "Новый участник в проекте")
+        return await self.send_html(to, f"Новый участник — {_BRAND}", html)
+
+    async def send_response_rejected_email(self, to: str, first_name: str, project_name: str) -> bool:
+        """Участнику: его отклик отклонён."""
+        body = f"""
+                    <p style="margin:0 0 16px 0;font-size:16px;line-height:1.5;color:{_TEXT};">Здравствуйте, {first_name}!</p>
+                    <p style="margin:0 0 24px 0;font-size:16px;line-height:1.5;color:{_MUTED};">
+                        К сожалению, автор пока не готов взять вас в проект «{project_name}». Не расстраивайтесь — вас ждут другие команды.
+                    </p>
+        """
+        html = self._wrap(body, "Ваш отклик отклонён")
+        return await self.send_html(to, f"Отклик отклонён — {_BRAND}", html)
+
+    async def send_invitation_accepted_email(
+        self, to: str, first_name: str, project_name: str, project_id: int, vacancy_title: str | None = None
+    ) -> bool:
+        """Автору проекта: участник принял приглашение."""
+        role_line = f" на роль «{vacancy_title}»" if vacancy_title else ""
+        body = f"""
+                    <p style="margin:0 0 16px 0;font-size:16px;line-height:1.5;color:{_TEXT};">Здравствуйте, {first_name}!</p>
+                    <p style="margin:0 0 24px 0;font-size:16px;line-height:1.5;color:{_MUTED};">
+                        Участник принял приглашение в проект «{project_name}»{role_line} и стал частью команды.
+                    </p>
+        """
+        body += self._action_button(f"{settings.FRONTEND_URL}/app/project?id={project_id}", "Открыть проект")
+        html = self._wrap(body, "Приглашение принято")
+        return await self.send_html(to, f"Приглашение принято — {_BRAND}", html)
+
+    async def send_invitation_rejected_email(
+        self, to: str, first_name: str, project_name: str, project_id: int
+    ) -> bool:
+        """Автору проекта: участник отклонил приглашение."""
+        body = f"""
+                    <p style="margin:0 0 16px 0;font-size:16px;line-height:1.5;color:{_TEXT};">Здравствуйте, {first_name}!</p>
+                    <p style="margin:0 0 24px 0;font-size:16px;line-height:1.5;color:{_MUTED};">
+                        Участник отклонил приглашение в проект «{project_name}». Возможно, стоит поискать кандидатов ещё.
+                    </p>
+        """
+        body += self._action_button(f"{settings.FRONTEND_URL}/app/project?id={project_id}", "Открыть проект")
+        html = self._wrap(body, "Приглашение отклонено")
+        return await self.send_html(to, f"Приглашение отклонено — {_BRAND}", html)
