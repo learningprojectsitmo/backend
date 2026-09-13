@@ -297,6 +297,7 @@ async def get_current_user_info(
         "tg_nickname": current_user.tg_nickname,
         "vk_nickname": current_user.vk_nickname,
         "show_my_contacts": current_user.show_my_contacts,
+        "lang": current_user.lang,
         "permissions": permissions,
     }
 

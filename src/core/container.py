@@ -191,8 +191,9 @@ async def get_project_service(
 async def get_stage_service(
     type_repository: ProjectTypeRepository = Depends(get_project_type_repository),
     transition_repository: StageTransitionRepository = Depends(get_stage_transition_repository),
+    notification_service: NotificationService = Depends(get_notification_service),
 ) -> ProjectStageService:
-    return ProjectStageService(type_repository, transition_repository)
+    return ProjectStageService(type_repository, transition_repository, notification_service)
 
 
 async def get_auth_service(

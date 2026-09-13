@@ -20,6 +20,7 @@ class UserBase(BaseModel):
     phone: str | None = None
     vk_nickname: str | None = None
     show_my_contacts: bool = False
+    lang: str = "ru"
 
 
 class UserCreate(UserBase):
@@ -70,11 +71,21 @@ class UserUpdate(BaseModel):
     vk_nickname: str | None = None
     role_id: int | None = None
     show_my_contacts: bool | None = None
+    lang: str | None = None
 
     @field_validator("tg_nickname")
     @classmethod
     def validate_tg_nickname(cls, v):
         return TelegramValidator.validate_tg_nickname_optional(v)
+
+    @field_validator("lang")
+    @classmethod
+    def validate_lang(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        if v not in ("ru", "en"):
+            raise ValueError("lang must be one of: ru, en")
+        return v
 
     @field_validator("first_name")
     @classmethod

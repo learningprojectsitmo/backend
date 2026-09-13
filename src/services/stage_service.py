@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from src.core.exceptions import NotFoundError, PermissionError, ValidationError
+from src.model.notification import NotificationType
 from src.model.project import Project, ProjectParticipation, ProjectType, StageTransition
 from src.model.user import Role, User
 from src.model.workspace import WorkSpaceParticipation
@@ -23,6 +24,7 @@ from src.services.base_service import BaseService
 
 if TYPE_CHECKING:
     from src.repository.stage_repository import ProjectTypeRepository, StageTransitionRepository
+    from src.services.notification_service import NotificationService
 
 
 class ProjectStageService(BaseService[Project, dict, dict]):
@@ -35,10 +37,12 @@ class ProjectStageService(BaseService[Project, dict, dict]):
         self,
         type_repository: ProjectTypeRepository,
         transition_repository: StageTransitionRepository,
+        notification_service: NotificationService | None = None,
     ) -> None:
         super().__init__(type_repository)  # type: ignore[arg-type]
         self._type_repository = type_repository
         self._transition_repository = transition_repository
+        self._notification_service = notification_service
 
     async def copy_system_types_to_workspace(self, workspace_id: int) -> int:
         """Скопировать системные типы проектов в пространство (идемпотентно)."""
@@ -275,6 +279,46 @@ class ProjectStageService(BaseService[Project, dict, dict]):
         target = stages[current_order + 1]
         return await self._apply_advance(project, stages[current_order], target, user_id)
 
+    async def _approval_recipient_ids(self, project: Project) -> list[int]:
+        """ID пользователей, которые могут утверждать этап: преподаватели/админы пространства
+        (если проект в пространстве) + глобальные преподаватели/админы."""
+        user_ids: set[int] = set()
+        if project.workspace_id:
+            result = await self._type_repository.uow.session.execute(
+                select(WorkSpaceParticipation.participant_id)
+                .join(Role, Role.id == WorkSpaceParticipation.role_id)
+                .where(
+                    WorkSpaceParticipation.workspace_id == project.workspace_id,
+                    Role.name.in_(("teacher", "admin", "manager")),
+                )
+            )
+            user_ids.update(result.scalars().all())
+        result = await self._type_repository.uow.session.execute(
+            select(User.id)
+            .join(Role, Role.id == User.role_id)
+            .where(Role.name.in_(("teacher", "admin")))
+        )
+        user_ids.update(result.scalars().all())
+        user_ids.discard(project.author_id)
+        return sorted(user_ids)
+
+    async def _notify_approval_required(self, project: Project, stage_name: str) -> None:
+        """Уведомить преподавателей/админов о необходимости утверждения этапа."""
+        if not self._notification_service:
+            return
+        author = await self._type_repository.uow.session.get(User, project.author_id) if project.author_id else None
+        actor_name = f"{author.first_name} {author.last_name or ''}".strip() if author else "User"
+        for user_id in await self._approval_recipient_ids(project):
+            await self._notification_service.create_notification(
+                user_id=user_id,
+                type=NotificationType.stage_approval_required,
+                actor_name=actor_name,
+                actor_id=project.author_id,
+                project_id=project.id,
+                project_name=project.name,
+                stage_name=stage_name,
+            )
+
     async def _apply_advance(self, project: Project, from_stage, target, user_id: int) -> Project:
         await self._transition_repository.create_transition(
             project_id=project.id,
@@ -286,6 +330,7 @@ class ProjectStageService(BaseService[Project, dict, dict]):
         project.current_stage_id = target.id
         if target.requires_approval:
             project.stage_pending_approval = True
+            await self._notify_approval_required(project, target.name)
         else:
             project.stage_pending_approval = False
         project.progress = self._compute_progress(project, await self._get_ordered_stages(project))

@@ -5,7 +5,17 @@ from sqlalchemy import delete as sa_delete
 from sqlalchemy.orm import selectinload
 
 from src.core.uow import IUnitOfWork
-from src.model.project import Project, ProjectParticipation
+from src.model.kanban_models import Column, Subtask, Task, TaskAssignee, TaskHistory
+from src.model.project import (
+    Project,
+    ProjectParticipation,
+    ProjectStage,
+    ProjectType,
+    ProjectVacancy,
+    Response,
+    StageTransition,
+    project_tag,
+)
 from src.model.resume import Resume, ResumeInterest, ResumeSkill
 from src.model.settings import SpaceSettings
 from src.model.user import Role, User
@@ -26,17 +36,36 @@ class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUp
         if not db_obj:
             return False
 
+        project_ids = select(Project.id).where(Project.workspace_id == id)
+
+        # ── Дочерние сущности проектов (канбан, отклики, вакансии, этапы) ──
+        task_ids = select(Task.id).where(Task.project_id.in_(project_ids))
+        await self.uow.session.execute(sa_delete(TaskAssignee).where(TaskAssignee.task_id.in_(task_ids)))
+        await self.uow.session.execute(sa_delete(TaskHistory).where(TaskHistory.task_id.in_(task_ids)))
+        await self.uow.session.execute(sa_delete(Subtask).where(Subtask.task_id.in_(task_ids)))
+        await self.uow.session.execute(sa_delete(Task).where(Task.project_id.in_(project_ids)))
+        await self.uow.session.execute(sa_delete(Column).where(Column.project_id.in_(project_ids)))
+        await self.uow.session.execute(sa_delete(StageTransition).where(StageTransition.project_id.in_(project_ids)))
+        await self.uow.session.execute(sa_delete(Response).where(Response.project_id.in_(project_ids)))
+        await self.uow.session.execute(sa_delete(ProjectVacancy).where(ProjectVacancy.project_id.in_(project_ids)))
+        await self.uow.session.execute(sa_delete(project_tag).where(project_tag.c.project_id.in_(project_ids)))
+        await self.uow.session.execute(
+            sa_delete(ProjectParticipation).where(ProjectParticipation.project_id.in_(project_ids))
+        )
+        await self.uow.session.execute(sa_delete(Project).where(Project.workspace_id == id))
+
+        # ── Типы проектов пространства и их этапы ──
+        type_ids = select(ProjectType.id).where(ProjectType.workspace_id == id)
+        await self.uow.session.execute(sa_delete(ProjectStage).where(ProjectStage.project_type_id.in_(type_ids)))
+        await self.uow.session.execute(sa_delete(ProjectType).where(ProjectType.workspace_id == id))
+
+        # ── Прямые связи workspace ──
         await self.uow.session.execute(sa_delete(SpaceSettings).where(SpaceSettings.space_id == id))
         await self.uow.session.execute(
             sa_delete(WorkSpaceParticipation).where(WorkSpaceParticipation.workspace_id == id)
         )
         await self.uow.session.execute(sa_delete(WorkspaceInvitation).where(WorkspaceInvitation.workspace_id == id))
-        await self.uow.session.execute(
-            sa_delete(ProjectParticipation).where(
-                ProjectParticipation.project_id.in_(select(Project.id).where(Project.workspace_id == id))
-            )
-        )
-        await self.uow.session.execute(sa_delete(Project).where(Project.workspace_id == id))
+
         await self.uow.session.delete(db_obj)
         return True
 

@@ -20,6 +20,7 @@ class NotificationType(str, enum.Enum):
     invitation_received = "invitation_received"
     invitation_accepted = "invitation_accepted"
     invitation_rejected = "invitation_rejected"
+    stage_approval_required = "stage_approval_required"
 
 
 class Notification(Base):
