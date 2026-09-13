@@ -136,14 +136,29 @@ class StageRejectionInfo(BaseModel):
 
 
 def _latest_rejection(project: Project) -> StageRejectionInfo | None:
-    """Присутствует ли у проекта возврат этапа с комментарием (последний reject)."""
+    """Присутствует ли у проекта возврат этапа с комментарием (последний reject).
+
+    Возврат не показываем, если после него этап уже был утверждён преподавателем.
+    """
     try:
         transitions = project.stage_transitions or []
     except Exception:
         transitions = []
+
+    last_approve_at: datetime | None = None
+    for t in transitions:
+        if (
+            getattr(t, "action", None) == "approve"
+            and t.created_at
+            and (last_approve_at is None or t.created_at > last_approve_at)
+        ):
+            last_approve_at = t.created_at
+
     latest: StageRejectionInfo | None = None
     for t in transitions:
         if getattr(t, "action", None) != "reject":
+            continue
+        if t.created_at and last_approve_at and last_approve_at > t.created_at:
             continue
         if latest and (not t.created_at or (latest.created_at and t.created_at <= latest.created_at)):
             continue

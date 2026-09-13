@@ -9,7 +9,7 @@ from src.core.exceptions import NotFoundError, PermissionError, ValidationError
 from src.model.notification import NotificationType
 from src.model.project import Project, ProjectParticipation, ProjectType, StageTransition
 from src.model.user import Role, User
-from src.model.workspace import WorkSpaceParticipation
+from src.model.workspace import WorkSpace, WorkSpaceParticipation
 from src.schema.stage import (
     ProjectStageCreate,
     ProjectStageInfo,
@@ -280,30 +280,25 @@ class ProjectStageService(BaseService[Project, dict, dict]):
         return await self._apply_advance(project, stages[current_order], target, user_id)
 
     async def _approval_recipient_ids(self, project: Project) -> list[int]:
-        """ID пользователей, которые могут утверждать этап: преподаватели/админы пространства
-        (если проект в пространстве) + глобальные преподаватели/админы."""
+        """Кому отправлять уведомление об утверждении этапа: только автору пространства
+        (для проектов вне пространства — глобальные преподаватели/админы)."""
         user_ids: set[int] = set()
         if project.workspace_id:
+            workspace = await self._type_repository.uow.session.get(WorkSpace, project.workspace_id)
+            if workspace:
+                user_ids.add(workspace.author_id)
+        else:
             result = await self._type_repository.uow.session.execute(
-                select(WorkSpaceParticipation.participant_id)
-                .join(Role, Role.id == WorkSpaceParticipation.role_id)
-                .where(
-                    WorkSpaceParticipation.workspace_id == project.workspace_id,
-                    Role.name.in_(("teacher", "admin", "manager")),
-                )
+                select(User.id)
+                .join(Role, Role.id == User.role_id)
+                .where(Role.name.in_(("teacher", "admin")))
             )
             user_ids.update(result.scalars().all())
-        result = await self._type_repository.uow.session.execute(
-            select(User.id)
-            .join(Role, Role.id == User.role_id)
-            .where(Role.name.in_(("teacher", "admin")))
-        )
-        user_ids.update(result.scalars().all())
         user_ids.discard(project.author_id)
         return sorted(user_ids)
 
     async def _notify_approval_required(self, project: Project, stage_name: str) -> None:
-        """Уведомить преподавателей/админов о необходимости утверждения этапа."""
+        """Уведомить автора пространства о необходимости утверждения этапа."""
         if not self._notification_service:
             return
         author = await self._type_repository.uow.session.get(User, project.author_id) if project.author_id else None

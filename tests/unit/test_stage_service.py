@@ -196,6 +196,41 @@ class TestProjectStageService:
         assert result.stage_rejection is None
 
     @pytest.mark.asyncio
+    async def test_should_not_expose_rejection_after_stage_approved(self):
+        # given — этап сначала вернули, потом утвердили
+        project_type = ProjectType(id=1, name="Курсовая")
+        now = datetime.now(ZoneInfo("UTC"))
+        reject = StageTransition(
+            id=1,
+            project_id=10,
+            stage_id=2,
+            from_stage_id=2,
+            actor_id=200,
+            action="reject",
+            comment="заполни все",
+            created_at=now - timedelta(days=2),
+        )
+        approve = StageTransition(
+            id=2,
+            project_id=10,
+            stage_id=2,
+            from_stage_id=None,
+            actor_id=200,
+            action="approve",
+            comment=None,
+            created_at=now - timedelta(days=1),
+        )
+        project = Project(id=10, name="Test", author_id=100, current_stage_id=2, stage_pending_approval=False)
+        project.project_type = project_type
+        project.stage_transitions = [reject, approve]
+
+        # when
+        result = ProjectFull.from_orm(project, 100)
+
+        # then
+        assert result.stage_rejection is None
+
+    @pytest.mark.asyncio
     async def test_should_approve_current_stage(self):
         # given
         service, type_repo, transition_repo = self._make_service()
