@@ -39,6 +39,7 @@ class ResponseItem(BaseModel):
     role: str = ""
     type: str = "response"
     status: str = "pending"
+    allow_multi_project_participation: bool = True
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -199,7 +200,9 @@ class ProjectFull(ProjectCreate):
     model_config = ConfigDict(from_attributes=True)
 
     @staticmethod
-    def from_orm(project: Project, current_user_id: int | None = None) -> ProjectFull:
+    def from_orm(
+        project: Project, current_user_id: int | None = None, allow_multi_project_participation: bool = True
+    ) -> ProjectFull:
         try:
             project_tags = project.tags or []
         except Exception:
@@ -264,6 +267,7 @@ class ProjectFull(ProjectCreate):
                 role=getattr(r.vacancy, "title", "") if r.vacancy else "",
                 type=r.type,
                 status=r.status,
+                allow_multi_project_participation=allow_multi_project_participation,
             )
             for r in all_responses
             if r.respondent
@@ -430,6 +434,7 @@ class MyInvitationItem(BaseModel):
     resume_title: str = ""
     date: str
     status: str
+    allow_multi_project_participation: bool = True
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -310,6 +310,37 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         )
         return list(result.scalars().all())
 
+    async def mark_sibling_pending_as_in_team(self, user_id: int, exclude_response_id: int, workspace_id: int) -> int:
+        """Пометить остальные ожидающие отклики/приглашения пользователя в пространстве как «уже в команде»."""
+        sibling_project_ids = select(Project.id).where(Project.workspace_id == workspace_id)
+        stmt = (
+            update(Response)
+            .where(
+                Response.respondent_id == user_id,
+                Response.id != exclude_response_id,
+                Response.status == "pending",
+                Response.project_id.in_(sibling_project_ids),
+            )
+            .values(status="in_team")
+            .execution_options(synchronize_session="fetch")
+        )
+        result = await self.uow.session.execute(stmt)
+        await self.uow.session.flush()
+        return result.rowcount or 0
+
+    async def is_user_participant_in_other_project(self, user_id: int, workspace_id: int, exclude_project_id: int) -> bool:
+        """Участвует ли пользователь в другом проекте пространства (кроме указанного)."""
+        result = await self.uow.session.execute(
+            select(ProjectParticipation.id)
+            .join(Project, Project.id == ProjectParticipation.project_id)
+            .where(
+                ProjectParticipation.participant_id == user_id,
+                Project.workspace_id == workspace_id,
+                Project.id != exclude_project_id,
+            )
+        )
+        return result.first() is not None
+
     async def get_accepted_response_for_participant(self, project_id: int, user_id: int) -> Response | None:
         result = await self.uow.session.execute(
             select(Response).where(

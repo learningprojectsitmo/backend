@@ -144,6 +144,8 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         """Получить приглашения текущего пользователя"""
         invitations = await self._project_repository.get_invitations_by_invitee_id(user_id)
         resume_url, resume_title = await self._get_user_resume_url(user_id)
+        workspace_ids = {inv.project.workspace_id for inv in invitations if inv.project}
+        flags = await self._resolve_allow_multi_participation_batch(workspace_ids)
         items = [
             MyInvitationItem(
                 id=inv.id,
@@ -156,6 +158,9 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
                 resume_title=resume_title,
                 date=inv.created_at.isoformat() if inv.created_at else "",
                 status=inv.status,
+                allow_multi_project_participation=flags.get(
+                    inv.project.workspace_id if inv.project else None, True
+                ),
             )
             for inv in invitations
         ]
@@ -247,6 +252,14 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         project = await self._project_repository.get_by_id(invitation.project_id)
         if project and project.max_participants is not None and len(project.participants) >= project.max_participants:
             raise ValidationError("Project has reached maximum number of participants")
+        if (
+            project
+            and not await self._workspace_allows_multi_participation(project.workspace_id)
+            and await self._project_repository.is_user_participant_in_other_project(
+                user_id, project.workspace_id, invitation.project_id
+            )
+        ):
+            raise ValidationError("Вы уже участвуете в другом проекте этого пространства")
         result = await self._project_repository.update_response_status(invitation_id, "accepted")
         if not result:
             raise NotFoundError("Invitation not found")
@@ -255,6 +268,8 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         # Уменьшаем количество необходимых участников для роли
         if invitation.vacancy_id:
             await self._project_repository.decrement_vacancy_count(invitation.vacancy_id)
+        # Остальные ожидающие отклики и приглашения пользователя в этом пространстве — «уже в команде»
+        await self._cancel_sibling_pending(user_id, invitation_id, project.workspace_id if project else None)
         if self._notification_service and invitation.inviter_id and project:
             invitee = await self._project_repository.uow.session.get(User, user_id)
             actor_name = f"{invitee.first_name} {invitee.last_name or ''}".strip() if invitee else "User"
@@ -392,6 +407,45 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         )
         settings = space_settings.scalar_one_or_none()
         return settings.default_project_deadline if settings else None
+
+    async def _workspace_allows_multi_participation(self, workspace_id: int | None) -> bool:
+        """Разрешено ли в пространстве участие в нескольких проектах одновременно."""
+        if not workspace_id:
+            return True
+        space_settings = await self._project_repository.uow.session.execute(
+            select(SpaceSettings).where(SpaceSettings.space_id == workspace_id)
+        )
+        settings = space_settings.scalar_one_or_none()
+        if not settings:
+            return True
+        return settings.allow_multi_project_participation
+
+    async def workspace_allows_multi_participation(self, workspace_id: int | None) -> bool:
+        """Публичная обёртка: разрешено ли участие в нескольких проектах в пространстве."""
+        return await self._workspace_allows_multi_participation(workspace_id)
+
+    async def _cancel_sibling_pending(self, user_id: int, exclude_response_id: int, workspace_id: int | None) -> None:
+        """Если в пространстве запрещено участие в нескольких проектах — пометить остальные
+        ожидающие отклики/приглашения пользователя как «уже в команде»."""
+        if workspace_id is None or await self._workspace_allows_multi_participation(workspace_id):
+            return
+        await self._project_repository.mark_sibling_pending_as_in_team(user_id, exclude_response_id, workspace_id)
+
+    async def _resolve_allow_multi_participation_batch(self, workspace_ids: set[int | None]) -> dict[int | None, bool]:
+        """Разрешено ли участие в нескольких проектах для каждого пространства (пакетно)."""
+        if not workspace_ids:
+            return {}
+        if None in workspace_ids:
+            workspace_ids = workspace_ids - {None}
+        if not workspace_ids:
+            return {}
+        result = await self._project_repository.uow.session.execute(
+            select(SpaceSettings.space_id, SpaceSettings.allow_multi_project_participation).where(
+                SpaceSettings.space_id.in_(workspace_ids)
+            )
+        )
+        rows = dict(result.all())
+        return {wid: rows.get(wid, True) for wid in workspace_ids}
 
     async def _assign_initial_stage(self, project: Project) -> None:
         """Если у проекта выбран тип — ставим текущий этап = первый (или ожидание утверждения)."""
@@ -751,9 +805,19 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         project = await self._project_repository.get_by_id(response.project_id)
         if project and project.max_participants is not None and len(project.participants) >= project.max_participants:
             raise ValidationError("Project has reached maximum number of participants")
+        if (
+            project
+            and not await self._workspace_allows_multi_participation(project.workspace_id)
+            and await self._project_repository.is_user_participant_in_other_project(
+                user_id, project.workspace_id, response.project_id
+            )
+        ):
+            raise ValidationError("Вы уже участвуете в другом проекте этого пространства")
         await self._project_repository.add_participant(response.project_id, user_id)
         if response.vacancy_id:
             await self._project_repository.decrement_vacancy_count(response.vacancy_id)
+        # Остальные ожидающие отклики и приглашения пользователя в этом пространстве — «уже в команде»
+        await self._cancel_sibling_pending(user_id, response_id, project.workspace_id if project else None)
         if self._notification_service and project:
             user = await self._project_repository.uow.session.get(User, user_id)
             actor_name = f"{user.first_name} {user.last_name or ''}".strip() if user else "User"

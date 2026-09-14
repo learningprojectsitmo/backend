@@ -74,7 +74,11 @@ async def fetch_project(
     ):
         raise HTTPException(status_code=404, detail="There is no project with that id!")
 
-    return ProjectFull.from_orm(project, current_user.id)
+    return ProjectFull.from_orm(
+        project,
+        current_user.id,
+        await project_service.workspace_allows_multi_participation(project.workspace_id),
+    )
 
 
 @project_router.get("/", response_model=ProjectListResponse)

@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, Mock  # Добавили AsyncMock
 import pytest
 
 from src.core.exceptions import PermissionError, ValidationError
-from src.model.project import Project, ProjectStage, ProjectType
+from src.model.project import Project, ProjectStage, ProjectType, Response
 from src.model.resume import Resume
 from src.model.settings import SpaceSettings
 from src.model.user import Role
@@ -716,3 +716,189 @@ class TestProjectService:
         # when
         with pytest.raises(ValidationError, match="already a participant"):
             await project_service.apply_for_project(project_id=1, user_id=1, vacancy_id=None, resume_id=RESUME_ID)
+
+
+class TestMultiProjectRestriction:
+    """Запрет участия в нескольких проектах одного пространства."""
+
+    def _make_accepted_response(self, response_id: int, user_id: int, project_id: int) -> Response:
+        return Response(
+            id=response_id,
+            respondent_id=user_id,
+            project_id=project_id,
+            type="response",
+            status="accepted",
+        )
+
+    def _make_pending_invitation(self, invitation_id: int, user_id: int, project_id: int) -> Response:
+        return Response(
+            id=invitation_id,
+            respondent_id=user_id,
+            project_id=project_id,
+            type="invitation",
+            status="pending",
+        )
+
+    def _settings_result(self, allow_multi: bool):
+        result = Mock()
+        result.scalar_one_or_none.return_value = SpaceSettings(
+            space_id=7, allow_multi_project_participation=allow_multi
+        )
+        return result
+
+    @pytest.mark.asyncio
+    async def test_confirm_join_marks_sibling_pending_as_in_team_when_restriction_on(self):
+        # given
+        mock_repository = Mock(spec=ProjectRepository)
+        mock_uow = Mock()
+        mock_session = AsyncMock()
+        mock_uow.session = mock_session
+        mock_repository.uow = mock_uow
+        mock_repository.get_response_by_id = AsyncMock(
+            return_value=self._make_accepted_response(1, 2, 3)
+        )
+        mock_repository.get_by_id = AsyncMock(
+            return_value=Project(id=3, name="P", author_id=1, workspace_id=7, max_participants=None)
+        )
+        mock_repository.is_user_participant_in_other_project = AsyncMock(return_value=False)
+        mock_repository.add_participant = AsyncMock()
+        mock_repository.mark_sibling_pending_as_in_team = AsyncMock(return_value=2)
+        mock_session.execute = AsyncMock(side_effect=[self._settings_result(False), self._settings_result(False)])
+
+        project_service = ProjectService(mock_repository)
+
+        # when
+        await project_service.confirm_join(1, 2)
+
+        # then
+        mock_repository.add_participant.assert_awaited_once_with(3, 2)
+        mock_repository.mark_sibling_pending_as_in_team.assert_awaited_once_with(2, 1, 7)
+
+    @pytest.mark.asyncio
+    async def test_confirm_join_skips_marking_when_restriction_off(self):
+        # given
+        mock_repository = Mock(spec=ProjectRepository)
+        mock_uow = Mock()
+        mock_session = AsyncMock()
+        mock_uow.session = mock_session
+        mock_repository.uow = mock_uow
+        mock_repository.get_response_by_id = AsyncMock(
+            return_value=self._make_accepted_response(1, 2, 3)
+        )
+        mock_repository.get_by_id = AsyncMock(
+            return_value=Project(id=3, name="P", author_id=1, workspace_id=7, max_participants=None)
+        )
+        mock_repository.add_participant = AsyncMock()
+        mock_repository.mark_sibling_pending_as_in_team = AsyncMock()
+        mock_session.execute = AsyncMock(side_effect=[self._settings_result(True), self._settings_result(True)])
+
+        project_service = ProjectService(mock_repository)
+
+        # when
+        await project_service.confirm_join(1, 2)
+
+        # then
+        mock_repository.add_participant.assert_awaited_once_with(3, 2)
+        mock_repository.mark_sibling_pending_as_in_team.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_confirm_join_blocks_when_user_already_in_another_project(self):
+        # given
+        mock_repository = Mock(spec=ProjectRepository)
+        mock_uow = Mock()
+        mock_session = AsyncMock()
+        mock_uow.session = mock_session
+        mock_repository.uow = mock_uow
+        mock_repository.get_response_by_id = AsyncMock(return_value=self._make_accepted_response(1, 2, 3))
+        mock_repository.get_by_id = AsyncMock(
+            return_value=Project(id=3, name="P", author_id=1, workspace_id=7, max_participants=None)
+        )
+        mock_repository.is_user_participant_in_other_project = AsyncMock(return_value=True)
+        mock_repository.add_participant = AsyncMock()
+        mock_session.execute = AsyncMock(return_value=self._settings_result(False))
+
+        project_service = ProjectService(mock_repository)
+
+        # when / then
+        with pytest.raises(ValidationError, match="уже участвуете"):
+            await project_service.confirm_join(1, 2)
+        mock_repository.add_participant.assert_not_called()
+        mock_repository.mark_sibling_pending_as_in_team.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_accept_invitation_marks_sibling_pending_as_in_team_when_restriction_on(self):
+        # given
+        mock_repository = Mock(spec=ProjectRepository)
+        mock_uow = Mock()
+        mock_session = AsyncMock()
+        mock_uow.session = mock_session
+        mock_repository.uow = mock_uow
+        mock_repository.get_response_by_id = AsyncMock(
+            return_value=self._make_pending_invitation(5, 2, 3)
+        )
+        mock_repository.get_by_id = AsyncMock(
+            return_value=Project(id=3, name="P", author_id=1, workspace_id=7, max_participants=None)
+        )
+        mock_repository.is_user_participant_in_other_project = AsyncMock(return_value=False)
+        mock_repository.update_response_status = AsyncMock(return_value=self._make_pending_invitation(5, 2, 3))
+        mock_repository.add_participant = AsyncMock()
+        mock_repository.mark_sibling_pending_as_in_team = AsyncMock(return_value=1)
+        mock_session.execute = AsyncMock(side_effect=[self._settings_result(False), self._settings_result(False)])
+
+        project_service = ProjectService(mock_repository)
+
+        # when
+        await project_service.accept_invitation(5, 2)
+
+        # then
+        mock_repository.add_participant.assert_awaited_once_with(3, 2)
+        mock_repository.mark_sibling_pending_as_in_team.assert_awaited_once_with(2, 5, 7)
+
+    @pytest.mark.asyncio
+    async def test_accept_invitation_blocks_when_user_already_in_another_project(self):
+        # given
+        mock_repository = Mock(spec=ProjectRepository)
+        mock_uow = Mock()
+        mock_session = AsyncMock()
+        mock_uow.session = mock_session
+        mock_repository.uow = mock_uow
+        mock_repository.get_response_by_id = AsyncMock(return_value=self._make_pending_invitation(5, 2, 3))
+        mock_repository.get_by_id = AsyncMock(
+            return_value=Project(id=3, name="P", author_id=1, workspace_id=7, max_participants=None)
+        )
+        mock_repository.is_user_participant_in_other_project = AsyncMock(return_value=True)
+        mock_repository.update_response_status = AsyncMock()
+        mock_repository.add_participant = AsyncMock()
+        mock_session.execute = AsyncMock(return_value=self._settings_result(False))
+
+        project_service = ProjectService(mock_repository)
+
+        # when / then
+        with pytest.raises(ValidationError, match="уже участвуете"):
+            await project_service.accept_invitation(5, 2)
+        mock_repository.update_response_status.assert_not_called()
+        mock_repository.add_participant.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_get_my_invitations_exposes_restriction_flag(self):
+        # given
+        mock_repository = Mock(spec=ProjectRepository)
+        mock_uow = Mock()
+        mock_session = AsyncMock()
+        mock_uow.session = mock_session
+        mock_repository.uow = mock_uow
+        invitation = self._make_pending_invitation(5, 2, 3)
+        invitation.project = Project(id=3, name="P", description="D", author_id=1, workspace_id=7)
+        mock_repository.get_invitations_by_invitee_id = AsyncMock(return_value=[invitation])
+        flags_result = Mock()
+        flags_result.all.return_value = [(7, False)]
+        mock_session.execute = AsyncMock(return_value=flags_result)
+
+        project_service = ProjectService(mock_repository)
+
+        # when
+        result = await project_service.get_my_invitations(2)
+
+        # then
+        assert result.total == 1
+        assert result.items[0].allow_multi_project_participation is False
