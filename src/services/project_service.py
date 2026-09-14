@@ -814,6 +814,7 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         ):
             raise ValidationError("Вы уже участвуете в другом проекте этого пространства")
         await self._project_repository.add_participant(response.project_id, user_id)
+        await self._project_repository.update_response_status(response_id, "in_team")
         if response.vacancy_id:
             await self._project_repository.decrement_vacancy_count(response.vacancy_id)
         # Остальные ожидающие отклики и приглашения пользователя в этом пространстве — «уже в команде»

@@ -762,6 +762,7 @@ class TestMultiProjectRestriction:
         )
         mock_repository.is_user_participant_in_other_project = AsyncMock(return_value=False)
         mock_repository.add_participant = AsyncMock()
+        mock_repository.update_response_status = AsyncMock(return_value=True)
         mock_repository.mark_sibling_pending_as_in_team = AsyncMock(return_value=2)
         mock_session.execute = AsyncMock(side_effect=[self._settings_result(False), self._settings_result(False)])
 
@@ -772,6 +773,7 @@ class TestMultiProjectRestriction:
 
         # then
         mock_repository.add_participant.assert_awaited_once_with(3, 2)
+        mock_repository.update_response_status.assert_awaited_once_with(1, "in_team")
         mock_repository.mark_sibling_pending_as_in_team.assert_awaited_once_with(2, 1, 7)
 
     @pytest.mark.asyncio
@@ -789,6 +791,7 @@ class TestMultiProjectRestriction:
             return_value=Project(id=3, name="P", author_id=1, workspace_id=7, max_participants=None)
         )
         mock_repository.add_participant = AsyncMock()
+        mock_repository.update_response_status = AsyncMock(return_value=True)
         mock_repository.mark_sibling_pending_as_in_team = AsyncMock()
         mock_session.execute = AsyncMock(side_effect=[self._settings_result(True), self._settings_result(True)])
 
@@ -799,6 +802,7 @@ class TestMultiProjectRestriction:
 
         # then
         mock_repository.add_participant.assert_awaited_once_with(3, 2)
+        mock_repository.update_response_status.assert_awaited_once_with(1, "in_team")
         mock_repository.mark_sibling_pending_as_in_team.assert_not_called()
 
     @pytest.mark.asyncio
