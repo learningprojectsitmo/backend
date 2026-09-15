@@ -82,3 +82,20 @@ class AdminOverview(BaseModel):
     active_sessions: int
     active_users: int
     recent_activity: list[AdminAuditItem]
+
+
+class AdminFixtureUserInfo(BaseModel):
+    """Краткая информация о созданном фикстурном пользователе"""
+
+    id: int
+    email: str
+    first_name: str
+    last_name: str | None = None
+    role_name: str
+
+
+class AdminFixtureUsersResponse(BaseModel):
+    """Результат триггера создания фикстурных пользователей"""
+
+    created: list[AdminFixtureUserInfo]
+    already_existed: list[str]

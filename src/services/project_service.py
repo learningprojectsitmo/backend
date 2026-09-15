@@ -51,14 +51,16 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
 
     @staticmethod
     def is_draft(project: Project) -> bool:
-        """Проект в режиме черновика: на первом этапе своего типа (или ещё не начат)."""
+        """Проект скрыт от участников: не начат либо текущий этап не виден участникам."""
         stages = (project.project_type.stages if project.project_type else []) or []
         if not stages:
             return False
         if project.current_stage_id is None:
             return True
-        first_stage = min(stages, key=lambda s: s.order)
-        return project.current_stage_id == first_stage.id
+        for s in stages:
+            if s.id == project.current_stage_id:
+                return not s.visible_to_participants
+        return True
 
     async def _visible_projects(self, projects: list[Project], viewer_id: int) -> list[Project]:
         """Скрыть черновики от всех, кроме автора и админа пространства."""
@@ -158,9 +160,7 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
                 resume_title=resume_title,
                 date=inv.created_at.isoformat() if inv.created_at else "",
                 status=inv.status,
-                allow_multi_project_participation=flags.get(
-                    inv.project.workspace_id if inv.project else None, True
-                ),
+                allow_multi_project_participation=flags.get(inv.project.workspace_id if inv.project else None, True),
             )
             for inv in invitations
         ]

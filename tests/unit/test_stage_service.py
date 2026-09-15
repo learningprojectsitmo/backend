@@ -12,8 +12,14 @@ from src.schema.project import ProjectFull
 from src.services.stage_service import ProjectStageService
 
 
-def _stage(id: int, order: int, requires_approval: bool = False) -> ProjectStage:
-    return ProjectStage(id=id, name=f"stage{id}", order=order, requires_approval=requires_approval)
+def _stage(id: int, order: int, requires_approval: bool = False, visible_to_participants: bool = True) -> ProjectStage:
+    return ProjectStage(
+        id=id,
+        name=f"stage{id}",
+        order=order,
+        requires_approval=requires_approval,
+        visible_to_participants=visible_to_participants,
+    )
 
 
 def _mock_project_fetch(session, project: Project | None) -> None:
@@ -231,7 +237,7 @@ class TestProjectStageService:
         assert result.stage_rejection is None
 
     @pytest.mark.asyncio
-    async def test_should_approve_current_stage(self):
+    async def test_should_approve_current_stage_and_advance_to_next(self):
         # given
         service, type_repo, transition_repo = self._make_service()
         project = self._project_with_stages(current_stage_id=2, pending=True)
@@ -247,10 +253,68 @@ class TestProjectStageService:
         # when
         result = await service.approve_stage(10, 200)
 
-        # then
+        # then — этап утверждён и проект автоматически перешёл на следующий
+        assert result.current_stage_id == 3  # noqa: PLR2004
         assert result.stage_pending_approval is False
-        kwargs = transition_repo.create_transition.await_args.kwargs
-        assert kwargs["action"] == "approve"
+        calls = transition_repo.create_transition.call_args_list
+        assert calls[0].kwargs["action"] == "approve"
+        assert calls[1].kwargs["action"] == "advance"
+        assert calls[1].kwargs["stage_id"] == 3  # noqa: PLR2004
+
+    @pytest.mark.asyncio
+    async def test_should_approve_final_stage_without_advance(self):
+        # given
+        service, type_repo, transition_repo = self._make_service()
+        project = self._project_with_stages(current_stage_id=3, pending=True)
+        type_repo.uow.session.flush = AsyncMock()
+
+        teacher = Mock()
+        teacher_role = Mock()
+        teacher_role.name = "teacher"
+        teacher.role = teacher_role
+        _mock_project_fetch(type_repo.uow.session, project)
+        _mock_teacher(type_repo.uow.session, teacher)
+
+        # when
+        result = await service.approve_stage(10, 200)
+
+        # then — последний этап утверждён, перехода нет
+        assert result.current_stage_id == 3  # noqa: PLR2004
+        assert result.stage_pending_approval is False
+        calls = transition_repo.create_transition.call_args_list
+        assert len(calls) == 1
+        assert calls[0].kwargs["action"] == "approve"
+
+    @pytest.mark.asyncio
+    async def test_should_mark_next_stage_pending_when_it_requires_approval(self):
+        # given — второй и третий этапы требуют утверждения
+        service, type_repo, transition_repo = self._make_service()
+        type_repo.uow.session.flush = AsyncMock()
+        ptype = ProjectType(id=1, name="Курсовая")
+        ptype.stages = [
+            _stage(1, 0),
+            _stage(2, 1, requires_approval=True),
+            _stage(3, 2, requires_approval=True),
+        ]
+        project = Project(id=10, name="Test", author_id=100, current_stage_id=2, stage_pending_approval=True)
+        project.project_type = ptype
+        _mock_project_fetch(type_repo.uow.session, project)
+
+        teacher = Mock()
+        teacher_role = Mock()
+        teacher_role.name = "teacher"
+        teacher.role = teacher_role
+        _mock_teacher(type_repo.uow.session, teacher)
+
+        # when
+        result = await service.approve_stage(10, 200)
+
+        # then — уже на следующем этапе и снова ожидает утверждения
+        assert result.current_stage_id == 3  # noqa: PLR2004
+        assert result.stage_pending_approval is True
+        calls = transition_repo.create_transition.call_args_list
+        assert calls[1].kwargs["action"] == "advance"
+        assert calls[1].kwargs["stage_id"] == 3  # noqa: PLR2004
 
     @pytest.mark.asyncio
     async def test_should_raise_when_project_type_missing(self):
@@ -384,7 +448,7 @@ class TestProjectTypeCRUDWorkspaceScoped:
         await service.add_stage(
             type_id=5,
             workspace_id=42,
-            data=Mock(name="Тема", order=0, requires_approval=False, duration_days=7),
+            data=Mock(name="Тема", order=0, requires_approval=False, duration_days=7, visible_to_participants=False),
             user_id=1,
         )
 
@@ -392,6 +456,35 @@ class TestProjectTypeCRUDWorkspaceScoped:
         type_id_arg, data_arg = type_repo.create_stage.await_args.args
         assert type_id_arg == 5  # noqa: PLR2004
         assert data_arg.duration_days == 7  # noqa: PLR2004
+        assert data_arg.visible_to_participants is False
+
+    @pytest.mark.asyncio
+    async def test_should_update_visible_to_participants(self):
+        # given
+        service, type_repo = self._make_service()
+        admin = self._global_admin()
+        await self._mock_session_user(type_repo, admin)
+        ptype = ProjectType(id=5, name="Курсовая", workspace_id=42)
+        ptype.stages = []
+        type_repo.get_by_id = AsyncMock(return_value=ptype)
+        type_repo.get_by_id_with_stages = AsyncMock(return_value=ptype)
+        type_repo.update_stage = AsyncMock(
+            return_value=ProjectStage(
+                id=19, name="Решение", order=1, requires_approval=False, duration_days=None, project_type_id=5
+            )
+        )
+
+        data = Mock()
+        data.name = "Решение"
+        data.visible_to_participants = False
+
+        # when
+        await service.update_stage(type_id=5, stage_id=19, workspace_id=None, data=data, user_id=1)
+
+        # then
+        stage_id_arg, data_arg = type_repo.update_stage.await_args.args
+        assert stage_id_arg == 19  # noqa: PLR2004
+        assert data_arg.visible_to_participants is False
 
     @pytest.mark.asyncio
     async def test_should_update_workspace_stage_without_workspace_id(self):
@@ -439,7 +532,11 @@ class TestProjectTypeCRUDWorkspaceScoped:
         # given
         service, type_repo = self._make_service()
         ptype = ProjectType(id=5, name="Курсовая")
-        ptype.stages = [ProjectStage(id=1, name="Тема", order=0, requires_approval=False, duration_days=10)]
+        ptype.stages = [
+            ProjectStage(
+                id=1, name="Тема", order=0, requires_approval=False, duration_days=10, visible_to_participants=True
+            )
+        ]
         type_repo.list_with_stages = AsyncMock(return_value=[ptype])
 
         # when
@@ -447,6 +544,7 @@ class TestProjectTypeCRUDWorkspaceScoped:
 
         # then
         assert types[0].stages[0].duration_days == 10  # noqa: PLR2004
+        assert types[0].stages[0].visible_to_participants is True
 
 
 class TestProjectStageDeadline:
@@ -482,8 +580,17 @@ class TestProjectStageDeadline:
         entered = datetime(2026, 9, 1, 12, 0, 0, tzinfo=tz)
         project = self._project(
             stages=[
-                ProjectStage(id=1, name="Тема", order=0, requires_approval=False, duration_days=10),
-                ProjectStage(id=2, name="Решение", order=1, requires_approval=False, duration_days=None),
+                ProjectStage(
+                    id=1, name="Тема", order=0, requires_approval=False, duration_days=10, visible_to_participants=True
+                ),
+                ProjectStage(
+                    id=2,
+                    name="Решение",
+                    order=1,
+                    requires_approval=False,
+                    duration_days=None,
+                    visible_to_participants=True,
+                ),
             ],
             entered=entered,
             created=entered,
@@ -502,7 +609,11 @@ class TestProjectStageDeadline:
         tz = ZoneInfo("UTC")
         created = datetime(2026, 9, 2, 9, 0, 0, tzinfo=tz)
         project = self._project(
-            stages=[ProjectStage(id=1, name="Тема", order=0, requires_approval=False, duration_days=5)],
+            stages=[
+                ProjectStage(
+                    id=1, name="Тема", order=0, requires_approval=False, duration_days=5, visible_to_participants=True
+                )
+            ],
             entered=None,
             created=created,
         )

@@ -2,12 +2,20 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query
 
-from src.core.container import get_admin_service, get_session_service
+from src.core.container import get_admin_service, get_fixtures_service, get_session_service
 from src.core.dependencies import admin_required
 from src.model.user import User
-from src.schema.admin import AdminAuditListResponse, AdminOverview, AdminSessionsResponse, AdminSessionStats
+from src.schema.admin import (
+    AdminAuditListResponse,
+    AdminFixtureUserInfo,
+    AdminFixtureUsersResponse,
+    AdminOverview,
+    AdminSessionsResponse,
+    AdminSessionStats,
+)
 from src.schema.session import SessionTerminateRequest, SessionTerminateResponse
 from src.services.admin_service import AdminService
+from src.services.fixtures_service import FIXTURE_USERS, FixtureService
 from src.services.session_service import SessionService
 
 admin_router = APIRouter(prefix="/admin", tags=["admin"])
@@ -62,3 +70,29 @@ async def get_admin_audit_logs(
 ) -> AdminAuditListResponse:
     """Audit логи всех пользователей"""
     return await admin_service.get_all_audit_logs(page=page, limit=limit)
+
+
+@admin_router.post("/fixtures/users", response_model=AdminFixtureUsersResponse)
+async def create_fixture_users(
+    fixtures_service: FixtureService = Depends(get_fixtures_service),
+    _current_user: User = Depends(admin_required),
+) -> AdminFixtureUsersResponse:
+    """Создать фикстурных (демо) пользователей по ролям
+
+    Идемпотентно: повторный вызов не создаёт дубликаты.
+    """
+    created_users, already_existed = await fixtures_service.create_fixture_users()
+    role_lookup = {ud["email"]: ud["role_name"] for ud in FIXTURE_USERS}
+
+    created_items = [
+        AdminFixtureUserInfo(
+            id=user.id,
+            email=user.email,
+            first_name=user.first_name,
+            last_name=user.last_name,
+            role_name=role_lookup.get(user.email, ""),
+        )
+        for user in created_users
+    ]
+
+    return AdminFixtureUsersResponse(created=created_items, already_existed=already_existed)

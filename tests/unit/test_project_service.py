@@ -35,10 +35,10 @@ class TestProjectService:
 
     @staticmethod
     def _make_type_with_stages() -> ProjectType:
-        """Проектный тип с двумя этапами (первый — черновик)"""
+        """Проектный тип с двумя этапами (первый — скрыт от участников)"""
         project_type = ProjectType(id=1, name="Type")
-        first = ProjectStage(id=11, name="Initial", order=0, project_type_id=1)
-        second = ProjectStage(id=12, name="Development", order=1, project_type_id=1)
+        first = ProjectStage(id=11, name="Initial", order=0, project_type_id=1, visible_to_participants=False)
+        second = ProjectStage(id=12, name="Development", order=1, project_type_id=1, visible_to_participants=True)
         project_type.stages = [first, second]
         return project_type
 
@@ -254,6 +254,47 @@ class TestProjectService:
         # then
         assert len(result.items) == 1
         assert result.items[0].id == 1
+
+    @pytest.mark.asyncio
+    async def test_should_show_first_stage_project_when_visible_to_participants(self):
+        # given — первый этап помечен как видимый участникам
+        mock_repository = self._setup_mock_repo()
+        project_type = ProjectType(id=1, name="Type")
+        project_type.stages = [
+            ProjectStage(id=11, name="Initial", order=0, project_type_id=1, visible_to_participants=True),
+        ]
+        visible = Project(id=1, name="Visible", author_id=5, current_stage_id=11, project_type=project_type)
+        mock_repository.get_projects_by_participant_id.return_value = [visible]
+
+        project_service = ProjectService(mock_repository)
+
+        # when
+        result = await project_service.get_my_projects(user_id=1)
+
+        # then
+        assert len(result.items) == 1
+        assert result.items[0].id == 1
+
+    @pytest.mark.asyncio
+    async def test_should_hide_second_stage_project_when_hidden_from_participants(self):
+        # given — второй (не первый) этап скрыт от участников
+        mock_repository = self._setup_mock_repo()
+        project_type = ProjectType(id=1, name="Type")
+        project_type.stages = [
+            ProjectStage(id=11, name="Initial", order=0, project_type_id=1, visible_to_participants=True),
+            ProjectStage(id=12, name="Hidden", order=1, project_type_id=1, visible_to_participants=False),
+        ]
+        hidden = Project(id=1, name="Hidden", author_id=5, current_stage_id=12, project_type=project_type)
+        mock_repository.get_projects_by_participant_id.return_value = [hidden]
+
+        project_service = ProjectService(mock_repository)
+
+        # when
+        result = await project_service.get_my_projects(user_id=1)
+
+        # then
+        assert result.items == []
+        assert result.total == 0
 
     @pytest.mark.asyncio
     async def test_should_filter_drafts_in_paginated_list(self):
@@ -754,9 +795,7 @@ class TestMultiProjectRestriction:
         mock_session = AsyncMock()
         mock_uow.session = mock_session
         mock_repository.uow = mock_uow
-        mock_repository.get_response_by_id = AsyncMock(
-            return_value=self._make_accepted_response(1, 2, 3)
-        )
+        mock_repository.get_response_by_id = AsyncMock(return_value=self._make_accepted_response(1, 2, 3))
         mock_repository.get_by_id = AsyncMock(
             return_value=Project(id=3, name="P", author_id=1, workspace_id=7, max_participants=None)
         )
@@ -784,9 +823,7 @@ class TestMultiProjectRestriction:
         mock_session = AsyncMock()
         mock_uow.session = mock_session
         mock_repository.uow = mock_uow
-        mock_repository.get_response_by_id = AsyncMock(
-            return_value=self._make_accepted_response(1, 2, 3)
-        )
+        mock_repository.get_response_by_id = AsyncMock(return_value=self._make_accepted_response(1, 2, 3))
         mock_repository.get_by_id = AsyncMock(
             return_value=Project(id=3, name="P", author_id=1, workspace_id=7, max_participants=None)
         )
@@ -837,9 +874,7 @@ class TestMultiProjectRestriction:
         mock_session = AsyncMock()
         mock_uow.session = mock_session
         mock_repository.uow = mock_uow
-        mock_repository.get_response_by_id = AsyncMock(
-            return_value=self._make_pending_invitation(5, 2, 3)
-        )
+        mock_repository.get_response_by_id = AsyncMock(return_value=self._make_pending_invitation(5, 2, 3))
         mock_repository.get_by_id = AsyncMock(
             return_value=Project(id=3, name="P", author_id=1, workspace_id=7, max_participants=None)
         )

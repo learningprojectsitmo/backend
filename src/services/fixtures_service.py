@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from sqlalchemy import select
 from sqlalchemy.orm import aliased
 
@@ -12,6 +14,143 @@ from src.services.permission_service import PermissionService
 from src.services.role_service import RoleService
 from src.services.user_service import UserService
 from src.services.workspace_service import WorkSpaceService
+
+# ─── Демо-пользователи, создаваемые через API-триггер ─────────────────────
+
+FIXTURE_USERS: list[dict[str, Any]] = [
+    {
+        "email": "teacher@example.com",
+        "first_name": "Анна",
+        "middle_name": "Сергеевна",
+        "last_name": "Иванова",
+        "password": "teacher_password",
+        "role_name": "teacher",
+        "tg_nickname": "@teacher_tg",
+        "vk_nickname": "@teacher_vk",
+        "phone": "+7 (999) 111-22-33",
+    },
+    {
+        "email": "teacher1@example.com",
+        "first_name": "Анна",
+        "middle_name": "Сергеевна",
+        "last_name": "Иванова",
+        "password": "teacher_password",
+        "role_name": "teacher",
+        "tg_nickname": "@teacher_tg",
+        "vk_nickname": "@teacher_vk",
+        "phone": "+7 (999) 111-22-33",
+    },
+    {
+        "email": "teacher2@example.com",
+        "first_name": "Анна",
+        "middle_name": "Сергеевна",
+        "last_name": "Иванова",
+        "password": "teacher_password",
+        "role_name": "teacher",
+        "tg_nickname": "@teacher_tg",
+        "vk_nickname": "@teacher_vk",
+        "phone": "+7 (999) 111-22-33",
+    },
+        {
+        "email": "teacher3@example.com",
+        "first_name": "Анна",
+        "middle_name": "Сергеевна",
+        "last_name": "Иванова",
+        "password": "teacher_password",
+        "role_name": "teacher",
+        "tg_nickname": "@teacher_tg",
+        "vk_nickname": "@teacher_vk",
+        "phone": "+7 (999) 111-22-33",
+    },
+    {
+        "email": "member@example.com",
+        "first_name": "Пётр",
+        "middle_name": "Алексеевич",
+        "last_name": "Петров",
+        "password": "member_password",
+        "role_name": "member",
+        "tg_nickname": "@member_tg",
+        "vk_nickname": "@member_vk",
+        "phone": "+7 (999) 222-33-44",
+    },
+     {
+            "email": "member1@example.com",
+            "first_name": "Пётр",
+            "middle_name": "Алексеевич",
+            "last_name": "Петров",
+            "password": "member_password",
+            "role_name": "member",
+            "tg_nickname": "@member_tg",
+            "vk_nickname": "@member_vk",
+            "phone": "+7 (999) 222-33-44",
+        },
+         {
+                "email": "member2@example.com",
+                "first_name": "Пётр",
+                "middle_name": "Алексеевич",
+                "last_name": "Петров",
+                "password": "member_password",
+                "role_name": "member",
+                "tg_nickname": "@member_tg",
+                "vk_nickname": "@member_vk",
+                "phone": "+7 (999) 222-33-44",
+            },
+             {
+                    "email": "member3@example.com",
+                    "first_name": "Пётр",
+                    "middle_name": "Алексеевич",
+                    "last_name": "Петров",
+                    "password": "member_password",
+                    "role_name": "member",
+                    "tg_nickname": "@member_tg",
+                    "vk_nickname": "@member_vk",
+                    "phone": "+7 (999) 222-33-44",
+                },
+    {
+        "email": "ye",
+        "first_name": "Мария",
+        "middle_name": "Ивановна",
+        "last_name": "Сидорова",
+        "password": "manager_password",
+        "role_name": "manager",
+        "tg_nickname": "@manager_tg",
+        "vk_nickname": "@manager_vk",
+        "phone": "+7 (999) 333-44-55",
+    },
+    {
+            "email": "manager1@example.com",
+            "first_name": "Мария",
+            "middle_name": "Ивановна",
+            "last_name": "Сидорова",
+            "password": "manager_password",
+            "role_name": "manager",
+            "tg_nickname": "@manager_tg",
+            "vk_nickname": "@manager_vk",
+            "phone": "+7 (999) 333-44-55",
+        },
+        {
+                "email": "manager2@example.com",
+                "first_name": "Мария",
+                "middle_name": "Ивановна",
+                "last_name": "Сидорова",
+                "password": "manager_password",
+                "role_name": "manager",
+                "tg_nickname": "@manager_tg",
+                "vk_nickname": "@manager_vk",
+                "phone": "+7 (999) 333-44-55",
+            },
+            {
+                    "email": "manager3@example.com",
+                    "first_name": "Мария",
+                    "middle_name": "Ивановна",
+                    "last_name": "Сидорова",
+                    "password": "manager_password",
+                    "role_name": "manager",
+                    "tg_nickname": "@manager_tg",
+                    "vk_nickname": "@manager_vk",
+                    "phone": "+7 (999) 333-44-55",
+                },
+]
 
 
 class FixtureService:
@@ -195,29 +334,62 @@ class FixtureService:
             role_manager.id, PermissionMatrix(permissions_matrix=manager_matrix)
         )
 
+    # ─── helpers ─────────────────────────────────────────────────────────────
+
+    async def _get_role_id(self, role_name: str) -> int:
+        """Вернуть id роли по имени; выбрасывает ошибку, если роль не найдена."""
+        role_repo = self._role_service._repository
+        role = await role_repo.get_by_name(role_name)
+        if not role:
+            raise ValueError(f"Role '{role_name}' is not seeded")
+        return role.id
+
+    async def _create_user_if_missing(self, **fields: Any) -> User | None:
+        """Создать пользователя, если email ещё не занят. Возвращает User или None."""
+        existing = await self._user_service.get_user_by_email(fields["email"])
+        if existing:
+            return None
+
+        role_name = fields.pop("role_name")
+        role_id = await self._get_role_id(role_name)
+        return await self._user_service.create(UserCreate(role_id=role_id, **fields))
+
     # ─── admin user ────────────────────────────────────────────────────────
 
     async def _seed_users(self) -> None:
-        role_repo = self._role_service._repository
-        role_admin = await role_repo.get_by_name("admin")
-
-        existing = await self._user_service.get_user_by_email("admin@example.com")
-        if existing:
-            return
-
-        await self._user_service.create(
-            UserCreate(
-                email="admin@example.com",
-                first_name="Admin",
-                middle_name="",
-                last_name="User",
-                password="admin_password",
-                role_id=role_admin.id,
-                tg_nickname="@admin_tg",
-                vk_nickname="@admin_vk",
-                phone="+7 (999) 123-45-67",
-            )
+        await self._create_user_if_missing(
+            email="admin@example.com",
+            first_name="Admin",
+            middle_name="",
+            last_name="User",
+            password="admin_password",
+            role_name="admin",
+            tg_nickname="@admin_tg",
+            vk_nickname="@admin_vk",
+            phone="+7 (999) 123-45-67",
         )
+
+    # ─── fixture users (API trigger) ──────────────────────────────────────
+
+    async def create_fixture_users(self) -> tuple[list[User], list[str]]:
+        """Создать демо-пользователей по ролям.
+
+        Возвращает (created, already_existed_emails).
+        Идемпотентно: повторный вызов не создаёт дубликаты.
+        """
+        created: list[User] = []
+        already_existed: list[str] = []
+
+        for user_data in FIXTURE_USERS:
+            result = await self._create_user_if_missing(**dict(user_data))
+            if result:
+                created.append(result)
+            else:
+                already_existed.append(user_data["email"])
+
+        role_repo = self._role_service._repository
+        role_repo.uow.commit()
+        return created, already_existed
 
     # ─── персинхронизация ролей в пространствах ────────────────────────────
 

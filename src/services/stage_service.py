@@ -108,6 +108,7 @@ class ProjectStageService(BaseService[Project, dict, dict]):
             name=s.name,
             order=s.order,
             requires_approval=s.requires_approval,
+            visible_to_participants=s.visible_to_participants,
             is_current=False,
             duration_days=s.duration_days,
         )
@@ -289,9 +290,7 @@ class ProjectStageService(BaseService[Project, dict, dict]):
                 user_ids.add(workspace.author_id)
         else:
             result = await self._type_repository.uow.session.execute(
-                select(User.id)
-                .join(Role, Role.id == User.role_id)
-                .where(Role.name.in_(("teacher", "admin")))
+                select(User.id).join(Role, Role.id == User.role_id).where(Role.name.in_(("teacher", "admin")))
             )
             user_ids.update(result.scalars().all())
         user_ids.discard(project.author_id)
@@ -333,7 +332,7 @@ class ProjectStageService(BaseService[Project, dict, dict]):
         return project
 
     async def approve_stage(self, project_id: int, user_id: int) -> Project:
-        """Преподаватель утверждает текущий этап."""
+        """Преподаватель утверждает текущий этап и автоматически переходит на следующий."""
         project = await self._get_project(project_id)
         if not project:
             raise NotFoundError("Project not found")
@@ -352,7 +351,15 @@ class ProjectStageService(BaseService[Project, dict, dict]):
             action="approve",
         )
         project.stage_pending_approval = False
-        project.progress = self._compute_progress(project, await self._get_ordered_stages(project))
+        stages = await self._get_ordered_stages(project)
+        project.progress = self._compute_progress(project, stages)
+        current_id = project.current_stage_id
+        current_order = next((i for i, s in enumerate(stages) if s.id == current_id), None)
+        # Если текущий этап не последний — автоматически переходим на следующий.
+        # Если следующий требует утверждения — он сразу становится ожидающим подтверждения.
+        if current_order is not None and current_order < len(stages) - 1:
+            return await self._apply_advance(project, stages[current_order], stages[current_order + 1], user_id)
+
         await self._type_repository.uow.session.flush()
         return project
 
