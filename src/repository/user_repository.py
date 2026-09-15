@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from pydantic import BaseModel
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import selectinload
 
 from src.core.uow import IUnitOfWork
@@ -34,9 +36,16 @@ class UserRepository(BaseRepository[User, UserCreateHashedPwd, UserUpdate]):
         )
         return list(result.scalars().all())
 
-    async def get_by_email(self, email: str) -> User | None:
+    async def get_multi_with_role(self, skip: int = 0, limit: int = 100) -> Sequence[User]:
         result = await self.uow.session.execute(
-            select(User).where(User.email == email).options(selectinload(User.role)),
+            select(User).options(selectinload(User.role)).offset(skip).limit(limit),
+        )
+        return list(result.scalars().all())
+
+    async def get_by_email(self, email: str) -> User | None:
+        email = (email or "").strip().lower()
+        result = await self.uow.session.execute(
+            select(User).where(func.lower(User.email) == email).options(selectinload(User.role)),
         )
         return result.scalar_one_or_none()
 
@@ -47,8 +56,9 @@ class NewUserRepository(BaseRepository[NewUser, NewUserCreate, NewUserUpdate]):
         self._model = NewUser
 
     async def get_by_email(self, email: str) -> NewUser | None:
+        email = (email or "").strip().lower()
         result = await self.uow.session.execute(
-            select(NewUser).where(NewUser.email == email),
+            select(NewUser).where(func.lower(NewUser.email) == email),
         )
         return result.scalar_one_or_none()
 

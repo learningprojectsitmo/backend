@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_BACKEND_DIR = Path(__file__).resolve().parent.parent.parent
 
 
 class Settings(BaseSettings):
@@ -21,6 +25,15 @@ class Settings(BaseSettings):
 
     # CORS - исправленные настройки для Docker
     FRONTEND_URL: str = "http://localhost:3000"
+
+    # SMTP (maildev: web UI http://localhost:9000, SMTP localhost:2500)
+    MAIL_SMTP_HOST: str = "localhost"
+    MAIL_SMTP_PORT: int = 2500
+    MAIL_SMTP_USER: str | None = None
+    MAIL_SMTP_PASSWORD: str | None = None
+    MAIL_FROM: str = "maildev@localhost"
+    MAIL_FROM_NAME: str = "FPIN Projects"
+    MAIL_TLS: bool = False
 
     CORS_ORIGINS: list = [
         "http://localhost:3000",
@@ -45,7 +58,11 @@ class Settings(BaseSettings):
     ENABLE_FILE_LOGGING: bool = True
     ENABLE_CONSOLE_LOGGING: bool = True
 
-    model_config = SettingsConfigDict(env_file="../.env", extra="ignore")
+    # Sentry / GlitchTip
+    SENTRY_DSN: str | None = None
+    SENTRY_TRACES_SAMPLE_RATE: float = 1.0
+
+    model_config = SettingsConfigDict(env_file=_BACKEND_DIR / ".env", extra="ignore")
 
 
 settings = Settings()

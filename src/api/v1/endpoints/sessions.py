@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from src.core.container import get_session_service
-from src.core.dependencies import get_current_user
+from src.core.dependencies import get_current_user, permission_required
 from src.core.logging_config import api_logger
 from src.model.user import User
 from src.schema.session import (
@@ -182,11 +182,19 @@ async def terminate_sessions(
     current_user: Annotated[User, Depends(get_current_user)],
     session_service: SessionService = Depends(get_session_service),
 ) -> SessionTerminateResponse:
-    """Завершить сессии"""
+    """Завершить свои сессии"""
     client_ip = request.client.host if request.client else "unknown"
     user_agent = request.headers.get("user-agent", "")
 
+    async def _check_session_ownership() -> None:
+        for session_id in terminate_request.session_ids:
+            session = await session_service.get_session_by_id(session_id)
+            if session.user_id != current_user.id:
+                raise HTTPException(status_code=404, detail="Session not found")
+
     try:
+        # Завершать можно только свои сессии
+        await _check_session_ownership()
         result = await session_service.terminate_sessions(terminate_request)
     except Exception as e:
         api_logger.log_error(method="POST", path="/sessions/terminate", error=e, user_id=current_user.id)
@@ -278,7 +286,7 @@ async def validate_session(
 @sessions_router.post("/cleanup")
 async def cleanup_expired_sessions(
     request: Request,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(permission_required("session:delete"))],
     session_service: SessionService = Depends(get_session_service),
 ) -> dict[str, int]:
     """Очистить истекшие сессии (административная функция)"""

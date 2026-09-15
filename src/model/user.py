@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from src.model.ideas import Idea
     from src.model.kanban_models import Task
     from src.model.language import Language
+    from src.model.notification import Notification
     from src.model.portfolio import Portfolio
     from src.model.workspace import WorkSpaceParticipation
 from src.model.project import Project, ProjectParticipation, Response
@@ -33,6 +34,7 @@ class User(Base):
     tg_nickname: Mapped[str | None] = mapped_column(String(40), nullable=True)
     phone: Mapped[str | None] = mapped_column(String(20), nullable=True)
     vk_nickname: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    show_my_contacts: Mapped[bool] = mapped_column(default=False, nullable=False)
 
     password_hashed: Mapped[str] = mapped_column(String, nullable=False)
     role_id: Mapped[int] = mapped_column(ForeignKey("role.id"), nullable=False)
@@ -81,6 +83,13 @@ class User(Base):
         back_populates="author",
         cascade="all, delete-orphan",
     )
+    notifications: Mapped[list[Notification]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    lang: Mapped[str] = mapped_column(String(10), nullable=False, server_default="ru")
+    push_token: Mapped[str | None] = mapped_column(String(255), nullable=True, comment="FCM/APNs push token for mobile")
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
@@ -116,6 +125,7 @@ class Role(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(30), nullable=False, unique=True)
+    description: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
     users: Mapped[list[User]] = relationship(back_populates="role")
 

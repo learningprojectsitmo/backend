@@ -6,6 +6,7 @@ from src.model.education import Education
 from src.model.ideas import Idea, IdeaComment, IdeaTag, IdeaVote
 from src.model.kanban_models import Column, Subtask, Task, TaskAssignee, TaskHistory
 from src.model.language import Language
+from src.model.notification import Notification, NotificationType
 from src.model.portfolio import Portfolio
 from src.model.project import Project, ProjectParticipation, ProjectStatus, ProjectVacancy, Response, Tag
 from src.model.resume import (
@@ -32,6 +33,8 @@ __all__ = [
     "IdeaVote",
     "Language",
     "NewUser",
+    "Notification",
+    "NotificationType",
     "PasswordReset",
     "Permission",
     "Portfolio",

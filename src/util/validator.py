@@ -4,6 +4,58 @@ import re
 from typing import Any, ClassVar
 
 
+class NameValidator:
+    """Валидатор ФИО.
+
+    Разрешает и кириллицу, и латиницу (а также дефис, апостроф, точку и пробел),
+    чтобы поддерживать иностранные имена (напр. "Jean-Luc", "O'Brien", "Анна-Мария").
+    Запрещает цифры и прочие символы.
+    """
+
+    # Первый символ — буква любого алфавита; далее буквы, дефис, апостроф, точка.
+    TOKEN_PATTERN: ClassVar[re.Pattern] = re.compile(r"^[^\W\d_](?:[^\W\d_]|['\-\.])*$", re.UNICODE)
+
+    @classmethod
+    def _clean(cls, value: Any | None) -> str | None:
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            raise TypeError("Имя должно быть строкой")
+        cleaned = value.strip()
+        return cleaned if cleaned else None
+
+    @classmethod
+    def _validate(cls, value: str, field: str) -> str:
+        if any(ch.isdigit() for ch in value):
+            raise ValueError(f"{field} не может содержать цифры")
+
+        if re.search(r"\s{2,}", value):
+            raise ValueError(f"{field} не должно содержать двойных пробелов")
+
+        for token in value.split():
+            if not cls.TOKEN_PATTERN.match(token):
+                raise ValueError(
+                    f"{field} может содержать только буквы, дефис, апостроф и точку. Ошибка в части «{token}»"
+                )
+        return value
+
+    @classmethod
+    def validate_name(cls, value: Any | None, field: str = "Имя") -> str:
+        """Валидатор обязательного поля ФИО."""
+        cleaned = cls._clean(value)
+        if cleaned is None:
+            raise ValueError(f"{field} обязательно для заполнения")
+        return cls._validate(cleaned, field)
+
+    @classmethod
+    def validate_name_optional(cls, value: Any | None, field: str = "Отчество") -> str | None:
+        """Валидатор необязательного поля ФИО (отчество)."""
+        cleaned = cls._clean(value)
+        if cleaned is None:
+            return None
+        return cls._validate(cleaned, field)
+
+
 class TelegramValidator:
     """Валидатор для Telegram nickname"""
 

@@ -66,6 +66,14 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
         if not has_access:
             raise PermissionError(f"User {user_id} has no access to project {project_id}")
 
+    async def _validate_assignees_are_members(self, project_id: int, assignee_ids: list[int] | None) -> None:
+        """Ответственные за задачу должны быть участниками проекта (команды)."""
+        if not assignee_ids:
+            return
+        for assignee_id in assignee_ids:
+            if not await self._project_repository.is_user_in_project(project_id, assignee_id):
+                raise ValidationError(f"User {assignee_id} is not a member of project {project_id}")
+
     #   === Метод для проектов ===
 
     async def get_board(self, project_id: int) -> ProjectBoardResponse:
@@ -166,6 +174,9 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
         if not column:
             raise NotFoundError(f"Column with id {task_data.column_id} not found")
 
+        await self._check_project_access(column.project_id, current_user_id)
+        await self._validate_assignees_are_members(column.project_id, getattr(task_data, "assignee_ids", None))
+
         task = await self._kanban_task_repository.create(task_data, current_user_id)
 
         # TODO: Отправить уведомления
@@ -179,12 +190,18 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
         if not task:
             raise NotFoundError(f"Task with id {task_id} not found")
 
+        column = await self._kanban_column_repository.get_by_id(task.column_id)
+        if not column:
+            raise NotFoundError(f"Column with id {task.column_id} not found")
+        await self._check_project_access(column.project_id, current_user_id)
+
         if task_data.column_id is not None and task_data.column_id != task.column_id:
             new_column = await self._kanban_column_repository.get_by_id(task_data.column_id)
             if not new_column:
                 raise NotFoundError(f"Column with id {task_data.column_id} not found")
 
         if task_data.assignee_ids:
+            await self._validate_assignees_are_members(column.project_id, task_data.assignee_ids)
             users = await self._user_repository.get_multi_by_ids(task_data.assignee_ids)
             found_ids = {u.id for u in users}
             missing = [uid for uid in task_data.assignee_ids if uid not in found_ids]
@@ -205,6 +222,11 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
         task = await self._kanban_task_repository.get_by_id(task_id)
         if not task:
             raise NotFoundError(f"Task with id {task_id} not found")
+
+        column = await self._kanban_column_repository.get_by_id(task.column_id)
+        if not column:
+            raise NotFoundError(f"Column with id {task.column_id} not found")
+        await self._check_project_access(column.project_id, current_user_id)
 
         target_column = await self._kanban_column_repository.get_by_id_with_for_update(move_data.column_id)
         if not target_column:
@@ -231,6 +253,11 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
         task = await self._kanban_task_repository.get_by_id(task_id)
         if not task:
             raise NotFoundError(f"Task with id {task_id} not found")
+
+        column = await self._kanban_column_repository.get_by_id(task.column_id)
+        if not column:
+            raise NotFoundError(f"Column with id {task.column_id} not found")
+        await self._check_project_access(column.project_id, current_user_id)
 
         result = await self._kanban_task_repository.delete(task_id)
 
@@ -275,6 +302,11 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
         if not task:
             raise NotFoundError(f"Task with id {subtask_data.task_id} not found")
 
+        column = await self._kanban_column_repository.get_by_id(task.column_id)
+        if not column:
+            raise NotFoundError(f"Column with id {task.column_id} not found")
+        await self._check_project_access(column.project_id, current_user_id)
+
         current_subtasks = await self._kanban_subtask_repository.get_subtasks_by_task(subtask_data.task_id)
         if len(current_subtasks) >= MAX_SUBTASKS_PER_TASK:
             raise ValidationError(
@@ -297,6 +329,14 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
         if not subtask:
             raise NotFoundError(f"Subtask with id {subtask_id} not found")
 
+        task = await self._kanban_task_repository.get_by_id(subtask.task_id)
+        if not task:
+            raise NotFoundError(f"Task with id {subtask.task_id} not found")
+        column = await self._kanban_column_repository.get_by_id(task.column_id)
+        if not column:
+            raise NotFoundError(f"Column with id {task.column_id} not found")
+        await self._check_project_access(column.project_id, current_user_id)
+
         updated_subtask = await self._kanban_subtask_repository.update(subtask_id, subtask_data)
         if not updated_subtask:
             raise NotFoundError(f"Subtask with id {subtask_id} not found")
@@ -311,6 +351,14 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
         subtask = await self._kanban_subtask_repository.get_by_id(subtask_id)
         if not subtask:
             raise NotFoundError(f"Subtask with id {subtask_id} not found")
+
+        task = await self._kanban_task_repository.get_by_id(subtask.task_id)
+        if not task:
+            raise NotFoundError(f"Task with id {subtask.task_id} not found")
+        column = await self._kanban_column_repository.get_by_id(task.column_id)
+        if not column:
+            raise NotFoundError(f"Column with id {task.column_id} not found")
+        await self._check_project_access(column.project_id, current_user_id)
 
         updated_subtask = await self._kanban_subtask_repository.update(
             subtask_id, SubtaskUpdate(is_completed=not subtask.is_completed)
@@ -329,6 +377,14 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
         subtask = await self._kanban_subtask_repository.get_by_id(subtask_id)
         if not subtask:
             raise NotFoundError(f"Subtask with id {subtask_id} not found")
+
+        task = await self._kanban_task_repository.get_by_id(subtask.task_id)
+        if not task:
+            raise NotFoundError(f"Task with id {subtask.task_id} not found")
+        column = await self._kanban_column_repository.get_by_id(task.column_id)
+        if not column:
+            raise NotFoundError(f"Column with id {task.column_id} not found")
+        await self._check_project_access(column.project_id, current_user_id)
 
         result = await self._kanban_subtask_repository.delete(subtask_id)
 

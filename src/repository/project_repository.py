@@ -1,10 +1,20 @@
 from __future__ import annotations
 
-from sqlalchemy import func, select
+from datetime import datetime
+
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import selectinload
 
 from src.core.uow import IUnitOfWork
-from src.model.project import Project, ProjectParticipation, Response, Tag
+from src.model.project import (
+    Project,
+    ProjectParticipation,
+    ProjectType,
+    ProjectVacancy,
+    Response,
+    StageTransition,
+    Tag,
+)
 from src.repository.base_repository import BaseRepository
 from src.schema.project import ProjectCreate, ProjectUpdate
 
@@ -19,10 +29,20 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
             select(Project)
             .where(Project.id == id)
             .options(
+                selectinload(Project.author),
                 selectinload(Project.participants).selectinload(ProjectParticipation.participant),
                 selectinload(Project.tags),
                 selectinload(Project.status),
                 selectinload(Project.vacancies),
+                selectinload(Project.responses).selectinload(Response.vacancy),
+                selectinload(Project.responses).selectinload(Response.respondent),
+                selectinload(Project.responses).selectinload(Response.inviter),
+                selectinload(Project.responses).selectinload(Response.resume),
+                selectinload(Project.project_type).selectinload(ProjectType.stages),
+                selectinload(Project.current_stage),
+                selectinload(Project.stage_transitions).selectinload(StageTransition.stage),
+                selectinload(Project.stage_transitions).selectinload(StageTransition.from_stage),
+                selectinload(Project.stage_transitions).selectinload(StageTransition.actor),
             )
         )
         result = await self.uow.session.execute(query)
@@ -32,7 +52,7 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         result = await self.uow.session.execute(
             select(ProjectParticipation).where(
                 ProjectParticipation.project_id == project_id,
-                ProjectParticipation.user_id == user_id,
+                ProjectParticipation.participant_id == user_id,
             ),
         )
         return result.scalar_one_or_none() is not None
@@ -56,6 +76,7 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
             select(Project)
             .where(Project.id.in_(project_ids))
             .options(
+                selectinload(Project.project_type).selectinload(ProjectType.stages),
                 selectinload(Project.participants).selectinload(ProjectParticipation.participant),
                 selectinload(Project.tags),
                 selectinload(Project.status),
@@ -71,6 +92,7 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
             select(Project)
             .where(Project.id.in_(subquery))
             .options(
+                selectinload(Project.project_type).selectinload(ProjectType.stages),
                 selectinload(Project.participants).selectinload(ProjectParticipation.participant),
                 selectinload(Project.tags),
                 selectinload(Project.status),
@@ -117,11 +139,21 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         result = await self.uow.session.execute(query)
         return list(result.scalars().all())
 
+    async def count_invitations_by_user_id(self, user_id: int) -> int:
+        result = await self.uow.session.execute(
+            select(func.count())
+            .select_from(Response)
+            .where(Response.respondent_id == user_id, Response.type == "invitation"),
+        )
+        return result.scalar() or 0
+
     async def get_projects_by_workspace(self, workspace_id: int, skip: int = 0, limit: int = 100) -> list[Project]:
         query = (
             select(Project)
             .where(Project.workspace_id == workspace_id)
             .options(
+                selectinload(Project.project_type).selectinload(ProjectType.stages),
+                selectinload(Project.current_stage),
                 selectinload(Project.participants).selectinload(ProjectParticipation.participant),
                 selectinload(Project.tags),
                 selectinload(Project.status),
@@ -131,6 +163,16 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         )
         result = await self.uow.session.execute(query)
         return list(result.scalars().all())
+
+    async def update_deadline_by_workspace(self, workspace_id: int, deadline: datetime | None) -> None:
+        """Обновить дедлайн всех проектов пространства (ретроактивно)."""
+        stmt = (
+            update(Project)
+            .where(Project.workspace_id == workspace_id)
+            .values(deadline=deadline)
+            .execution_options(synchronize_session="fetch")
+        )
+        await self.uow.session.execute(stmt)
 
     async def count_by_workspace(self, workspace_id: int) -> int:
         result = await self.uow.session.execute(
@@ -142,6 +184,8 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         query = (
             select(Project)
             .options(
+                selectinload(Project.project_type).selectinload(ProjectType.stages),
+                selectinload(Project.current_stage),
                 selectinload(Project.participants).selectinload(ProjectParticipation.participant),
                 selectinload(Project.tags),
                 selectinload(Project.status),
@@ -186,3 +230,125 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
 
         await self.uow.session.flush()
         return tags
+
+    async def has_pending_response(self, project_id: int, user_id: int) -> bool:
+        result = await self.uow.session.execute(
+            select(Response).where(
+                Response.project_id == project_id,
+                Response.respondent_id == user_id,
+                Response.status == "pending",
+            ),
+        )
+        return result.scalar_one_or_none() is not None
+
+    async def has_pending_invitation(self, project_id: int, user_id: int) -> bool:
+        result = await self.uow.session.execute(
+            select(Response).where(
+                Response.project_id == project_id,
+                Response.respondent_id == user_id,
+                Response.type == "invitation",
+                Response.status == "pending",
+            ),
+        )
+        return result.scalar_one_or_none() is not None
+
+    async def create_response(
+        self,
+        respondent_id: int,
+        project_id: int,
+        vacancy_id: int | None = None,
+        type: str = "response",
+        inviter_id: int | None = None,
+        note: str | None = None,
+        resume_id: int | None = None,
+    ) -> Response:
+        response = Response(
+            respondent_id=respondent_id,
+            project_id=project_id,
+            vacancy_id=vacancy_id,
+            type=type,
+            inviter_id=inviter_id,
+            note=note,
+            resume_id=resume_id,
+        )
+        self.uow.session.add(response)
+        await self.uow.session.flush()
+        await self.uow.session.refresh(response, ["vacancy"])
+        return response
+
+    async def decrement_vacancy_count(self, vacancy_id: int) -> None:
+        await self.uow.session.execute(
+            update(ProjectVacancy)
+            .where(ProjectVacancy.id == vacancy_id, ProjectVacancy.required_count > 0)
+            .values(required_count=ProjectVacancy.required_count - 1),
+        )
+        await self.uow.session.flush()
+
+    async def increment_vacancy_count(self, vacancy_id: int) -> None:
+        await self.uow.session.execute(
+            update(ProjectVacancy)
+            .where(ProjectVacancy.id == vacancy_id)
+            .values(required_count=ProjectVacancy.required_count + 1),
+        )
+        await self.uow.session.flush()
+
+    async def add_participant(self, project_id: int, user_id: int) -> ProjectParticipation:
+        participation = ProjectParticipation(
+            project_id=project_id,
+            participant_id=user_id,
+        )
+        self.uow.session.add(participation)
+        await self.uow.session.flush()
+        return participation
+
+    async def get_responses_by_project_id(self, project_id: int) -> list[Response]:
+        result = await self.uow.session.execute(
+            select(Response)
+            .where(Response.project_id == project_id)
+            .options(
+                selectinload(Response.vacancy),
+                selectinload(Response.respondent),
+            )
+        )
+        return list(result.scalars().all())
+
+    async def mark_sibling_pending_as_in_team(self, user_id: int, exclude_response_id: int, workspace_id: int) -> int:
+        """Пометить остальные ожидающие отклики/приглашения пользователя в пространстве как «уже в команде»."""
+        sibling_project_ids = select(Project.id).where(Project.workspace_id == workspace_id)
+        stmt = (
+            update(Response)
+            .where(
+                Response.respondent_id == user_id,
+                Response.id != exclude_response_id,
+                Response.status == "pending",
+                Response.project_id.in_(sibling_project_ids),
+            )
+            .values(status="in_team")
+            .execution_options(synchronize_session="fetch")
+        )
+        result = await self.uow.session.execute(stmt)
+        await self.uow.session.flush()
+        return result.rowcount or 0
+
+    async def is_user_participant_in_other_project(self, user_id: int, workspace_id: int, exclude_project_id: int) -> bool:
+        """Участвует ли пользователь в другом проекте пространства (кроме указанного)."""
+        result = await self.uow.session.execute(
+            select(ProjectParticipation.id)
+            .join(Project, Project.id == ProjectParticipation.project_id)
+            .where(
+                ProjectParticipation.participant_id == user_id,
+                Project.workspace_id == workspace_id,
+                Project.id != exclude_project_id,
+            )
+        )
+        return result.first() is not None
+
+    async def get_accepted_response_for_participant(self, project_id: int, user_id: int) -> Response | None:
+        result = await self.uow.session.execute(
+            select(Response).where(
+                Response.project_id == project_id,
+                Response.respondent_id == user_id,
+                Response.status == "accepted",
+            )
+        )
+        return result.scalar_one_or_none()
