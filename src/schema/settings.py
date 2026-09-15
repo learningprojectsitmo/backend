@@ -27,6 +27,7 @@ class SpaceSettingsCreate(BaseModel):
     allow_multi_project_participation: bool = False
     allow_multi_project_creation: bool = False
     default_project_deadline: datetime | None = None
+    require_project_type_on_create: bool = True
 
 
 class SpaceSettingsUpdate(BaseModel):
@@ -39,6 +40,7 @@ class SpaceSettingsUpdate(BaseModel):
     allow_multi_project_participation: bool | None = None
     allow_multi_project_creation: bool | None = None
     default_project_deadline: datetime | None = None
+    require_project_type_on_create: bool | None = None
 
 
 class SpaceSettingsFull(BaseModel):
@@ -54,6 +56,7 @@ class SpaceSettingsFull(BaseModel):
     allow_multi_project_participation: bool = False
     allow_multi_project_creation: bool = False
     default_project_deadline: datetime | None = None
+    require_project_type_on_create: bool = True
     created_at: datetime
     updated_at: datetime
 

@@ -383,6 +383,8 @@ class ProjectListItem(BaseModel):
     tags: list[str] = []
     participants_preview: list[ParticipantPreview] = []
     author_id: int
+    current_stage_id: int | None = None
+    current_stage_name: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

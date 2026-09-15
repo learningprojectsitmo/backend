@@ -70,7 +70,7 @@ async def fetch_project(
     if (
         project_service.is_draft(project)
         and project.author_id != current_user.id
-        and not await project_service.is_workspace_admin(current_user.id, project.workspace_id)
+        and not await project_service.is_workspace_editor(current_user.id, project.workspace_id)
     ):
         raise HTTPException(status_code=404, detail="There is no project with that id!")
 

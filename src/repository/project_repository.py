@@ -153,6 +153,7 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
             .where(Project.workspace_id == workspace_id)
             .options(
                 selectinload(Project.project_type).selectinload(ProjectType.stages),
+                selectinload(Project.current_stage),
                 selectinload(Project.participants).selectinload(ProjectParticipation.participant),
                 selectinload(Project.tags),
                 selectinload(Project.status),
@@ -184,6 +185,7 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
             select(Project)
             .options(
                 selectinload(Project.project_type).selectinload(ProjectType.stages),
+                selectinload(Project.current_stage),
                 selectinload(Project.participants).selectinload(ProjectParticipation.participant),
                 selectinload(Project.tags),
                 selectinload(Project.status),

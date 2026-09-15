@@ -63,19 +63,19 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         return True
 
     async def _visible_projects(self, projects: list[Project], viewer_id: int) -> list[Project]:
-        """Скрыть черновики от всех, кроме автора и админа пространства."""
-        admin_workspace_ids: set[int] = set()
+        """Скрыть черновики от всех, кроме автора и редакторов пространства (admin/teacher)."""
+        editor_workspace_ids: set[int] = set()
         draft_workspace_ids = {p.workspace_id for p in projects if self.is_draft(p) and p.workspace_id}
         if draft_workspace_ids:
-            admin_workspace_ids = await self._admin_workspace_ids(viewer_id, draft_workspace_ids)
+            editor_workspace_ids = await self._editor_workspace_ids(viewer_id, draft_workspace_ids)
         return [
             p
             for p in projects
-            if not (self.is_draft(p) and p.author_id != viewer_id and p.workspace_id not in admin_workspace_ids)
+            if not (self.is_draft(p) and p.author_id != viewer_id and p.workspace_id not in editor_workspace_ids)
         ]
 
-    async def _admin_workspace_ids(self, user_id: int, workspace_ids: set[int]) -> set[int]:
-        """ID пространств, в которых пользователь имеет роль admin."""
+    async def _editor_workspace_ids(self, user_id: int, workspace_ids: set[int]) -> set[int]:
+        """ID пространств, в которых пользователь имеет роль admin/teacher (видит черновики)."""
         if not workspace_ids:
             return set()
         result = await self._project_repository.uow.session.execute(
@@ -84,13 +84,13 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
             .where(
                 WorkSpaceParticipation.participant_id == user_id,
                 WorkSpaceParticipation.workspace_id.in_(workspace_ids),
-                Role.name == "admin",
+                Role.name.in_(("admin", "teacher")),
             )
         )
         return set(result.scalars().all())
 
-    async def is_workspace_admin(self, user_id: int, workspace_id: int | None) -> bool:
-        """Является ли пользователь админом в указанном пространстве."""
+    async def is_workspace_editor(self, user_id: int, workspace_id: int | None) -> bool:
+        """Является ли пользователь редактором (admin/teacher) в указанном пространстве."""
         if not workspace_id:
             return False
         result = await self._project_repository.uow.session.execute(
@@ -99,7 +99,7 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
             .where(
                 WorkSpaceParticipation.workspace_id == workspace_id,
                 WorkSpaceParticipation.participant_id == user_id,
-                Role.name == "admin",
+                Role.name.in_(("admin", "teacher")),
             )
         )
         return result.first() is not None
@@ -384,6 +384,8 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
 
         tags = [tag.name for tag in getattr(project, "tags", []) or []]
 
+        current_stage = getattr(project, "current_stage", None)
+
         return ProjectListItem(
             id=project.id,
             name=project.name,
@@ -396,6 +398,8 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
             tags=tags,
             participants_preview=preview,
             author_id=project.author_id,
+            current_stage_id=project.current_stage_id,
+            current_stage_name=current_stage.name if current_stage else None,
         )
 
     async def _resolve_workspace_deadline(self, workspace_id: int | None):
@@ -407,6 +411,26 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         )
         settings = space_settings.scalar_one_or_none()
         return settings.default_project_deadline if settings else None
+
+    async def _workspace_requires_project_type(self, workspace_id: int | None) -> bool:
+        """Требуется ли тип проекта при создании в пространстве (по умолчанию — да)."""
+        if not workspace_id:
+            return False
+        space_settings = await self._project_repository.uow.session.execute(
+            select(SpaceSettings).where(SpaceSettings.space_id == workspace_id)
+        )
+        settings = space_settings.scalar_one_or_none()
+        if not settings:
+            return True
+        return settings.require_project_type_on_create
+
+    async def _raise_if_project_type_required(self, workspace_id: int | None, project_type_id: int | None) -> None:
+        """Запретить создание проекта без типа, если это требует настройка пространства."""
+        if project_type_id:
+            return
+        if not await self._workspace_requires_project_type(workspace_id):
+            return
+        raise ValidationError("Project type is required to create a project in this workspace")
 
     async def _workspace_allows_multi_participation(self, workspace_id: int | None) -> bool:
         """Разрешено ли в пространстве участие в нескольких проектах одновременно."""
@@ -506,6 +530,9 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
             )
             if existing_count.scalar_one() > 0:
                 raise PermissionError("Вы уже создали проект в этом пространстве. Можно создать только один проект.")
+
+            # Если в настройках пространства включено требование типа проекта — блокируем создание без типа
+            await self._raise_if_project_type_required(project_data.workspace_id, project_data.project_type_id)
 
         # Преобразуем в dict и вырезаем теги и вакансии
         payload = project_data.model_dump(exclude_none=True)
