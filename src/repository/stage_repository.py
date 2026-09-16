@@ -37,6 +37,7 @@ class ProjectTypeRepository(BaseRepository[ProjectType, ProjectTypeCreate, Proje
             name=data.name,
             order=data.order,
             requires_approval=data.requires_approval,
+            visible_to_participants=data.visible_to_participants,
             duration_days=data.duration_days,
         )
         self.uow.session.add(stage)
@@ -90,6 +91,7 @@ class ProjectTypeRepository(BaseRepository[ProjectType, ProjectTypeCreate, Proje
                         name=stage.name,
                         order=idx,
                         requires_approval=stage.requires_approval,
+                        visible_to_participants=stage.visible_to_participants,
                         duration_days=stage.duration_days,
                     )
                 )

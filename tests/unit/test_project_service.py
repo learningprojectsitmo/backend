@@ -35,10 +35,10 @@ class TestProjectService:
 
     @staticmethod
     def _make_type_with_stages() -> ProjectType:
-        """Проектный тип с двумя этапами (первый — черновик)"""
+        """Проектный тип с двумя этапами (первый — скрыт от участников)"""
         project_type = ProjectType(id=1, name="Type")
-        first = ProjectStage(id=11, name="Initial", order=0, project_type_id=1)
-        second = ProjectStage(id=12, name="Development", order=1, project_type_id=1)
+        first = ProjectStage(id=11, name="Initial", order=0, project_type_id=1, visible_to_participants=False)
+        second = ProjectStage(id=12, name="Development", order=1, project_type_id=1, visible_to_participants=True)
         project_type.stages = [first, second]
         return project_type
 
@@ -111,8 +111,19 @@ class TestProjectService:
         draft_query_result.scalar_one_or_none.return_value = AsyncMock(id=99, name="draft")
         ws_sync_result = Mock()
         ws_sync_result.scalar_one_or_none.return_value = None
+        require_type_result = Mock()
+        require_type_result.scalar_one_or_none.return_value = SpaceSettings(
+            id=1, space_id=5, settings_type_id=1, require_project_type_on_create=False
+        )
         mock_session.execute = AsyncMock(
-            side_effect=[mock_result, count_result, settings_result, draft_query_result, ws_sync_result]
+            side_effect=[
+                mock_result,
+                count_result,
+                require_type_result,
+                settings_result,
+                draft_query_result,
+                ws_sync_result,
+            ]
         )
         mock_session.refresh = AsyncMock()
         mock_session.flush = AsyncMock()
@@ -155,6 +166,70 @@ class TestProjectService:
 
         # when / then
         with pytest.raises(PermissionError):
+            await project_service.create_project(project_data, author_id=1)
+
+    @pytest.mark.asyncio
+    async def test_should_block_create_project_without_type_when_settings_require_it(self):
+        """Настройка «требовать тип проекта» блокирует создание без типа в пространстве"""
+        # given
+        mock_repository = self._setup_mock_repo()
+        manager_role = Role(id=4, name="manager")
+        mock_repository.create.return_value = Project(id=1, name="Test", author_id=1, workspace_id=5)
+        mock_repository.get_or_create_tags = AsyncMock(return_value=[])
+
+        mock_uow = Mock()
+        mock_session = Mock()
+        mock_result = Mock()
+        mock_result.first.return_value = (object(), manager_role)
+        count_result = Mock()
+        count_result.scalar_one.return_value = 0
+        require_type_result = Mock()
+        require_type_result.scalar_one_or_none.return_value = SpaceSettings(
+            id=1, space_id=5, settings_type_id=1, require_project_type_on_create=True
+        )
+        mock_session.execute = AsyncMock(side_effect=[mock_result, count_result, require_type_result])
+        mock_session.refresh = AsyncMock()
+        mock_session.flush = AsyncMock()
+        mock_session.add = Mock()
+        mock_uow.session = mock_session
+        mock_repository.uow = mock_uow
+
+        project_service = ProjectService(mock_repository)
+        project_data = ProjectCreate(name="Test", author_id=1, workspace_id=5)
+
+        # when / then
+        with pytest.raises(ValidationError):
+            await project_service.create_project(project_data, author_id=1)
+
+    @pytest.mark.asyncio
+    async def test_should_block_create_project_without_type_when_settings_row_absent(self):
+        """По умолчанию (нет строки настроек) создание без типа в пространстве запрещено"""
+        # given
+        mock_repository = self._setup_mock_repo()
+        manager_role = Role(id=4, name="manager")
+        mock_repository.create.return_value = Project(id=1, name="Test", author_id=1, workspace_id=5)
+        mock_repository.get_or_create_tags = AsyncMock(return_value=[])
+
+        mock_uow = Mock()
+        mock_session = Mock()
+        mock_result = Mock()
+        mock_result.first.return_value = (object(), manager_role)
+        count_result = Mock()
+        count_result.scalar_one.return_value = 0
+        require_type_result = Mock()
+        require_type_result.scalar_one_or_none.return_value = None
+        mock_session.execute = AsyncMock(side_effect=[mock_result, count_result, require_type_result])
+        mock_session.refresh = AsyncMock()
+        mock_session.flush = AsyncMock()
+        mock_session.add = Mock()
+        mock_uow.session = mock_session
+        mock_repository.uow = mock_uow
+
+        project_service = ProjectService(mock_repository)
+        project_data = ProjectCreate(name="Test", author_id=1, workspace_id=5)
+
+        # when / then
+        with pytest.raises(ValidationError):
             await project_service.create_project(project_data, author_id=1)
 
     @pytest.mark.asyncio
@@ -256,6 +331,47 @@ class TestProjectService:
         assert result.items[0].id == 1
 
     @pytest.mark.asyncio
+    async def test_should_show_first_stage_project_when_visible_to_participants(self):
+        # given — первый этап помечен как видимый участникам
+        mock_repository = self._setup_mock_repo()
+        project_type = ProjectType(id=1, name="Type")
+        project_type.stages = [
+            ProjectStage(id=11, name="Initial", order=0, project_type_id=1, visible_to_participants=True),
+        ]
+        visible = Project(id=1, name="Visible", author_id=5, current_stage_id=11, project_type=project_type)
+        mock_repository.get_projects_by_participant_id.return_value = [visible]
+
+        project_service = ProjectService(mock_repository)
+
+        # when
+        result = await project_service.get_my_projects(user_id=1)
+
+        # then
+        assert len(result.items) == 1
+        assert result.items[0].id == 1
+
+    @pytest.mark.asyncio
+    async def test_should_hide_second_stage_project_when_hidden_from_participants(self):
+        # given — второй (не первый) этап скрыт от участников
+        mock_repository = self._setup_mock_repo()
+        project_type = ProjectType(id=1, name="Type")
+        project_type.stages = [
+            ProjectStage(id=11, name="Initial", order=0, project_type_id=1, visible_to_participants=True),
+            ProjectStage(id=12, name="Hidden", order=1, project_type_id=1, visible_to_participants=False),
+        ]
+        hidden = Project(id=1, name="Hidden", author_id=5, current_stage_id=12, project_type=project_type)
+        mock_repository.get_projects_by_participant_id.return_value = [hidden]
+
+        project_service = ProjectService(mock_repository)
+
+        # when
+        result = await project_service.get_my_projects(user_id=1)
+
+        # then
+        assert result.items == []
+        assert result.total == 0
+
+    @pytest.mark.asyncio
     async def test_should_filter_drafts_in_paginated_list(self):
         # given
         mock_repository = self._setup_mock_repo()
@@ -304,9 +420,9 @@ class TestProjectService:
         )
         mock_repository.get_projects_by_workspace.return_value = [draft]
 
-        admin_query_result = Mock()
-        admin_query_result.scalars.return_value.all.return_value = [1]
-        mock_repository.uow.session.execute.return_value = admin_query_result
+        editor_query_result = Mock()
+        editor_query_result.scalars.return_value.all.return_value = [1]
+        mock_repository.uow.session.execute.return_value = editor_query_result
 
         project_service = ProjectService(mock_repository)
 
@@ -318,7 +434,7 @@ class TestProjectService:
         assert total == 1
 
     @pytest.mark.asyncio
-    async def test_should_hide_draft_from_non_admin_in_workspace_list(self):
+    async def test_should_show_draft_to_workspace_teacher_in_list(self):
         # given
         mock_repository = self._setup_mock_repo()
         draft = Project(
@@ -331,9 +447,36 @@ class TestProjectService:
         )
         mock_repository.get_projects_by_workspace.return_value = [draft]
 
-        admin_query_result = Mock()
-        admin_query_result.scalars.return_value.all.return_value = []
-        mock_repository.uow.session.execute.return_value = admin_query_result
+        editor_query_result = Mock()
+        editor_query_result.scalars.return_value.all.return_value = [1]
+        mock_repository.uow.session.execute.return_value = editor_query_result
+
+        project_service = ProjectService(mock_repository)
+
+        # when
+        projects, total = await project_service.get_projects_by_workspace(workspace_id=1, page=1, limit=10, viewer_id=1)
+
+        # then
+        assert [p.id for p in projects] == [1]
+        assert total == 1
+
+    @pytest.mark.asyncio
+    async def test_should_hide_draft_from_non_editor_in_workspace_list(self):
+        # given
+        mock_repository = self._setup_mock_repo()
+        draft = Project(
+            id=1,
+            name="Draft",
+            author_id=5,
+            workspace_id=1,
+            current_stage_id=11,
+            project_type=self._make_type_with_stages(),
+        )
+        mock_repository.get_projects_by_workspace.return_value = [draft]
+
+        editor_query_result = Mock()
+        editor_query_result.scalars.return_value.all.return_value = []
+        mock_repository.uow.session.execute.return_value = editor_query_result
 
         project_service = ProjectService(mock_repository)
 
@@ -345,49 +488,95 @@ class TestProjectService:
         assert total == 0
 
     @pytest.mark.asyncio
-    async def test_is_workspace_admin_should_return_true_for_admin_role(self):
+    async def test_is_workspace_editor_should_return_true_for_admin_role(self):
         # given
         mock_repository = self._setup_mock_repo()
-        admin_query_result = Mock()
-        admin_query_result.first.return_value = (42,)
-        mock_repository.uow.session.execute.return_value = admin_query_result
+        editor_query_result = Mock()
+        editor_query_result.first.return_value = (42,)
+        mock_repository.uow.session.execute.return_value = editor_query_result
 
         project_service = ProjectService(mock_repository)
 
         # when
-        result = await project_service.is_workspace_admin(user_id=1, workspace_id=1)
+        result = await project_service.is_workspace_editor(user_id=1, workspace_id=1)
 
         # then
         assert result is True
 
     @pytest.mark.asyncio
-    async def test_is_workspace_admin_should_return_false_for_other_roles(self):
+    async def test_is_workspace_editor_should_return_true_for_teacher_role(self):
         # given
         mock_repository = self._setup_mock_repo()
-        admin_query_result = Mock()
-        admin_query_result.first.return_value = None
-        mock_repository.uow.session.execute.return_value = admin_query_result
+        editor_query_result = Mock()
+        editor_query_result.first.return_value = (42,)
+        mock_repository.uow.session.execute.return_value = editor_query_result
 
         project_service = ProjectService(mock_repository)
 
         # when
-        result = await project_service.is_workspace_admin(user_id=1, workspace_id=1)
+        result = await project_service.is_workspace_editor(user_id=1, workspace_id=1)
+
+        # then
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_is_workspace_editor_should_return_false_for_other_roles(self):
+        # given
+        mock_repository = self._setup_mock_repo()
+        editor_query_result = Mock()
+        editor_query_result.first.return_value = None
+        mock_repository.uow.session.execute.return_value = editor_query_result
+
+        project_service = ProjectService(mock_repository)
+
+        # when
+        result = await project_service.is_workspace_editor(user_id=1, workspace_id=1)
 
         # then
         assert result is False
 
     @pytest.mark.asyncio
-    async def test_is_workspace_admin_should_return_false_without_workspace(self):
+    async def test_is_workspace_editor_should_return_false_without_workspace(self):
         # given
         mock_repository = self._setup_mock_repo()
         project_service = ProjectService(mock_repository)
 
         # when
-        result = await project_service.is_workspace_admin(user_id=1, workspace_id=None)
+        result = await project_service.is_workspace_editor(user_id=1, workspace_id=None)
 
         # then
         assert result is False
         mock_repository.uow.session.execute.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_to_project_list_item_should_include_current_stage(self):
+        # given
+        project_service = ProjectService(self._setup_mock_repo())
+        current_stage_id = 11
+        current_stage_name = "Утверждение темы"
+        stage = ProjectStage(id=current_stage_id, name=current_stage_name, order=0, project_type_id=1)
+        project = Project(id=1, name="P", author_id=5, current_stage_id=current_stage_id, progress=40)
+        project.current_stage = stage
+
+        # when
+        item = project_service.to_project_list_item(project)
+
+        # then
+        assert item.current_stage_id == current_stage_id
+        assert item.current_stage_name == current_stage_name
+
+    @pytest.mark.asyncio
+    async def test_to_project_list_item_should_allow_missing_current_stage(self):
+        # given
+        project_service = ProjectService(self._setup_mock_repo())
+        project = Project(id=1, name="P", author_id=5)
+
+        # when
+        item = project_service.to_project_list_item(project)
+
+        # then
+        assert item.current_stage_id is None
+        assert item.current_stage_name is None
 
     @pytest.mark.asyncio
     async def test_should_treat_stage_zero_and_missing_type_consistently(self):
@@ -548,8 +737,12 @@ class TestProjectService:
         draft_result.scalar_one_or_none.return_value = AsyncMock(id=99, name="draft")
         ws_sync_result = Mock()
         ws_sync_result.scalar_one_or_none.return_value = None
+        require_type_result = Mock()
+        require_type_result.scalar_one_or_none.return_value = SpaceSettings(
+            id=1, space_id=5, settings_type_id=1, require_project_type_on_create=False
+        )
         mock_session.execute = AsyncMock(
-            side_effect=[ws_result, count_result, settings_result, draft_result, ws_sync_result]
+            side_effect=[ws_result, count_result, require_type_result, settings_result, draft_result, ws_sync_result]
         )
         mock_session.refresh = AsyncMock()
         mock_session.flush = AsyncMock()
@@ -593,8 +786,12 @@ class TestProjectService:
         draft_result.scalar_one_or_none.return_value = AsyncMock(id=99, name="draft")
         ws_sync_result = Mock()
         ws_sync_result.scalar_one_or_none.return_value = None
+        require_type_result = Mock()
+        require_type_result.scalar_one_or_none.return_value = SpaceSettings(
+            id=1, space_id=5, settings_type_id=1, require_project_type_on_create=False
+        )
         mock_session.execute = AsyncMock(
-            side_effect=[ws_result, count_result, settings_result, draft_result, ws_sync_result]
+            side_effect=[ws_result, count_result, require_type_result, settings_result, draft_result, ws_sync_result]
         )
         mock_session.refresh = AsyncMock()
         mock_session.flush = AsyncMock()
@@ -754,9 +951,7 @@ class TestMultiProjectRestriction:
         mock_session = AsyncMock()
         mock_uow.session = mock_session
         mock_repository.uow = mock_uow
-        mock_repository.get_response_by_id = AsyncMock(
-            return_value=self._make_accepted_response(1, 2, 3)
-        )
+        mock_repository.get_response_by_id = AsyncMock(return_value=self._make_accepted_response(1, 2, 3))
         mock_repository.get_by_id = AsyncMock(
             return_value=Project(id=3, name="P", author_id=1, workspace_id=7, max_participants=None)
         )
@@ -784,9 +979,7 @@ class TestMultiProjectRestriction:
         mock_session = AsyncMock()
         mock_uow.session = mock_session
         mock_repository.uow = mock_uow
-        mock_repository.get_response_by_id = AsyncMock(
-            return_value=self._make_accepted_response(1, 2, 3)
-        )
+        mock_repository.get_response_by_id = AsyncMock(return_value=self._make_accepted_response(1, 2, 3))
         mock_repository.get_by_id = AsyncMock(
             return_value=Project(id=3, name="P", author_id=1, workspace_id=7, max_participants=None)
         )
@@ -837,9 +1030,7 @@ class TestMultiProjectRestriction:
         mock_session = AsyncMock()
         mock_uow.session = mock_session
         mock_repository.uow = mock_uow
-        mock_repository.get_response_by_id = AsyncMock(
-            return_value=self._make_pending_invitation(5, 2, 3)
-        )
+        mock_repository.get_response_by_id = AsyncMock(return_value=self._make_pending_invitation(5, 2, 3))
         mock_repository.get_by_id = AsyncMock(
             return_value=Project(id=3, name="P", author_id=1, workspace_id=7, max_participants=None)
         )

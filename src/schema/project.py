@@ -333,6 +333,7 @@ class ProjectFull(ProjectCreate):
                 name=s.name,
                 order=s.order,
                 requires_approval=s.requires_approval,
+                visible_to_participants=s.visible_to_participants,
                 is_current=(s.id == current_stage_id),
                 duration_days=s.duration_days,
                 deadline=(
@@ -397,6 +398,8 @@ class ProjectListItem(BaseModel):
     tags: list[str] = []
     participants_preview: list[ParticipantPreview] = []
     author_id: int
+    current_stage_id: int | None = None
+    current_stage_name: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

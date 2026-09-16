@@ -46,38 +46,17 @@ def seed_project_types(connection) -> None:
 
     default_types = [
         {
-            "name": "Курсовая работа",
-            "description": "Курсовая работа с утверждением темы преподавателем",
-            "stages": [
-                {"name": "Черновик идеи", "requires_approval": False},
-                {"name": "Утверждение темы", "requires_approval": True},
-                {"name": "Написание работы", "requires_approval": False},
-                {"name": "Проверка преподавателем", "requires_approval": True},
-                {"name": "Завершено", "requires_approval": False},
-            ],
-        },
-        {
-            "name": "Дипломный проект",
+            "name": "Курсовой проект",
             "description": "Диплом с этапами утверждения темы и защиты",
             "stages": [
-                {"name": "Выбор темы", "requires_approval": False},
-                {"name": "Утверждение темы", "requires_approval": True},
-                {"name": "Постановка плана", "requires_approval": True},
-                {"name": "Реализация", "requires_approval": False},
-                {"name": "Предзащита", "requires_approval": True},
-                {"name": "Защита", "requires_approval": True},
-                {"name": "Завершено", "requires_approval": False},
-            ],
-        },
-        {
-            "name": "Практика",
-            "description": "Практика/стажировка с согласованием направления",
-            "stages": [
-                {"name": "Выбор направления", "requires_approval": False},
-                {"name": "Согласование преподавателем", "requires_approval": True},
-                {"name": "Прохождение практики", "requires_approval": False},
-                {"name": "Отчёт", "requires_approval": True},
-                {"name": "Завершено", "requires_approval": False},
+                {"name": "Выбор темы", "requires_approval": False, "visible_to_participants": False},
+                {"name": "Утверждение темы", "requires_approval": True, "visible_to_participants": True},
+                {"name": "Создание тз", "requires_approval": False, "visible_to_participants": True},
+                {"name": "Утверждение тз", "requires_approval": True, "visible_to_participants": True},
+                {"name": "Реализация", "requires_approval": False, "visible_to_participants": True},
+                {"name": "Предзащита", "requires_approval": True, "visible_to_participants": True},
+                {"name": "Защита", "requires_approval": True, "visible_to_participants": True},
+                {"name": "Завершено", "requires_approval": False, "visible_to_participants": True},
             ],
         },
     ]
@@ -98,6 +77,7 @@ def seed_project_types(connection) -> None:
                     name=stage["name"],
                     order=idx,
                     requires_approval=stage["requires_approval"],
+                    visible_to_participants=stage["visible_to_participants"],
                     project_type_id=type_id,
                 )
             )
