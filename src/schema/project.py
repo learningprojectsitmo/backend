@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from src.model.project import Project
 from src.schema.stage import ProjectStageInfo
@@ -61,9 +61,24 @@ class VacancyItem(BaseModel):
 
 
 class VacancyCreate(BaseModel):
-    title: str
-    tasks: list[str] = []
+    title: str = Field(..., min_length=1, max_length=200)
+    tasks: list[str] = Field(..., min_length=1)
     required_count: int = 1
+
+    @field_validator("title")
+    @classmethod
+    def title_not_blank(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("Роль не может быть пустой")
+        return v.strip()
+
+    @field_validator("tasks")
+    @classmethod
+    def tasks_not_blank(cls, v: list[str]) -> list[str]:
+        cleaned = [t.strip() for t in v if t.strip()]
+        if not cleaned:
+            raise ValueError("У роли должны быть указаны задачи")
+        return cleaned
 
 
 class ProjectCreate(BaseModel):
