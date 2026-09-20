@@ -666,16 +666,28 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         return project
 
     async def remove_participant(self, project_id: int, participant_user_id: int, current_user_id: int) -> bool:
+        """Удалить участника из команды проекта (автор или глобальный админ)."""
         project = await self.get_project_by_id(project_id)
         if not project:
             return False
-        if project.author_id != current_user_id:
-            raise PermissionError("Only project author can remove participants")
+        if not await self._can_manage_team(project, current_user_id):
+            raise PermissionError("Only project author or admin can remove participants")
+        if project.author_id == participant_user_id:
+            raise ValidationError("Cannot remove the project author")
         # Увеличиваем количество мест в вакансии если участник был принят по роли
         accepted = await self._project_repository.get_accepted_response_for_participant(project_id, participant_user_id)
         if accepted and accepted.vacancy_id:
             await self._project_repository.increment_vacancy_count(accepted.vacancy_id)
         return await self._project_repository.remove_participant(project_id, participant_user_id)
+
+    async def _can_manage_team(self, project: Project, user_id: int) -> bool:
+        """Может ли пользователь управлять командой проекта (автор или глобальный админ)."""
+        if project.author_id == user_id:
+            return True
+        result = await self._project_repository.uow.session.execute(
+            select(Role.name).join(User, User.role_id == Role.id).where(User.id == user_id)
+        )
+        return result.scalar_one_or_none() == "admin"
 
     async def apply_for_project(
         self, project_id: int, user_id: int, vacancy_id: int | None = None, resume_id: int | None = None

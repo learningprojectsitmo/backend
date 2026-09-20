@@ -173,6 +173,7 @@ class SpecificationService(BaseService[object, object, SpecificationUpdate]):
         comment = SpecificationComment(specification_id=spec.id, author_id=user_id, text=text.strip())
         self._specification_repository.uow.session.add(comment)
         await self._specification_repository.uow.session.flush()
+        await self._specification_repository.uow.session.refresh(comment)
         return comment
 
     async def update_comment(
@@ -191,6 +192,7 @@ class SpecificationService(BaseService[object, object, SpecificationUpdate]):
             raise PermissionError("Only comment author can edit the comment")
         comment.text = text.strip()
         await self._specification_repository.uow.session.flush()
+        await self._specification_repository.uow.session.refresh(comment)
         return comment
 
     async def delete_comment(

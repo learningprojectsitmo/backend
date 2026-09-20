@@ -1097,3 +1097,75 @@ class TestMultiProjectRestriction:
         # then
         assert result.total == 1
         assert result.items[0].allow_multi_project_participation is False
+
+
+class TestRemoveParticipant:
+    """Тесты для ProjectService.remove_participant (автор или глобальный админ)"""
+
+    def _setup(self, *, project_author_id: int = 1) -> tuple[Mock, Mock, AsyncMock]:
+        mock_repository = Mock(spec=ProjectRepository)
+        mock_uow = Mock()
+        mock_session = AsyncMock()
+        mock_uow.session = mock_session
+        mock_repository.uow = mock_uow
+        mock_repository.get_by_id = AsyncMock(return_value=Project(id=3, name="P", author_id=project_author_id))
+        mock_repository.get_accepted_response_for_participant = AsyncMock(return_value=None)
+        mock_repository.remove_participant = AsyncMock(return_value=True)
+        return mock_repository, mock_uow, mock_session
+
+    def _role_result(self, role_name: str | None) -> Mock:
+        role_result = Mock()
+        role_result.scalar_one_or_none.return_value = role_name
+        return role_result
+
+    @pytest.mark.asyncio
+    async def test_should_allow_author_to_remove_participant(self):
+        # given
+        mock_repository, _, mock_session = self._setup(project_author_id=1)
+        project_service = ProjectService(mock_repository)
+
+        # when
+        result = await project_service.remove_participant(3, 42, current_user_id=1)
+
+        # then
+        assert result is True
+        mock_session.execute.assert_not_called()
+        mock_repository.remove_participant.assert_awaited_once_with(3, 42)
+
+    @pytest.mark.asyncio
+    async def test_should_allow_global_admin_to_remove_participant(self):
+        # given
+        mock_repository, _, mock_session = self._setup(project_author_id=1)
+        mock_session.execute = AsyncMock(return_value=self._role_result("admin"))
+        project_service = ProjectService(mock_repository)
+
+        # when
+        result = await project_service.remove_participant(3, 42, current_user_id=999)
+
+        # then
+        assert result is True
+        mock_repository.remove_participant.assert_awaited_once_with(3, 42)
+
+    @pytest.mark.asyncio
+    async def test_should_deny_non_admin_non_author(self):
+        # given
+        mock_repository, _, mock_session = self._setup(project_author_id=1)
+        mock_session.execute = AsyncMock(return_value=self._role_result("member"))
+        project_service = ProjectService(mock_repository)
+
+        # when / then
+        with pytest.raises(PermissionError, match="Only project author or admin can remove participants"):
+            await project_service.remove_participant(3, 42, current_user_id=999)
+        mock_repository.remove_participant.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_should_deny_removing_project_author(self):
+        # given
+        mock_repository, _, mock_session = self._setup(project_author_id=1)
+        mock_session.execute = AsyncMock(return_value=self._role_result("admin"))
+        project_service = ProjectService(mock_repository)
+
+        # when / then
+        with pytest.raises(ValidationError, match="Cannot remove the project author"):
+            await project_service.remove_participant(3, 1, current_user_id=999)
+        mock_repository.remove_participant.assert_not_called()
