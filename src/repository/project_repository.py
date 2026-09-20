@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import func, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import selectinload
 
 from src.core.uow import IUnitOfWork
@@ -196,6 +196,32 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         result = await self.uow.session.execute(query)
         return list(result.scalars().all())
 
+    async def search_by_text(self, query: str, limit: int = 100) -> list[Project]:
+        """Поиск проектов по названию, теме и описанию"""
+        term = f"%{query}%"
+        stmt = (
+            select(Project)
+            .where(
+                or_(
+                    Project.name.ilike(term),
+                    Project.theme.ilike(term),
+                    Project.description.ilike(term),
+                )
+            )
+            .options(
+                selectinload(Project.project_type).selectinload(ProjectType.stages),
+                selectinload(Project.current_stage),
+                selectinload(Project.participants).selectinload(ProjectParticipation.participant),
+                selectinload(Project.tags),
+                selectinload(Project.status),
+                selectinload(Project.workspace),
+            )
+            .order_by(Project.name.asc())
+            .limit(limit)
+        )
+        result = await self.uow.session.execute(stmt)
+        return list(result.scalars().all())
+
     async def remove_participant(self, project_id: int, user_id: int) -> bool:
         result = await self.uow.session.execute(
             select(ProjectParticipation).where(
@@ -330,7 +356,9 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         await self.uow.session.flush()
         return result.rowcount or 0
 
-    async def is_user_participant_in_other_project(self, user_id: int, workspace_id: int, exclude_project_id: int) -> bool:
+    async def is_user_participant_in_other_project(
+        self, user_id: int, workspace_id: int, exclude_project_id: int
+    ) -> bool:
         """Участвует ли пользователь в другом проекте пространства (кроме указанного)."""
         result = await self.uow.session.execute(
             select(ProjectParticipation.id)

@@ -44,6 +44,7 @@ from src.services.profile_service import ProfileService
 from src.services.project_service import ProjectService
 from src.services.resume_service import ResumeService
 from src.services.role_service import RoleService
+from src.services.search_service import SearchService
 from src.services.session_service import SessionService
 from src.services.settings_service import SpaceSettingsService
 from src.services.specification_service import SpecificationService
@@ -288,6 +289,14 @@ async def get_workspace_service(
     workspace_repository: WorkSpaceRepository = Depends(get_workspace_repository),
 ) -> WorkSpaceService:
     return WorkSpaceService(workspace_repository)
+
+
+async def get_search_service(
+    project_service: ProjectService = Depends(get_project_service),
+    workspace_service: WorkSpaceService = Depends(get_workspace_service),
+    user_service: UserService = Depends(get_user_service),
+) -> SearchService:
+    return SearchService(project_service, workspace_service, user_service)
 
 
 async def get_settings_service(

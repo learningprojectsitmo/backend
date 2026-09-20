@@ -355,6 +355,13 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         projects = await self._visible_projects(projects, viewer_id)
         return projects, len(projects)
 
+    async def search_projects_by_text(self, query: str, limit: int = 10, viewer_id: int | None = None) -> list[Project]:
+        """Поиск проектов по тексту (черновики скрыты от не-авторов)"""
+        projects = await self._project_repository.search_by_text(query, limit=limit)
+        if viewer_id is None:
+            return projects
+        return await self._visible_projects(projects, viewer_id)
+
     def to_project_list_item(self, project: Project) -> ProjectListItem:
         participants = project.participants or []
         preview: list[ParticipantPreview] = []

@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from pydantic import BaseModel
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import selectinload
 
 from src.core.uow import IUnitOfWork
@@ -39,6 +39,26 @@ class UserRepository(BaseRepository[User, UserCreateHashedPwd, UserUpdate]):
     async def get_multi_with_role(self, skip: int = 0, limit: int = 100) -> Sequence[User]:
         result = await self.uow.session.execute(
             select(User).options(selectinload(User.role)).offset(skip).limit(limit),
+        )
+        return list(result.scalars().all())
+
+    async def search_by_text(self, query: str, limit: int = 100) -> Sequence[User]:
+        """Поиск пользователей по ФИО, почте и никам"""
+        term = f"%{query}%"
+        result = await self.uow.session.execute(
+            select(User)
+            .where(
+                or_(
+                    User.first_name.ilike(term),
+                    User.last_name.ilike(term),
+                    User.middle_name.ilike(term),
+                    User.email.ilike(term),
+                    User.tg_nickname.ilike(term),
+                )
+            )
+            .options(selectinload(User.role))
+            .order_by(User.last_name.asc(), User.first_name.asc())
+            .limit(limit),
         )
         return list(result.scalars().all())
 

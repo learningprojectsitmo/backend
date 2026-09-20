@@ -15,6 +15,7 @@ from src.api.v1.endpoints.project import invitation_router as project_invitation
 from src.api.v1.endpoints.project import project_router, response_router
 from src.api.v1.endpoints.resume import resume_router
 from src.api.v1.endpoints.role import role_permission_router, role_router
+from src.api.v1.endpoints.search import search_router
 from src.api.v1.endpoints.sessions import sessions_router
 from src.api.v1.endpoints.settings import settings_router
 from src.api.v1.endpoints.specification import specification_router
@@ -47,6 +48,7 @@ router_list = [
     stage_router,
     specification_router,
     admin_router,
+    search_router,
 ]
 
 for router in router_list:

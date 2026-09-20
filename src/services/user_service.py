@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import secrets
+from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 
 from src.core.exceptions import BusinessLogicError, DuplicatedError, NotFoundError, ValidationError
@@ -106,6 +107,10 @@ class UserService(BaseService[User, UserCreate, UserUpdate]):
             limit=limit,
             total_pages=total_pages,
         )
+
+    async def search_users_by_text(self, query: str, limit: int = 10) -> Sequence[User]:
+        """Поиск пользователей по ФИО, почте и никам"""
+        return await self._user_repository.search_by_text(query, limit=limit)
 
     async def get_user_full(self, id: int) -> UserFull | None:
         """Получить полную информацию о пользователе"""

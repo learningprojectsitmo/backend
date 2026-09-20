@@ -103,6 +103,10 @@ class WorkSpaceService(BaseService[WorkSpace, WorkSpaceCreate, WorkSpaceUpdate])
         """Получить данные для меню workspace (только видимые пользователю)"""
         return await self._workspace_repository.get_workspaces_menu_data(user_id, skip, limit)
 
+    async def search_spaces_by_text(self, query: str, user_id: int, limit: int = 10) -> list[dict]:
+        """Поиск видимых пользователю пространств по названию"""
+        return await self._workspace_repository.search_by_text(query, user_id, limit=limit)
+
     async def get_workspace_participants_count(self, workspace_id: int) -> int:
         """Получить количество участников workspace"""
         return await self._workspace_repository.get_participants_count(workspace_id)

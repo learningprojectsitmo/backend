@@ -414,3 +414,58 @@ class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUp
 
         result = await self.uow.session.execute(query)
         return [dict(row) for row in result.mappings().all()], total
+
+    async def search_by_text(self, query: str, user_id: int, limit: int = 100) -> list[dict]:
+        """Поиск видимых пользователю пространств по названию"""
+        term = f"%{query}%"
+
+        participants_count = (
+            select(
+                WorkSpaceParticipation.workspace_id,
+                func.count(WorkSpaceParticipation.id).label("participants_count"),
+            )
+            .group_by(WorkSpaceParticipation.workspace_id)
+            .subquery()
+        )
+
+        projects_count = (
+            select(
+                Project.workspace_id,
+                func.count(Project.id).label("projects_count"),
+            )
+            .where(Project.workspace_id.isnot(None))
+            .group_by(Project.workspace_id)
+            .subquery()
+        )
+
+        user_workspace_ids = select(WorkSpaceParticipation.workspace_id).where(
+            WorkSpaceParticipation.participant_id == user_id
+        )
+
+        visible_filter = or_(
+            SpaceSettings.visibility.is_(None),
+            SpaceSettings.visibility == "public",
+            WorkSpace.author_id == user_id,
+            WorkSpace.id.in_(user_workspace_ids),
+        )
+
+        query_stmt = (
+            select(
+                WorkSpace.id.label("id"),
+                WorkSpace.name.label("title"),
+                func.coalesce(projects_count.c.projects_count, 0).label("projects_count"),
+                func.coalesce(participants_count.c.participants_count, 0).label("members_count"),
+                func.coalesce(WorkSpaceCategories.name, "General").label("category"),
+                WorkSpace.description.label("description"),
+            )
+            .outerjoin(participants_count, WorkSpace.id == participants_count.c.workspace_id)
+            .outerjoin(projects_count, WorkSpace.id == projects_count.c.workspace_id)
+            .outerjoin(WorkSpaceCategories, WorkSpace.category_id == WorkSpaceCategories.id)
+            .outerjoin(SpaceSettings, WorkSpace.id == SpaceSettings.space_id)
+            .where(visible_filter, WorkSpace.name.ilike(term))
+            .order_by(WorkSpace.name.asc())
+            .limit(limit)
+        )
+
+        result = await self.uow.session.execute(query_stmt)
+        return [dict(row) for row in result.mappings().all()]
