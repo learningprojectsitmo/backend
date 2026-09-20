@@ -61,3 +61,35 @@ class ProfileService:
             education=list(education),
             languages=list(languages),
         )
+
+    async def get_public_profile(self, user_id: int) -> ProfileResponse:
+        """Получить публичный профиль пользователя.
+
+        В отличие от get_profile возвращает только видимые (is_visible=True) резюме.
+        """
+        user = await self._user_repository.get_by_id_with_role(user_id)
+        if not user:
+            raise ValueError("User not found")
+
+        resumes = await self._resume_repository.get_by_author_id(user_id)
+        portfolio = await self._portfolio_repository.get_by_user_id(user_id)
+        education = await self._education_repository.get_by_user_id(user_id)
+        languages = await self._language_repository.get_by_user_id(user_id)
+
+        resumes_full = [ResumeFull.model_validate(r) for r in resumes if r.is_visible]
+
+        return ProfileResponse(
+            id=user.id,
+            first_name=user.first_name,
+            last_name=user.last_name,
+            middle_name=user.middle_name,
+            email=user.email,
+            phone=user.phone,
+            tg_nickname=user.tg_nickname,
+            vk_nickname=user.vk_nickname,
+            role=user.role.name if user.role else "member",
+            resumes=resumes_full,
+            portfolio=list(portfolio),
+            education=list(education),
+            languages=list(languages),
+        )

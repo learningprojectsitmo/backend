@@ -8,6 +8,8 @@ from src.core.container import (
     get_language_service,
     get_portfolio_service,
     get_profile_service,
+    get_project_service,
+    get_workspace_service,
 )
 from src.core.dependencies import get_current_user, setup_audit
 from src.core.exceptions import PermissionError
@@ -16,12 +18,15 @@ from src.schema.audit import ActivityResponse
 from src.schema.education import EducationCreate, EducationFull, EducationUpdate
 from src.schema.language import LanguageCreate, LanguageFull, LanguageUpdate
 from src.schema.portfolio import PortfolioCreate, PortfolioFull, PortfolioUpdate
-from src.schema.profile import ProfileResponse
+from src.schema.profile import ProfileResponse, PublicProfileResponse
+from src.schema.workspace import Space
 from src.services.audit_service import ACTIVITY_ITEMS_LIMIT, AuditService
 from src.services.education_service import EducationService
 from src.services.language_service import LanguageService
 from src.services.portfolio_service import PortfolioService
 from src.services.profile_service import ProfileService
+from src.services.project_service import ProjectService
+from src.services.workspace_service import WorkSpaceService
 
 profile_router = APIRouter(prefix="/profile", tags=["profile"], dependencies=[Depends(setup_audit)])
 
@@ -36,6 +41,42 @@ async def fetch_profile(
         return await profile_service.get_profile(current_user.id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
+
+
+@profile_router.get("/{user_id}", response_model=PublicProfileResponse)
+async def fetch_public_profile(
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    profile_service: ProfileService = Depends(get_profile_service),
+    workspace_service: WorkSpaceService = Depends(get_workspace_service),
+    project_service: ProjectService = Depends(get_project_service),
+) -> PublicProfileResponse:
+    """Получить публичный профиль пользователя по ID (только видимые резюме)"""
+    try:
+        profile = await profile_service.get_public_profile(user_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+    spaces_data, _ = await workspace_service.get_workspaces_menu_data(user_id, 0, 100)
+    projects = await project_service.get_my_created_projects(user_id)
+
+    return PublicProfileResponse(
+        **profile.model_dump(),
+        spaces=[Space.model_validate(item) for item in spaces_data],
+        projects=projects.items,
+    )
+
+
+@profile_router.get("/{user_id}/activity", response_model=ActivityResponse)
+async def fetch_public_profile_activity(
+    user_id: int,
+    page: int = Query(1, ge=1),
+    limit: int = Query(ACTIVITY_ITEMS_LIMIT, ge=1, le=100),
+    current_user: User = Depends(get_current_user),
+    audit_service: AuditService = Depends(get_audit_service),
+) -> ActivityResponse:
+    """Получить активность пользователя по ID (публичная лента действий)"""
+    return await audit_service.get_activity(user_id, page=page, limit=limit)
 
 
 @profile_router.get("/activity", response_model=ActivityResponse)
