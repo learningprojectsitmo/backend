@@ -49,14 +49,29 @@ def seed_project_types(connection) -> None:
             "name": "Курсовой проект",
             "description": "Диплом с этапами утверждения темы и защиты",
             "stages": [
-                {"name": "Выбор темы", "requires_approval": False, "visible_to_participants": False},
-                {"name": "Утверждение темы", "requires_approval": True, "visible_to_participants": True},
-                {"name": "Создание тз", "requires_approval": False, "visible_to_participants": True},
-                {"name": "Утверждение тз", "requires_approval": True, "visible_to_participants": True},
-                {"name": "Реализация", "requires_approval": False, "visible_to_participants": True},
-                {"name": "Предзащита", "requires_approval": True, "visible_to_participants": True},
-                {"name": "Защита", "requires_approval": True, "visible_to_participants": True},
-                {"name": "Завершено", "requires_approval": False, "visible_to_participants": True},
+                {"name": "Выбор темы", "requires_approval": False, "visible_to_participants": False, "kind": "general"},
+                {
+                    "name": "Утверждение темы",
+                    "requires_approval": True,
+                    "visible_to_participants": True,
+                    "kind": "general",
+                },
+                {
+                    "name": "Создание тз",
+                    "requires_approval": False,
+                    "visible_to_participants": True,
+                    "kind": "spec_creation",
+                },
+                {
+                    "name": "Утверждение тз",
+                    "requires_approval": True,
+                    "visible_to_participants": True,
+                    "kind": "spec_approval",
+                },
+                {"name": "Реализация", "requires_approval": False, "visible_to_participants": True, "kind": "general"},
+                {"name": "Предзащита", "requires_approval": True, "visible_to_participants": True, "kind": "general"},
+                {"name": "Защита", "requires_approval": True, "visible_to_participants": True, "kind": "general"},
+                {"name": "Завершено", "requires_approval": False, "visible_to_participants": True, "kind": "general"},
             ],
         },
     ]
@@ -78,6 +93,7 @@ def seed_project_types(connection) -> None:
                     order=idx,
                     requires_approval=stage["requires_approval"],
                     visible_to_participants=stage["visible_to_participants"],
+                    kind=stage.get("kind", "general"),
                     project_type_id=type_id,
                 )
             )

@@ -7,7 +7,13 @@ from sqlalchemy.orm import selectinload
 
 from src.core.exceptions import NotFoundError, PermissionError, ValidationError
 from src.model.notification import NotificationType
-from src.model.project import Project, ProjectParticipation, ProjectType, StageTransition
+from src.model.project import (
+    Project,
+    ProjectParticipation,
+    ProjectSpecification,
+    ProjectType,
+    StageTransition,
+)
 from src.model.user import Role, User
 from src.model.workspace import WorkSpace, WorkSpaceParticipation
 from src.schema.stage import (
@@ -23,6 +29,7 @@ from src.schema.stage import (
 from src.services.base_service import BaseService
 
 if TYPE_CHECKING:
+    from src.repository.specification_repository import SpecificationRepository
     from src.repository.stage_repository import ProjectTypeRepository, StageTransitionRepository
     from src.services.notification_service import NotificationService
 
@@ -33,16 +40,22 @@ class ProjectStageService(BaseService[Project, dict, dict]):
     TEACHER_ROLES: ClassVar[set[str]] = {"teacher", "admin"}
     MANAGE_ROLES: ClassVar[set[str]] = {"teacher", "admin", "manager"}
 
+    STAGE_KIND_GENERAL = "general"
+    STAGE_KIND_SPEC_CREATION = "spec_creation"
+    STAGE_KIND_SPEC_APPROVAL = "spec_approval"
+
     def __init__(
         self,
         type_repository: ProjectTypeRepository,
         transition_repository: StageTransitionRepository,
         notification_service: NotificationService | None = None,
+        specification_repository: SpecificationRepository | None = None,
     ) -> None:
         super().__init__(type_repository)  # type: ignore[arg-type]
         self._type_repository = type_repository
         self._transition_repository = transition_repository
         self._notification_service = notification_service
+        self._specification_repository = specification_repository
 
     async def copy_system_types_to_workspace(self, workspace_id: int) -> int:
         """Скопировать системные типы проектов в пространство (идемпотентно)."""
@@ -222,6 +235,36 @@ class ProjectStageService(BaseService[Project, dict, dict]):
         if project.author_id != user_id:
             raise PermissionError("Only project author can advance the project")
 
+    async def _spec_for_project(self, project: Project) -> ProjectSpecification | None:
+        """ТЗ проекта (создаётся пустой черновик, если его ещё нет)."""
+        if not self._specification_repository:
+            return None
+        return await self._specification_repository.get_or_create_draft(project.id)
+
+    @staticmethod
+    def _set_spec_status(spec: ProjectSpecification | None, status: str, comment: str | None = None) -> None:
+        """Обновить статус ТЗ при переходе по стадиям (spec_creation/spec_approval)."""
+        if spec is None:
+            return
+        spec.status = status
+        if comment is not None:
+            spec.rejection_comment = comment
+
+    async def _require_specification_for_advance(self, project: Project) -> None:
+        """Проверить заполненность ТЗ и пометить его как отправленное на утверждение."""
+        spec = await self._spec_for_project(project)
+        if spec is None:
+            return
+        goal = (spec.goal or "").strip()
+        tasks = [t for t in (spec.tasks or []) if t and t.strip()]
+        if not goal or not tasks:
+            raise ValidationError(
+                "ТЗ должно быть заполнено: укажите цель и хотя бы одну задачу перед отправкой на утверждение"
+            )
+        spec.status = "submitted"
+        spec.rejection_comment = None
+        await self._type_repository.uow.session.flush()
+
     async def _is_teacher(self, project: Project, user_id: int) -> bool:
         user = await self._type_repository.uow.session.get(User, user_id)
         if not user:
@@ -273,9 +316,15 @@ class ProjectStageService(BaseService[Project, dict, dict]):
         if current_order is None:
             raise ValidationError("Project current stage is not among its type stages")
 
+        from_stage = stages[current_order]
+
         # Последний этап — проект завершён, двигаться некуда
         if current_order == len(stages) - 1:
             raise ValidationError("Project already on the final stage")
+
+        # Стадия «Создание тз» → автор должен заполнить ТЗ и отправляет его на утверждение
+        if getattr(from_stage, "kind", self.STAGE_KIND_GENERAL) == self.STAGE_KIND_SPEC_CREATION:
+            await self._require_specification_for_advance(project)
 
         target = stages[current_order + 1]
         return await self._apply_advance(project, stages[current_order], target, user_id)
@@ -355,6 +404,13 @@ class ProjectStageService(BaseService[Project, dict, dict]):
         project.progress = self._compute_progress(project, stages)
         current_id = project.current_stage_id
         current_order = next((i for i, s in enumerate(stages) if s.id == current_id), None)
+        # Утверждение стадии «Утверждение тз» помечает ТЗ утверждённым
+        current_stage = stages[current_order] if current_order is not None else None
+        if (
+            current_stage is not None
+            and getattr(current_stage, "kind", self.STAGE_KIND_GENERAL) == self.STAGE_KIND_SPEC_APPROVAL
+        ):
+            self._set_spec_status(await self._spec_for_project(project), "approved")
         # Если текущий этап не последний — автоматически переходим на следующий.
         # Если следующий требует утверждения — он сразу становится ожидающим подтверждения.
         if current_order is not None and current_order < len(stages) - 1:
@@ -389,6 +445,13 @@ class ProjectStageService(BaseService[Project, dict, dict]):
             action="reject",
             comment=comment,
         )
+        # Отклонение стадии «Утверждение тз» возвращает ТЗ в черновик с комментарием
+        current_stage = stages[current_order] if current_order is not None else None
+        if (
+            current_stage is not None
+            and getattr(current_stage, "kind", self.STAGE_KIND_GENERAL) == self.STAGE_KIND_SPEC_APPROVAL
+        ):
+            self._set_spec_status(await self._spec_for_project(project), "draft", comment)
         # Перезагружаем историю, чтобы ответ сразу содержал свежий комментарий возврата
         project.stage_transitions = await self._transition_repository.get_transitions_by_project(project.id)
 

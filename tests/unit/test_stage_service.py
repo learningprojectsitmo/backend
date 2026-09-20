@@ -7,19 +7,40 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from src.core.exceptions import NotFoundError, PermissionError, ValidationError
-from src.model.project import Project, ProjectStage, ProjectType, StageTransition
+from src.model.project import Project, ProjectSpecification, ProjectStage, ProjectType, StageTransition
 from src.schema.project import ProjectFull
 from src.services.stage_service import ProjectStageService
 
 
-def _stage(id: int, order: int, requires_approval: bool = False, visible_to_participants: bool = True) -> ProjectStage:
+def _stage(
+    id: int,
+    order: int,
+    requires_approval: bool = False,
+    visible_to_participants: bool = True,
+    kind: str = "general",
+) -> ProjectStage:
     return ProjectStage(
         id=id,
         name=f"stage{id}",
         order=order,
         requires_approval=requires_approval,
         visible_to_participants=visible_to_participants,
+        kind=kind,
     )
+
+
+def _spec(
+    status: str = "draft",
+    goal: str = "",
+    tasks: list[str] | None = None,
+    rejection_comment: str | None = None,
+) -> ProjectSpecification:
+    spec = ProjectSpecification(id=1, project_id=10, status=status)
+    spec.goal = goal
+    spec.tasks = tasks or []
+    spec.acceptance_criteria = []
+    spec.rejection_comment = rejection_comment
+    return spec
 
 
 def _mock_project_fetch(session, project: Project | None) -> None:
@@ -39,7 +60,7 @@ def _mock_teacher(session, teacher: Mock, model_cls_name: str = "User") -> None:
 class TestProjectStageService:
     """Тесты для ProjectStageService — переходы по этапам"""
 
-    def _make_service(self) -> tuple:
+    def _make_service(self, spec_repo: Mock | None = None) -> tuple:
         type_repo = Mock()
         type_repo.uow = Mock()
         type_repo.uow.session = AsyncMock()
@@ -48,8 +69,10 @@ class TestProjectStageService:
         transition_repo.create_transition = AsyncMock()
         transition_repo.get_transitions_by_project = AsyncMock(return_value=[])
 
-        service = ProjectStageService(type_repo, transition_repo)  # type: ignore[arg-type]
-        return service, type_repo, transition_repo
+        service = ProjectStageService(  # type: ignore[arg-type]
+            type_repo, transition_repo, specification_repository=spec_repo
+        )
+        return service, type_repo, transition_repo, spec_repo
 
     def _project_with_stages(self, current_stage_id=None, pending=False) -> Project:
         ptype = ProjectType(id=1, name="Курсовая")
@@ -72,7 +95,7 @@ class TestProjectStageService:
     @pytest.mark.asyncio
     async def test_should_advance_to_second_with_pending_approval(self):
         # given
-        service, type_repo, transition_repo = self._make_service()
+        service, type_repo, transition_repo, _ = self._make_service()
         project = self._project_with_stages(current_stage_id=1)
         _mock_project_fetch(type_repo.uow.session, project)
         type_repo.uow.session.flush = AsyncMock()
@@ -90,7 +113,7 @@ class TestProjectStageService:
     @pytest.mark.asyncio
     async def test_should_deny_advance_for_non_author(self):
         # given
-        service, type_repo, _ = self._make_service()
+        service, type_repo, _, _ = self._make_service()
         project = self._project_with_stages(current_stage_id=1)
         _mock_project_fetch(type_repo.uow.session, project)
 
@@ -101,7 +124,7 @@ class TestProjectStageService:
     @pytest.mark.asyncio
     async def test_should_not_advance_while_pending_approval(self):
         # given
-        service, type_repo, _ = self._make_service()
+        service, type_repo, _, _ = self._make_service()
         project = self._project_with_stages(current_stage_id=1, pending=True)
         _mock_project_fetch(type_repo.uow.session, project)
 
@@ -112,7 +135,7 @@ class TestProjectStageService:
     @pytest.mark.asyncio
     async def test_should_reject_and_rollback_to_previous_stage(self):
         # given
-        service, type_repo, transition_repo = self._make_service()
+        service, type_repo, transition_repo, _ = self._make_service()
         project = self._project_with_stages(current_stage_id=2, pending=True)
         type_repo.uow.session.get = AsyncMock(return_value=project)
         type_repo.uow.session.flush = AsyncMock()
@@ -239,7 +262,7 @@ class TestProjectStageService:
     @pytest.mark.asyncio
     async def test_should_approve_current_stage_and_advance_to_next(self):
         # given
-        service, type_repo, transition_repo = self._make_service()
+        service, type_repo, transition_repo, _ = self._make_service()
         project = self._project_with_stages(current_stage_id=2, pending=True)
         type_repo.uow.session.flush = AsyncMock()
 
@@ -264,7 +287,7 @@ class TestProjectStageService:
     @pytest.mark.asyncio
     async def test_should_approve_final_stage_without_advance(self):
         # given
-        service, type_repo, transition_repo = self._make_service()
+        service, type_repo, transition_repo, _ = self._make_service()
         project = self._project_with_stages(current_stage_id=3, pending=True)
         type_repo.uow.session.flush = AsyncMock()
 
@@ -288,7 +311,7 @@ class TestProjectStageService:
     @pytest.mark.asyncio
     async def test_should_mark_next_stage_pending_when_it_requires_approval(self):
         # given — второй и третий этапы требуют утверждения
-        service, type_repo, transition_repo = self._make_service()
+        service, type_repo, transition_repo, _ = self._make_service()
         type_repo.uow.session.flush = AsyncMock()
         ptype = ProjectType(id=1, name="Курсовая")
         ptype.stages = [
@@ -319,7 +342,7 @@ class TestProjectStageService:
     @pytest.mark.asyncio
     async def test_should_raise_when_project_type_missing(self):
         # given
-        service, type_repo, _ = self._make_service()
+        service, type_repo, _, _ = self._make_service()
         project = Project(id=10, name="Test", author_id=100, stage_pending_approval=False)
         _mock_project_fetch(type_repo.uow.session, project)
 
@@ -330,12 +353,119 @@ class TestProjectStageService:
     @pytest.mark.asyncio
     async def test_should_raise_when_project_not_found(self):
         # given
-        service, type_repo, _ = self._make_service()
+        service, type_repo, _, _ = self._make_service()
         _mock_project_fetch(type_repo.uow.session, None)
 
         # when / then
         with pytest.raises(NotFoundError):
             await service.advance_stage(999, 100)
+
+    @pytest.mark.asyncio
+    async def test_should_deny_advance_from_spec_creation_without_filled_spec(self):
+        # given — стадия «Создание тз», но ТЗ пустое
+        spec_repo = Mock()
+        spec_repo.get_or_create_draft = AsyncMock(return_value=_spec(goal="", tasks=[]))
+        service, type_repo, _, _ = self._make_service(spec_repo=spec_repo)
+        ptype = ProjectType(id=1, name="Диплом")
+        ptype.stages = [
+            _stage(1, 0, kind=ProjectStageService.STAGE_KIND_SPEC_CREATION),
+            _stage(2, 1),
+        ]
+        project = Project(id=10, name="Test", author_id=100, current_stage_id=1)
+        project.project_type = ptype
+        _mock_project_fetch(type_repo.uow.session, project)
+
+        # when / then
+        with pytest.raises(ValidationError):
+            await service.advance_stage(10, 100)
+
+    @pytest.mark.asyncio
+    async def test_should_mark_spec_submitted_when_advancing_from_spec_creation(self):
+        # given — ТЗ заполнено автором
+        spec_repo = Mock()
+        spec = _spec(goal="Цель", tasks=["Задача 1"])
+        spec_repo.get_or_create_draft = AsyncMock(return_value=spec)
+        service, type_repo, transition_repo, _ = self._make_service(spec_repo=spec_repo)
+        type_repo.uow.session.flush = AsyncMock()
+        ptype = ProjectType(id=1, name="Диплом")
+        ptype.stages = [
+            _stage(1, 0, kind=ProjectStageService.STAGE_KIND_SPEC_CREATION),
+            _stage(2, 1),
+        ]
+        project = Project(id=10, name="Test", author_id=100, current_stage_id=1)
+        project.project_type = ptype
+        _mock_project_fetch(type_repo.uow.session, project)
+
+        # when
+        result = await service.advance_stage(10, 100)
+
+        # then — перешли на следующий этап, ТЗ отправлено на утверждение
+        assert result.current_stage_id == 2  # noqa: PLR2004
+        assert spec.status == "submitted"
+        assert spec.rejection_comment is None
+        transition_repo.create_transition.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_should_approve_spec_when_approving_spec_approval_stage(self):
+        # given — преподаватель утверждает стадию «Утверждение тз»
+        spec_repo = Mock()
+        spec = _spec(status="submitted", goal="Цель", tasks=["Задача 1"])
+        spec_repo.get_or_create_draft = AsyncMock(return_value=spec)
+        service, type_repo, _, _ = self._make_service(spec_repo=spec_repo)
+        type_repo.uow.session.flush = AsyncMock()
+        ptype = ProjectType(id=1, name="Диплом")
+        ptype.stages = [
+            _stage(1, 0, kind=ProjectStageService.STAGE_KIND_SPEC_CREATION),
+            _stage(2, 1, requires_approval=True, kind=ProjectStageService.STAGE_KIND_SPEC_APPROVAL),
+            _stage(3, 2),
+        ]
+        project = Project(id=10, name="Test", author_id=100, current_stage_id=2, stage_pending_approval=True)
+        project.project_type = ptype
+        _mock_project_fetch(type_repo.uow.session, project)
+
+        teacher = Mock()
+        teacher_role = Mock()
+        teacher_role.name = "teacher"
+        teacher.role = teacher_role
+        _mock_teacher(type_repo.uow.session, teacher)
+
+        # when
+        result = await service.approve_stage(10, 200)
+
+        # then — ТЗ утверждено, проект перешёл дальше
+        assert result.current_stage_id == 3  # noqa: PLR2004
+        assert spec.status == "approved"
+
+    @pytest.mark.asyncio
+    async def test_should_return_spec_to_draft_when_rejecting_spec_approval_stage(self):
+        # given — преподаватель возвращает ТЗ на доработку
+        spec_repo = Mock()
+        spec = _spec(status="submitted", goal="Цель", tasks=["Задача 1"])
+        spec_repo.get_or_create_draft = AsyncMock(return_value=spec)
+        service, type_repo, _, _ = self._make_service(spec_repo=spec_repo)
+        type_repo.uow.session.flush = AsyncMock()
+        ptype = ProjectType(id=1, name="Диплом")
+        ptype.stages = [
+            _stage(1, 0, kind=ProjectStageService.STAGE_KIND_SPEC_CREATION),
+            _stage(2, 1, requires_approval=True, kind=ProjectStageService.STAGE_KIND_SPEC_APPROVAL),
+        ]
+        project = Project(id=10, name="Test", author_id=100, current_stage_id=2, stage_pending_approval=True)
+        project.project_type = ptype
+        _mock_project_fetch(type_repo.uow.session, project)
+
+        teacher = Mock()
+        teacher_role = Mock()
+        teacher_role.name = "teacher"
+        teacher.role = teacher_role
+        _mock_teacher(type_repo.uow.session, teacher)
+
+        # when
+        result = await service.reject_stage(10, 200, comment="Поправьте постановку задач")
+
+        # then — ТЗ снова черновик, комментарий отклонения сохранён, проект со стадии не ушёл
+        assert result.current_stage_id == 1
+        assert spec.status == "draft"
+        assert spec.rejection_comment == "Поправьте постановку задач"
 
 
 class TestProjectTypeCRUDWorkspaceScoped:

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Table, UniqueConstraint, func
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Table, Text, UniqueConstraint, func
 from sqlalchemy import Column as SAColumn
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -79,6 +79,12 @@ class Project(Base):
         back_populates="project",
         cascade="all, delete-orphan",
         order_by="Column.position",
+    )
+
+    specification: Mapped[ProjectSpecification | None] = relationship(
+        back_populates="project",
+        uselist=False,
+        cascade="all, delete-orphan",
     )
 
     def __repr__(self) -> str:
@@ -219,6 +225,7 @@ class ProjectStage(Base):
     requires_approval: Mapped[bool] = mapped_column(default=False, nullable=False)
     visible_to_participants: Mapped[bool] = mapped_column(default=True, nullable=False)
     duration_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    kind: Mapped[str] = mapped_column(String(30), nullable=False, default="general", server_default="general")
     project_type_id: Mapped[int] = mapped_column(ForeignKey("project_type.id"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
@@ -253,4 +260,54 @@ class StageTransition(Base):
         return (
             f"StageTransition(id={self.id!r}, project_id={self.project_id!r}, "
             f"stage_id={self.stage_id!r}, action={self.action!r})"
+        )
+
+
+class ProjectSpecification(Base):
+    __tablename__ = "project_specification"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("project.id"), nullable=False, unique=True)
+    goal: Mapped[str | None] = mapped_column(Text, nullable=True)
+    tasks: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    functional_requirements: Mapped[list[dict]] = mapped_column(JSON, nullable=False, default=list)
+    non_functional_requirements: Mapped[list[dict]] = mapped_column(JSON, nullable=False, default=list)
+    acceptance_criteria: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="draft", server_default="draft")
+    rejection_comment: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    project: Mapped[Project] = relationship(back_populates="specification")
+    comments: Mapped[list[SpecificationComment]] = relationship(
+        back_populates="specification",
+        cascade="all, delete-orphan",
+        order_by="SpecificationComment.created_at",
+    )
+
+    def __repr__(self) -> str:
+        return f"ProjectSpecification(id={self.id!r}, project_id={self.project_id!r}, status={self.status!r})"
+
+
+class SpecificationComment(Base):
+    __tablename__ = "project_specification_comment"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    specification_id: Mapped[int] = mapped_column(ForeignKey("project_specification.id"), nullable=False)
+    author_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    specification: Mapped[ProjectSpecification] = relationship(back_populates="comments")
+    author: Mapped[User] = relationship()
+
+    def __repr__(self) -> str:
+        return (
+            f"SpecificationComment(id={self.id!r}, specification_id={self.specification_id!r}, "
+            f"author_id={self.author_id!r})"
         )
