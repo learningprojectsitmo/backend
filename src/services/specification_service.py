@@ -135,6 +135,7 @@ class SpecificationService(BaseService[object, object, SpecificationUpdate]):
             for field, value in payload.items():
                 setattr(spec, field, value)
             await self._specification_repository.uow.session.flush()
+            await self._specification_repository.uow.session.refresh(spec)
         return SpecificationFull.model_validate(spec)
 
     async def get_comments(self, project_id: int, user_id: int) -> list[SpecificationCommentResponse]:
