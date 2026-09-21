@@ -87,6 +87,20 @@ class TestSpecificationService:
         assert result.status == "draft"
 
     @pytest.mark.asyncio
+    async def test_should_allow_workspace_member_to_view_spec(self):
+        # given — участник пространства (любая роль), не автор и не участник проекта
+        service, spec_repo, project_repo = self._make_service()
+        project_repo.get_by_id.return_value = _project(author_id=100, workspace_id=42)
+        spec_repo.get_or_create_draft = AsyncMock(return_value=_spec())
+        spec_repo.uow.session.execute = AsyncMock(return_value=_resolved_row(Mock()))
+
+        # when
+        result = await service.get_specification(10, 300)
+
+        # then
+        assert result.status == "draft"
+
+    @pytest.mark.asyncio
     async def test_should_allow_participant_to_view_spec(self):
         # given — участник проекта
         service, spec_repo, project_repo = self._make_service()
@@ -253,6 +267,20 @@ class TestSpecificationCommentService:
         assert len(result) == 1
         assert result[0].text == "Комментарий"
         assert result[0].author.username == "Иван"
+
+    @pytest.mark.asyncio
+    async def test_should_allow_workspace_member_to_get_comments(self):
+        # given — участник пространства, не автор
+        service, spec_repo, project_repo, comment_repo = self._make_service()
+        project_repo.get_by_id.return_value = _project(author_id=100, workspace_id=42)
+        spec_repo.get_or_create_draft = AsyncMock(return_value=_spec())
+        comment_repo.get_by_specification_id = AsyncMock(return_value=[_comment_with_author(200, "Иван")])
+
+        # when
+        result = await service.get_comments(10, 300)
+
+        # then
+        assert len(result) == 1
 
     @pytest.mark.asyncio
     async def test_should_deny_get_comments_for_stranger(self):

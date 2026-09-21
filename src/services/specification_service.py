@@ -58,6 +58,17 @@ class SpecificationService(BaseService[object, object, SpecificationUpdate]):
         )
         return result.first() is not None
 
+    async def _is_workspace_participant(self, user_id: int, workspace_id: int | None) -> bool:
+        if not workspace_id:
+            return False
+        result = await self._specification_repository.uow.session.execute(
+            select(WorkSpaceParticipation).where(
+                WorkSpaceParticipation.workspace_id == workspace_id,
+                WorkSpaceParticipation.participant_id == user_id,
+            )
+        )
+        return result.scalar_one_or_none() is not None
+
     async def _is_participant(self, project_id: int, user_id: int) -> bool:
         result = await self._specification_repository.uow.session.execute(
             select(ProjectParticipation).where(
@@ -70,7 +81,7 @@ class SpecificationService(BaseService[object, object, SpecificationUpdate]):
     async def _can_view(self, project: Project, user_id: int) -> bool:
         return (
             project.author_id == user_id
-            or await self._is_workspace_editor(user_id, project.workspace_id)
+            or await self._is_workspace_participant(user_id, project.workspace_id)
             or await self._is_participant(project.id, user_id)
         )
 
