@@ -388,3 +388,72 @@ class TestWorkSpaceService:
 
         # then
         mock_repository.get_multi.assert_called_once_with(skip=20, limit=10)
+
+    @pytest.mark.asyncio
+    async def test_should_get_workspace_resumes_with_filters_and_pagination(self):
+        """Тест должен передать фильтры и пагинацию в repository при получении резюме"""
+        # given
+        mock_repository = Mock(spec=WorkSpaceRepository)
+        mock_items = [
+            {
+                "id": 1,
+                "header": "Backend developer",
+                "skills": ["Python"],
+                "interests": ["AI"],
+                "participant_name": "Иванов Иван",
+                "participant_id": 1,
+                "in_team": False,
+            }
+        ]
+        mock_repository.get_workspace_resumes.return_value = (mock_items, 1)
+
+        workspace_service = WorkSpaceService(mock_repository)
+
+        # when
+        items, total = await workspace_service.get_workspace_resumes(
+            workspace_id=1,
+            search="python",
+            skills=["Python", "FastAPI"],
+            interests=["AI"],
+            skip=0,
+            limit=10,
+        )
+
+        # then
+        assert items == mock_items
+        assert total == 1
+        mock_repository.get_workspace_resumes.assert_called_once_with(1, "python", ["Python", "FastAPI"], ["AI"], 0, 10)
+
+    @pytest.mark.asyncio
+    async def test_should_get_workspace_resumes_without_filters(self):
+        """Тест должен передать пустые фильтры и дефолтную пагинацию в repository"""
+        # given
+        mock_repository = Mock(spec=WorkSpaceRepository)
+        mock_repository.get_workspace_resumes.return_value = ([], 0)
+
+        workspace_service = WorkSpaceService(mock_repository)
+
+        # when
+        items, total = await workspace_service.get_workspace_resumes(workspace_id=1)
+
+        # then
+        assert items == []
+        assert total == 0
+        mock_repository.get_workspace_resumes.assert_called_once_with(1, None, None, None, 0, 10)
+
+    @pytest.mark.asyncio
+    async def test_should_get_workspace_resume_filters(self):
+        """Тест должен передать workspace_id в repository при получении доступных скиллов и интересов"""
+        # given
+        mock_repository = Mock(spec=WorkSpaceRepository)
+        mock_filters = {"skills": ["Python", "SQL"], "interests": ["AI"]}
+        mock_repository.get_workspace_resume_filters.return_value = mock_filters
+
+        workspace_service = WorkSpaceService(mock_repository)
+
+        # when
+        result = await workspace_service.get_workspace_resume_filters(1)
+
+        # then
+        assert result == mock_filters
+        mock_repository.get_workspace_resume_filters.assert_called_once_with(1)

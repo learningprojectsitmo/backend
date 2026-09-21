@@ -16,6 +16,7 @@ from src.schema.workspace import (
     WorkSpaceFull,
     WorkspaceParticipantItem,
     WorkspaceParticipantListResponse,
+    WorkspaceResumeFiltersResponse,
     WorkspaceResumeItem,
     WorkspaceResumeListResponse,
     WorkSpaceUpdate,
@@ -165,18 +166,52 @@ async def get_workspace_participants(
 @workspace_router.get("/{workspace_id}/resumes", response_model=WorkspaceResumeListResponse)
 async def get_workspace_resumes(
     workspace_id: int,
+    page: int = Query(1, ge=1, description="Номер страницы"),
+    limit: int = Query(10, ge=1, le=100, description="Количество резюме на странице"),
+    search: str | None = Query(None, description="Поиск по имени/заголовку/навыкам/интересам"),
+    skills: list[str] | None = Query(None, description="Фильтр по навыкам"),
+    interests: list[str] | None = Query(None, description="Фильтр по интересам"),
     workspace_service: WorkSpaceService = Depends(get_workspace_service),
     _current_user: User = Depends(get_current_user),
 ) -> WorkspaceResumeListResponse:
-    """Получить все видимые резюме участников workspace"""
+    """Получить видимые резюме участников workspace с пагинацией и фильтрацией"""
     workspace = await workspace_service.get_workspace_by_id(workspace_id)
     if not workspace:
         raise HTTPException(status_code=404, detail="Workspace not found")
 
-    items = await workspace_service.get_workspace_resumes(workspace_id)
+    skip = (page - 1) * limit
+    items, total = await workspace_service.get_workspace_resumes(
+        workspace_id,
+        search,
+        skills,
+        interests,
+        skip,
+        limit,
+    )
     parsed = [WorkspaceResumeItem.model_validate(item) for item in items]
 
-    return WorkspaceResumeListResponse(items=parsed, total=len(parsed))
+    return WorkspaceResumeListResponse(
+        items=parsed,
+        total=total,
+        page=page,
+        limit=limit,
+        total_pages=(total + limit - 1) // limit if limit > 0 else 0,
+    )
+
+
+@workspace_router.get("/{workspace_id}/resumes/filters", response_model=WorkspaceResumeFiltersResponse)
+async def get_workspace_resume_filters(
+    workspace_id: int,
+    workspace_service: WorkSpaceService = Depends(get_workspace_service),
+    _current_user: User = Depends(get_current_user),
+) -> WorkspaceResumeFiltersResponse:
+    """Получить доступные скиллы и интересы для фильтрации резюме workspace"""
+    workspace = await workspace_service.get_workspace_by_id(workspace_id)
+    if not workspace:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    filters = await workspace_service.get_workspace_resume_filters(workspace_id)
+    return WorkspaceResumeFiltersResponse(**filters)
 
 
 @workspace_router.delete("/{workspace_id}/participants/{user_id}")

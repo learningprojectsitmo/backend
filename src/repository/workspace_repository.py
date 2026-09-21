@@ -266,8 +266,16 @@ class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUp
 
         return items, total
 
-    async def get_workspace_resumes(self, workspace_id: int) -> list[dict]:
-        """Получить все видимые резюме участников workspace со скиллами и интересами"""
+    async def get_workspace_resumes(
+        self,
+        workspace_id: int,
+        search: str | None = None,
+        skills: list[str] | None = None,
+        interests: list[str] | None = None,
+        skip: int = 0,
+        limit: int = 10,
+    ) -> tuple[list[dict], int]:
+        """Получить видимые резюме участников workspace со скиллами и интересами, с фильтрацией и пагинацией"""
 
         user_name = func.concat_ws(" ", User.last_name, User.first_name, User.middle_name).label("participant_name")
 
@@ -300,7 +308,7 @@ class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUp
             .correlate(WorkSpaceParticipation)
         )
 
-        query = (
+        base_query = (
             select(
                 Resume.id,
                 Resume.header,
@@ -320,9 +328,39 @@ class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUp
                 Resume.is_visible.is_(True),
                 Resume.header != "",
             )
-            .order_by(Resume.id)
         )
 
+        # Фильтры
+        if search:
+            pattern = f"%{search}%"
+            skill_match = select(ResumeSkill.resume_id).where(ResumeSkill.name.ilike(pattern))
+            interest_match = select(ResumeInterest.resume_id).where(ResumeInterest.name.ilike(pattern))
+            base_query = base_query.where(
+                or_(
+                    User.first_name.ilike(pattern),
+                    User.last_name.ilike(pattern),
+                    User.middle_name.ilike(pattern),
+                    Resume.header.ilike(pattern),
+                    Resume.id.in_(skill_match),
+                    Resume.id.in_(interest_match),
+                )
+            )
+        if skills:
+            base_query = base_query.where(
+                Resume.id.in_(select(ResumeSkill.resume_id).where(ResumeSkill.name.in_(skills)))
+            )
+        if interests:
+            base_query = base_query.where(
+                Resume.id.in_(select(ResumeInterest.resume_id).where(ResumeInterest.name.in_(interests)))
+            )
+
+        # Total count
+        count_query = select(func.count()).select_from(base_query.subquery())
+        total_result = await self.uow.session.execute(count_query)
+        total = total_result.scalar()
+
+        # Paginated results
+        query = base_query.order_by(Resume.id).offset(skip).limit(limit)
         result = await self.uow.session.execute(query)
         rows = result.mappings().all()
 
@@ -340,7 +378,38 @@ class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUp
                 }
             )
 
-        return items
+        return items, total
+
+    async def get_workspace_resume_filters(self, workspace_id: int) -> dict[str, list[str]]:
+        """Получить все доступные скиллы и интересы для фильтрации резюме workspace"""
+
+        visible_resume_ids = (
+            select(Resume.id)
+            .join(WorkSpaceParticipation, WorkSpaceParticipation.participant_id == Resume.author_id)
+            .where(
+                WorkSpaceParticipation.workspace_id == workspace_id,
+                Resume.is_visible.is_(True),
+                Resume.header != "",
+            )
+        )
+
+        skills_result = await self.uow.session.execute(
+            select(ResumeSkill.name)
+            .where(ResumeSkill.resume_id.in_(visible_resume_ids))
+            .distinct()
+            .order_by(ResumeSkill.name)
+        )
+        interests_result = await self.uow.session.execute(
+            select(ResumeInterest.name)
+            .where(ResumeInterest.resume_id.in_(visible_resume_ids))
+            .distinct()
+            .order_by(ResumeInterest.name)
+        )
+
+        return {
+            "skills": [s for s in skills_result.scalars().all() if s],
+            "interests": [i for i in interests_result.scalars().all() if i],
+        }
 
     async def get_workspaces_menu_data(self, user_id: int, skip: int = 0, limit: int = 10) -> tuple[list[dict], int]:
         """Получить workspace с подсчётом участников (только видимые пользователю)"""

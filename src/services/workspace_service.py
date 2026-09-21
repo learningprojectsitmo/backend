@@ -137,9 +137,23 @@ class WorkSpaceService(BaseService[WorkSpace, WorkSpaceCreate, WorkSpaceUpdate])
 
         return await self._workspace_repository.remove_participant(workspace_id, user_id)
 
-    async def get_workspace_resumes(self, workspace_id: int) -> list[dict]:
-        """Получить все видимые резюме участников workspace"""
-        return await self._workspace_repository.get_workspace_resumes(workspace_id)
+    async def get_workspace_resumes(
+        self,
+        workspace_id: int,
+        search: str | None = None,
+        skills: list[str] | None = None,
+        interests: list[str] | None = None,
+        skip: int = 0,
+        limit: int = 10,
+    ) -> tuple[list[dict], int]:
+        """Получить видимые резюме участников workspace с фильтрацией и пагинацией"""
+        return await self._workspace_repository.get_workspace_resumes(
+            workspace_id, search, skills, interests, skip, limit
+        )
+
+    async def get_workspace_resume_filters(self, workspace_id: int) -> dict[str, list[str]]:
+        """Получить доступные скиллы и интересы для фильтрации резюме workspace"""
+        return await self._workspace_repository.get_workspace_resume_filters(workspace_id)
 
     async def get_all_categories(self) -> list:
         """Получить все категории workspace"""

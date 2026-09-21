@@ -137,7 +137,17 @@ class WorkspaceResumeItem(BaseModel):
 
 
 class WorkspaceResumeListResponse(BaseModel):
-    """Список резюме участников workspace"""
+    """Список резюме участников workspace с пагинацией"""
 
     items: list[WorkspaceResumeItem]
     total: int
+    page: int
+    limit: int
+    total_pages: int
+
+
+class WorkspaceResumeFiltersResponse(BaseModel):
+    """Доступные скиллы и интересы для фильтрации резюме workspace"""
+
+    skills: list[str]
+    interests: list[str]
