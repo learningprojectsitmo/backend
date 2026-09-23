@@ -318,9 +318,18 @@ async def get_kanban_service(
     kanban_subtask_repository: KanbanSubtaskRepository = Depends(get_kanban_subtask_repository),
     user_repository: UserRepository = Depends(get_user_repository),
     project_repository: ProjectRepository = Depends(get_project_repository),
+    *,
+    notification_service: NotificationService = Depends(get_notification_service),
+    mail_service: MailService = Depends(get_mail_service),
 ) -> KanbanService:
     return KanbanService(
-        kanban_column_repository, kanban_task_repository, kanban_subtask_repository, user_repository, project_repository
+        kanban_column_repository,
+        kanban_task_repository,
+        kanban_subtask_repository,
+        user_repository,
+        project_repository,
+        notification_service=notification_service,
+        mail_service=mail_service,
     )
 
 

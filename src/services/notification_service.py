@@ -28,6 +28,7 @@ class NotificationService:
         self,
         user_id: int,
         type: NotificationType,
+        *,
         actor_name: str,
         project_id: int,
         project_name: str,
@@ -36,6 +37,9 @@ class NotificationService:
         invitation_id: int | None = None,
         response_id: int | None = None,
         stage_name: str | None = None,
+        task_title: str | None = None,
+        column_name: str | None = None,
+        subtask_title: str | None = None,
     ) -> Notification:
         data = {
             "actor_id": actor_id,
@@ -46,6 +50,9 @@ class NotificationService:
             "invitation_id": invitation_id,
             "response_id": response_id,
             "stage_name": stage_name,
+            "task_title": task_title,
+            "column_name": column_name,
+            "subtask_title": subtask_title,
         }
         return await self._repository.create_notification(user_id, type, data)
 

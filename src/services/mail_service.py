@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from email.message import EmailMessage
+from typing import ClassVar
 
 import aiosmtplib
 
@@ -264,3 +265,156 @@ class MailService:
         body += self._action_button(f"{settings.FRONTEND_URL}/app/project?id={project_id}", "Открыть проект")
         html = self._wrap(body, "Приглашение отклонено")
         return await self.send_html(to, f"Приглашение отклонено — {_BRAND}", html)
+
+    #   === Канбан-доска ===
+
+    _CHANGE_LABELS: ClassVar[dict[str, str]] = {
+        "title": "название",
+        "description": "описание",
+        "priority": "приоритет",
+        "due_date": "срок выполнения",
+        "tags": "теги",
+        "assignees": "ответственные",
+        "is_completed": "статус выполнения",
+    }
+
+    async def send_task_created_email(
+        self, to: str, first_name: str, task_title: str, project_name: str, project_id: int
+    ) -> bool:
+        """Получателю: создана новая задача на канбан-доске проекта."""
+        body = f"""
+                    <p style="margin:0 0 16px 0;font-size:16px;line-height:1.5;color:{_TEXT};">Здравствуйте, {first_name}!</p>
+                    <p style="margin:0 0 24px 0;font-size:16px;line-height:1.5;color:{_MUTED};">
+                        На доске проекта «{project_name}» создана задача «{task_title}».
+                        Загляните на доску, чтобы не упустить детали.
+                    </p>
+        """
+        body += self._action_button(f"{settings.FRONTEND_URL}/app/project?id={project_id}", "Открыть доску")
+        html = self._wrap(body, "Новая задача на доске")
+        return await self.send_html(to, f"Новая задача — {_BRAND}", html)
+
+    async def send_task_updated_email(
+        self,
+        to: str,
+        first_name: str,
+        task_title: str,
+        project_name: str,
+        project_id: int,
+        *,
+        changes: list[str],
+    ) -> bool:
+        """Получателю: задача обновлена."""
+        changes_text = ", ".join(self._CHANGE_LABELS.get(ch, ch) for ch in changes) or "поля задачи"
+        body = f"""
+                    <p style="margin:0 0 16px 0;font-size:16px;line-height:1.5;color:{_TEXT};">Здравствуйте, {first_name}!</p>
+                    <p style="margin:0 0 24px 0;font-size:16px;line-height:1.5;color:{_MUTED};">
+                        В задаче «{task_title}» проекта «{project_name}» изменено: {changes_text}.
+                    </p>
+        """
+        body += self._action_button(f"{settings.FRONTEND_URL}/app/project?id={project_id}", "Открыть доску")
+        html = self._wrap(body, "Задача обновлена")
+        return await self.send_html(to, f"Задача обновлена — {_BRAND}", html)
+
+    async def send_task_moved_email(
+        self,
+        to: str,
+        first_name: str,
+        task_title: str,
+        project_name: str,
+        project_id: int,
+        *,
+        from_column: str,
+        to_column: str,
+    ) -> bool:
+        """Получателю: задача перемещена между колонками."""
+        body = f"""
+                    <p style="margin:0 0 16px 0;font-size:16px;line-height:1.5;color:{_TEXT};">Здравствуйте, {first_name}!</p>
+                    <p style="margin:0 0 24px 0;font-size:16px;line-height:1.5;color:{_MUTED};">
+                        Задача «{task_title}» в проекте «{project_name}» перемещена
+                        из колонки «{from_column}» в колонку «{to_column}».
+                    </p>
+        """
+        body += self._action_button(f"{settings.FRONTEND_URL}/app/project?id={project_id}", "Открыть доску")
+        html = self._wrap(body, "Задача перемещена")
+        return await self.send_html(to, f"Задача перемещена — {_BRAND}", html)
+
+    async def send_task_deleted_email(
+        self, to: str, first_name: str, task_title: str, project_name: str, project_id: int
+    ) -> bool:
+        """Получателю: задача удалена."""
+        body = f"""
+                    <p style="margin:0 0 16px 0;font-size:16px;line-height:1.5;color:{_TEXT};">Здравствуйте, {first_name}!</p>
+                    <p style="margin:0 0 24px 0;font-size:16px;line-height:1.5;color:{_MUTED};">
+                        Задача «{task_title}» была удалена с доски проекта «{project_name}».
+                    </p>
+        """
+        body += self._action_button(f"{settings.FRONTEND_URL}/app/project?id={project_id}", "Открыть доску")
+        html = self._wrap(body, "Задача удалена")
+        return await self.send_html(to, f"Задача удалена — {_BRAND}", html)
+
+    async def send_subtask_created_email(
+        self,
+        to: str,
+        first_name: str,
+        task_title: str,
+        project_name: str,
+        project_id: int,
+        *,
+        subtask_title: str,
+    ) -> bool:
+        """Получателю: добавлена подзадача."""
+        body = f"""
+                    <p style="margin:0 0 16px 0;font-size:16px;line-height:1.5;color:{_TEXT};">Здравствуйте, {first_name}!</p>
+                    <p style="margin:0 0 24px 0;font-size:16px;line-height:1.5;color:{_MUTED};">
+                        В задачу «{task_title}» проекта «{project_name}» добавлена подзадача «{subtask_title}».
+                    </p>
+        """
+        body += self._action_button(f"{settings.FRONTEND_URL}/app/project?id={project_id}", "Открыть доску")
+        html = self._wrap(body, "Новая подзадача")
+        return await self.send_html(to, f"Новая подзадача — {_BRAND}", html)
+
+    async def send_subtask_updated_email(
+        self,
+        to: str,
+        first_name: str,
+        task_title: str,
+        project_name: str,
+        project_id: int,
+        *,
+        subtask_title: str,
+        completed: bool | None = None,
+    ) -> bool:
+        """Получателю: подзадача обновлена / переключён статус выполнения."""
+        if completed is not None:
+            status = "выполнена" if completed else "возобновлена"
+            detail = f"Подзадача «{subtask_title}» в задаче «{task_title}» проекта «{project_name}» теперь {status}."
+        else:
+            detail = f"Подзадача «{subtask_title}» в задаче «{task_title}» проекта «{project_name}» была изменена."
+        body = f"""
+                    <p style="margin:0 0 16px 0;font-size:16px;line-height:1.5;color:{_TEXT};">Здравствуйте, {first_name}!</p>
+                    <p style="margin:0 0 24px 0;font-size:16px;line-height:1.5;color:{_MUTED};">{detail}</p>
+        """
+        body += self._action_button(f"{settings.FRONTEND_URL}/app/project?id={project_id}", "Открыть доску")
+        html = self._wrap(body, "Подзадача обновлена")
+        return await self.send_html(to, f"Подзадача обновлена — {_BRAND}", html)
+
+    async def send_subtask_deleted_email(
+        self,
+        to: str,
+        first_name: str,
+        task_title: str,
+        project_name: str,
+        project_id: int,
+        *,
+        subtask_title: str,
+    ) -> bool:
+        """Получателю: подзадача удалена."""
+        body = f"""
+                    <p style="margin:0 0 16px 0;font-size:16px;line-height:1.5;color:{_TEXT};">Здравствуйте, {first_name}!</p>
+                    <p style="margin:0 0 24px 0;font-size:16px;line-height:1.5;color:{_MUTED};">
+                        Подзадача «{subtask_title}» была удалена из задачи «{task_title}» проекта «{project_name}».
+                    </p>
+        """
+        body += self._action_button(f"{settings.FRONTEND_URL}/app/project?id={project_id}", "Открыть доску")
+        html = self._wrap(body, "Подзадача удалена")
+        return await self.send_html(to, f"Подзадача удалена — {_BRAND}", html)

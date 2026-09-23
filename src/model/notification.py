@@ -22,6 +22,13 @@ class NotificationType(str, enum.Enum):
     invitation_accepted = "invitation_accepted"
     invitation_rejected = "invitation_rejected"
     stage_approval_required = "stage_approval_required"
+    task_created = "task_created"
+    task_updated = "task_updated"
+    task_moved = "task_moved"
+    task_deleted = "task_deleted"
+    subtask_created = "subtask_created"
+    subtask_updated = "subtask_updated"
+    subtask_deleted = "subtask_deleted"
 
 
 class Notification(Base):
