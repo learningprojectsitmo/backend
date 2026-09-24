@@ -140,6 +140,9 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["PLR2004"]  # magic values are fine in hand-written given-when-then asserts
 
+[tool.ruff.lint.pylint]
+max-positional-arguments = 15  # FastAPI endpoints/DI factories legitimately exceed ruff's default of 5
+
 [tool.ruff.lint.flake8-bugbear]
 extend-immutable-calls = ["fastapi.Depends", "fastapi.Query"]
 

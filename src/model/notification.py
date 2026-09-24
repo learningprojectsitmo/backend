@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from src.model.user import User
 
 
-class NotificationType(str, enum.Enum):
+class NotificationType(enum.StrEnum):
     response_received = "response_received"
     response_accepted = "response_accepted"
     response_rejected = "response_rejected"
