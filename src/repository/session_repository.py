@@ -336,9 +336,7 @@ class SessionRepository:
         """Подсчитать количество активных сессий по всей системе"""
 
         try:
-            result = await self.uow.session.execute(
-                select(func.count()).select_from(Session).where(Session.is_active)
-            )
+            result = await self.uow.session.execute(select(func.count()).select_from(Session).where(Session.is_active))
             count = result.scalar_one()
         except Exception:
             self._logger.exception("Error counting all active sessions")

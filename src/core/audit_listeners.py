@@ -3,6 +3,16 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from json import dumps
 
+from sqlalchemy import event, insert
+from sqlalchemy.inspection import inspect as sqlalchemy_inspect
+
+from src.core.audit_context import get_audit_context
+from src.core.logging_config import get_logger
+from src.model.audit import AuditLog
+from src.model.project import Project, Response
+from src.model.resume import Resume
+from src.model.user import User
+
 
 def _safe_value(value):
     """Конвертация значений, не поддерживаемых JSON."""
@@ -17,15 +27,6 @@ def _safe_dumps(obj) -> str:
     """json.dumps с обработкой несериализуемых типов SQLAlchemy."""
     return dumps(obj, default=_safe_value)
 
-from sqlalchemy import event, insert
-from sqlalchemy.inspection import inspect as sqlalchemy_inspect
-
-from src.core.audit_context import get_audit_context
-from src.core.logging_config import get_logger
-from src.model.audit import AuditLog
-from src.model.project import Project, Response
-from src.model.resume import Resume
-from src.model.user import User
 
 logger = get_logger(__name__)
 

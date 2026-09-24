@@ -62,9 +62,7 @@ class AuditService:
 
         return result
 
-    async def get_activity(
-        self, user_id: int, page: int = 1, limit: int = ACTIVITY_ITEMS_LIMIT
-    ) -> ActivityResponse:
+    async def get_activity(self, user_id: int, page: int = 1, limit: int = ACTIVITY_ITEMS_LIMIT) -> ActivityResponse:
         """Активность пользователя за последние 365 дней: агрегат по дням + лента действий"""
 
         logs = await self._audit_repository.get_logs_by_user_id(user_id)

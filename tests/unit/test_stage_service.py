@@ -104,11 +104,11 @@ class TestProjectStageService:
         result = await service.advance_stage(10, 100)
 
         # then
-        assert result.current_stage_id == 2  # noqa: PLR2004
+        assert result.current_stage_id == 2
         assert result.stage_pending_approval is True  # второй этап требует утверждения
         transition_repo.create_transition.assert_awaited_once()
         kwargs = transition_repo.create_transition.await_args.kwargs
-        assert kwargs["project_id"] == 10  # noqa: PLR2004
+        assert kwargs["project_id"] == 10
 
     @pytest.mark.asyncio
     async def test_should_deny_advance_for_non_author(self):
@@ -277,12 +277,12 @@ class TestProjectStageService:
         result = await service.approve_stage(10, 200)
 
         # then — этап утверждён и проект автоматически перешёл на следующий
-        assert result.current_stage_id == 3  # noqa: PLR2004
+        assert result.current_stage_id == 3
         assert result.stage_pending_approval is False
         calls = transition_repo.create_transition.call_args_list
         assert calls[0].kwargs["action"] == "approve"
         assert calls[1].kwargs["action"] == "advance"
-        assert calls[1].kwargs["stage_id"] == 3  # noqa: PLR2004
+        assert calls[1].kwargs["stage_id"] == 3
 
     @pytest.mark.asyncio
     async def test_should_approve_final_stage_without_advance(self):
@@ -302,7 +302,7 @@ class TestProjectStageService:
         result = await service.approve_stage(10, 200)
 
         # then — последний этап утверждён, перехода нет
-        assert result.current_stage_id == 3  # noqa: PLR2004
+        assert result.current_stage_id == 3
         assert result.stage_pending_approval is False
         calls = transition_repo.create_transition.call_args_list
         assert len(calls) == 1
@@ -333,11 +333,11 @@ class TestProjectStageService:
         result = await service.approve_stage(10, 200)
 
         # then — уже на следующем этапе и снова ожидает утверждения
-        assert result.current_stage_id == 3  # noqa: PLR2004
+        assert result.current_stage_id == 3
         assert result.stage_pending_approval is True
         calls = transition_repo.create_transition.call_args_list
         assert calls[1].kwargs["action"] == "advance"
-        assert calls[1].kwargs["stage_id"] == 3  # noqa: PLR2004
+        assert calls[1].kwargs["stage_id"] == 3
 
     @pytest.mark.asyncio
     async def test_should_raise_when_project_type_missing(self):
@@ -400,7 +400,7 @@ class TestProjectStageService:
         result = await service.advance_stage(10, 100)
 
         # then — перешли на следующий этап, ТЗ отправлено на утверждение
-        assert result.current_stage_id == 2  # noqa: PLR2004
+        assert result.current_stage_id == 2
         assert spec.status == "submitted"
         assert spec.rejection_comment is None
         transition_repo.create_transition.assert_awaited_once()
@@ -433,7 +433,7 @@ class TestProjectStageService:
         result = await service.approve_stage(10, 200)
 
         # then — ТЗ утверждено, проект перешёл дальше
-        assert result.current_stage_id == 3  # noqa: PLR2004
+        assert result.current_stage_id == 3
         assert spec.status == "approved"
 
     @pytest.mark.asyncio
@@ -511,7 +511,7 @@ class TestProjectTypeCRUDWorkspaceScoped:
         )
 
         # then
-        assert result.id == 5  # noqa: PLR2004
+        assert result.id == 5
         type_repo.create.assert_awaited_once()
 
     @pytest.mark.asyncio
@@ -584,8 +584,8 @@ class TestProjectTypeCRUDWorkspaceScoped:
 
         # then
         type_id_arg, data_arg = type_repo.create_stage.await_args.args
-        assert type_id_arg == 5  # noqa: PLR2004
-        assert data_arg.duration_days == 7  # noqa: PLR2004
+        assert type_id_arg == 5
+        assert data_arg.duration_days == 7
         assert data_arg.visible_to_participants is False
 
     @pytest.mark.asyncio
@@ -613,7 +613,7 @@ class TestProjectTypeCRUDWorkspaceScoped:
 
         # then
         stage_id_arg, data_arg = type_repo.update_stage.await_args.args
-        assert stage_id_arg == 19  # noqa: PLR2004
+        assert stage_id_arg == 19
         assert data_arg.visible_to_participants is False
 
     @pytest.mark.asyncio
@@ -639,9 +639,9 @@ class TestProjectTypeCRUDWorkspaceScoped:
         result = await service.update_stage(type_id=5, stage_id=19, workspace_id=None, data=data, user_id=1)
 
         # then
-        assert result.id == 5  # noqa: PLR2004
+        assert result.id == 5
         stage_id_arg, data_arg = type_repo.update_stage.await_args.args
-        assert stage_id_arg == 19  # noqa: PLR2004
+        assert stage_id_arg == 19
         assert data_arg.name == "Решение"
 
     @pytest.mark.asyncio
@@ -673,7 +673,7 @@ class TestProjectTypeCRUDWorkspaceScoped:
         types = await service.list_project_types(workspace_id=None)
 
         # then
-        assert types[0].stages[0].duration_days == 10  # noqa: PLR2004
+        assert types[0].stages[0].duration_days == 10
         assert types[0].stages[0].visible_to_participants is True
 
 
@@ -731,7 +731,7 @@ class TestProjectStageDeadline:
 
         # then
         assert full.stages[0].deadline == entered + timedelta(days=10)
-        assert full.stages[0].duration_days == 10  # noqa: PLR2004
+        assert full.stages[0].duration_days == 10
         assert full.stages[1].deadline is None
 
     def test_should_fall_back_to_project_created_at_without_transitions(self):

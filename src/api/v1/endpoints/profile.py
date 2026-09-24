@@ -43,8 +43,6 @@ async def fetch_profile(
         raise HTTPException(status_code=404, detail=str(e)) from e
 
 
-
-
 @profile_router.get("/{user_id}/activity", response_model=ActivityResponse)
 async def fetch_public_profile_activity(
     user_id: int,
@@ -218,6 +216,7 @@ async def delete_language(
         raise HTTPException(status_code=404, detail="Language not found")
     return {"message": "Language deleted successfully"}
 
+
 @profile_router.get("/{user_id}", response_model=PublicProfileResponse)
 async def fetch_public_profile(
     user_id: int,
@@ -240,4 +239,3 @@ async def fetch_public_profile(
         spaces=[Space.model_validate(item) for item in spaces_data],
         projects=projects.items,
     )
-

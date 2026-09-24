@@ -9,9 +9,7 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.execute(
-        "ALTER TYPE notification_type_enum ADD VALUE IF NOT EXISTS 'stage_approval_required'"
-    )
+    op.execute("ALTER TYPE notification_type_enum ADD VALUE IF NOT EXISTS 'stage_approval_required'")
 
 
 def downgrade() -> None:
