@@ -5,7 +5,7 @@ import traceback
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from src.core.container import get_role_service
-from src.core.dependencies import get_current_user
+from src.core.dependencies import permission_required
 from src.model.user import User
 from src.schema.permission import PermissionMatrix
 from src.schema.role import RoleCreate, RoleFull, RoleListResponse
@@ -20,7 +20,7 @@ async def remap_role_permission(
     role_id: int,
     role_permission_matrix: PermissionMatrix,
     role_service: RoleService = Depends(get_role_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("perm:update")),
 ) -> PermissionMatrix:
     try:
         role_permission = await role_service.remap_role_permission(role_id, role_permission_matrix)
@@ -37,7 +37,7 @@ async def remap_role_permission(
 async def get_permissions(
     role_id: int,
     role_service: RoleService = Depends(get_role_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("perm:read")),
 ) -> PermissionMatrix:
     return await role_service.get_role_permissions(role_id=role_id)
 
@@ -46,7 +46,7 @@ async def get_permissions(
 async def create_role(
     role_data: RoleCreate,
     role_service: RoleService = Depends(get_role_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("role:create")),
 ) -> RoleFull:
     role = await role_service.create(role_data)
     return RoleFull.model_validate(role)
@@ -56,7 +56,7 @@ async def create_role(
 async def get_role(
     role_id: int,
     role_service: RoleService = Depends(get_role_service),
-    _current_user: User = Depends(get_current_user),
+    _current_user: User = Depends(permission_required("role:read")),
 ) -> RoleFull:
     role = await role_service.get_by_id(role_id)
     if not role:
@@ -69,7 +69,7 @@ async def get_role(
 async def delete_role(
     role_id: int,
     role_service: RoleService = Depends(get_role_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("role:delete")),
 ) -> dict[str, str]:
     try:
         await role_service.delete(role_id)
@@ -87,7 +87,7 @@ async def get_roles(
     page: int = Query(1, ge=1, description="Номер страницы"),
     page_size: int = Query(10, ge=1, le=100, description="Количество roles на странице"),
     role_service: RoleService = Depends(get_role_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("role:read")),
 ) -> RoleListResponse:
     result = await role_service.get_paginated(page=page, page_size=page_size)
     try:

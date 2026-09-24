@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from src.core.exceptions import NotFoundError, PermissionError, ValidationError
-from src.model.project import Project, ProjectParticipation, ProjectVacancy, Response
+from src.model.notification import NotificationType
+from src.model.project import Project, ProjectParticipation, ProjectStage, ProjectStatus, ProjectVacancy, Response
+from src.model.settings import SpaceSettings
+from src.model.user import Role, User
 from src.model.workspace import WorkSpaceParticipation
 from src.schema.project import (
     MyInvitationItem,
@@ -25,6 +28,11 @@ from src.services.base_service import BaseService
 if TYPE_CHECKING:
     from src.repository.project_repository import ProjectRepository
     from src.repository.resume_repository import ResumeRepository
+    from src.services.mail_service import MailService
+    from src.services.notification_service import NotificationService
+
+# Роли в пространстве, которым разрешено создавать проекты (совпадает с stage_service.MANAGE_ROLES).
+PROJECT_CREATE_ROLES: frozenset[str] = frozenset({"teacher", "admin", "manager"})
 
 
 class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
@@ -32,10 +40,69 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         self,
         project_repository: ProjectRepository,
         resume_repository: ResumeRepository | None = None,
+        notification_service: NotificationService | None = None,
+        mail_service: MailService | None = None,
     ):
         super().__init__(project_repository)
         self._project_repository = project_repository
         self._resume_repository = resume_repository
+        self._notification_service = notification_service
+        self._mail_service = mail_service
+
+    @staticmethod
+    def is_draft(project: Project) -> bool:
+        """Проект скрыт от участников: не начат либо текущий этап не виден участникам."""
+        stages = (project.project_type.stages if project.project_type else []) or []
+        if not stages:
+            return False
+        if project.current_stage_id is None:
+            return True
+        for s in stages:
+            if s.id == project.current_stage_id:
+                return not s.visible_to_participants
+        return True
+
+    async def _visible_projects(self, projects: list[Project], viewer_id: int) -> list[Project]:
+        """Скрыть черновики от всех, кроме автора и редакторов пространства (admin/teacher)."""
+        editor_workspace_ids: set[int] = set()
+        draft_workspace_ids = {p.workspace_id for p in projects if self.is_draft(p) and p.workspace_id}
+        if draft_workspace_ids:
+            editor_workspace_ids = await self._editor_workspace_ids(viewer_id, draft_workspace_ids)
+        return [
+            p
+            for p in projects
+            if not (self.is_draft(p) and p.author_id != viewer_id and p.workspace_id not in editor_workspace_ids)
+        ]
+
+    async def _editor_workspace_ids(self, user_id: int, workspace_ids: set[int]) -> set[int]:
+        """ID пространств, в которых пользователь имеет роль admin/teacher (видит черновики)."""
+        if not workspace_ids:
+            return set()
+        result = await self._project_repository.uow.session.execute(
+            select(WorkSpaceParticipation.workspace_id)
+            .join(Role, Role.id == WorkSpaceParticipation.role_id)
+            .where(
+                WorkSpaceParticipation.participant_id == user_id,
+                WorkSpaceParticipation.workspace_id.in_(workspace_ids),
+                Role.name.in_(("admin", "teacher")),
+            )
+        )
+        return set(result.scalars().all())
+
+    async def is_workspace_editor(self, user_id: int, workspace_id: int | None) -> bool:
+        """Является ли пользователь редактором (admin/teacher) в указанном пространстве."""
+        if not workspace_id:
+            return False
+        result = await self._project_repository.uow.session.execute(
+            select(WorkSpaceParticipation)
+            .join(Role, Role.id == WorkSpaceParticipation.role_id)
+            .where(
+                WorkSpaceParticipation.workspace_id == workspace_id,
+                WorkSpaceParticipation.participant_id == user_id,
+                Role.name.in_(("admin", "teacher")),
+            )
+        )
+        return result.first() is not None
 
     async def _get_user_resume_url(self, user_id: int) -> tuple[str, str]:
         """Получить URL и заголовок первого резюме пользователя"""
@@ -79,6 +146,8 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         """Получить приглашения текущего пользователя"""
         invitations = await self._project_repository.get_invitations_by_invitee_id(user_id)
         resume_url, resume_title = await self._get_user_resume_url(user_id)
+        workspace_ids = {inv.project.workspace_id for inv in invitations if inv.project}
+        flags = await self._resolve_allow_multi_participation_batch(workspace_ids)
         items = [
             MyInvitationItem(
                 id=inv.id,
@@ -91,14 +160,16 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
                 resume_title=resume_title,
                 date=inv.created_at.isoformat() if inv.created_at else "",
                 status=inv.status,
+                allow_multi_project_participation=flags.get(inv.project.workspace_id if inv.project else None, True),
             )
             for inv in invitations
         ]
         return MyInvitationListResponse(items=items, total=len(items))
 
-    async def get_projects_by_ids(self, project_ids: list[int]) -> MyProjectListResponse:
-        """Получить проекты по списку ID"""
+    async def get_projects_by_ids(self, project_ids: list[int], viewer_id: int) -> MyProjectListResponse:
+        """Получить проекты по списку ID (черновики — только для автора)"""
         projects = await self._project_repository.get_projects_by_ids(project_ids)
+        projects = await self._visible_projects(projects, viewer_id)
         items = [
             MyProjectItem(
                 id=p.id,
@@ -133,8 +204,9 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         return MyProjectListResponse(items=items, total=len(items))
 
     async def get_my_projects(self, user_id: int) -> MyProjectListResponse:
-        """Получить проекты, в которых участвует пользователь"""
+        """Получить проекты, в которых участвует пользователь (черновики — только свои)"""
         projects = await self._project_repository.get_projects_by_participant_id(user_id)
+        projects = await self._visible_projects(projects, user_id)
         items = [
             MyProjectItem(
                 id=p.id,
@@ -177,9 +249,50 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
             raise ValidationError("This is not an invitation")
         if invitation.status != "pending":
             raise ValidationError("Can only accept pending invitations")
+        project = await self._project_repository.get_by_id(invitation.project_id)
+        if project and project.max_participants is not None and len(project.participants) >= project.max_participants:
+            raise ValidationError("Project has reached maximum number of participants")
+        if (
+            project
+            and not await self._workspace_allows_multi_participation(project.workspace_id)
+            and await self._project_repository.is_user_participant_in_other_project(
+                user_id, project.workspace_id, invitation.project_id
+            )
+        ):
+            raise ValidationError("Вы уже участвуете в другом проекте этого пространства")
         result = await self._project_repository.update_response_status(invitation_id, "accepted")
         if not result:
             raise NotFoundError("Invitation not found")
+        # Добавляем пользователя как участника проекта
+        await self._project_repository.add_participant(invitation.project_id, user_id)
+        # Уменьшаем количество необходимых участников для роли
+        if invitation.vacancy_id:
+            await self._project_repository.decrement_vacancy_count(invitation.vacancy_id)
+        # Остальные ожидающие отклики и приглашения пользователя в этом пространстве — «уже в команде»
+        await self._cancel_sibling_pending(user_id, invitation_id, project.workspace_id if project else None)
+        if self._notification_service and invitation.inviter_id and project:
+            invitee = await self._project_repository.uow.session.get(User, user_id)
+            actor_name = f"{invitee.first_name} {invitee.last_name or ''}".strip() if invitee else "User"
+            await self._notification_service.create_notification(
+                user_id=invitation.inviter_id,
+                type=NotificationType.invitation_accepted,
+                actor_name=actor_name,
+                actor_id=user_id,
+                project_id=invitation.project_id,
+                project_name=project.name,
+                vacancy_title=invitation.vacancy.title if invitation.vacancy else None,
+                invitation_id=invitation_id,
+            )
+        if self._mail_service and invitation.inviter_id:
+            inviter = await self._project_repository.uow.session.get(User, invitation.inviter_id)
+            if inviter and inviter.email:
+                await self._mail_service.send_invitation_accepted_email(
+                    to=inviter.email,
+                    first_name=inviter.first_name or "Уважаемый автор",
+                    project_name=project.name,
+                    project_id=invitation.project_id,
+                    vacancy_title=invitation.vacancy.title if invitation.vacancy else None,
+                )
         return result
 
     async def reject_invitation(self, invitation_id: int, user_id: int) -> Response:
@@ -196,22 +309,58 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         result = await self._project_repository.update_response_status(invitation_id, "rejected")
         if not result:
             raise NotFoundError("Invitation not found")
+        if self._notification_service and invitation.inviter_id:
+            project = await self._project_repository.get_by_id(invitation.project_id)
+            invitee = await self._project_repository.uow.session.get(User, user_id)
+            actor_name = f"{invitee.first_name} {invitee.last_name or ''}".strip() if invitee else "User"
+            project_name = project.name if project else "Project"
+            await self._notification_service.create_notification(
+                user_id=invitation.inviter_id,
+                type=NotificationType.invitation_rejected,
+                actor_name=actor_name,
+                actor_id=user_id,
+                project_id=invitation.project_id,
+                project_name=project_name,
+                invitation_id=invitation_id,
+            )
+        if self._mail_service and invitation.inviter_id:
+            inviter = await self._project_repository.uow.session.get(User, invitation.inviter_id)
+            if inviter and inviter.email:
+                await self._mail_service.send_invitation_rejected_email(
+                    to=inviter.email,
+                    first_name=inviter.first_name or "Уважаемый автор",
+                    project_name=project.name if project else "project",
+                    project_id=invitation.project_id,
+                )
         return result
 
     async def get_projects_by_workspace(
-        self, workspace_id: int, page: int = 1, limit: int = 10
+        self, workspace_id: int, page: int = 1, limit: int = 10, viewer_id: int | None = None
     ) -> tuple[list[Project], int]:
         skip = (page - 1) * limit
         projects = await self._project_repository.get_projects_by_workspace(workspace_id, skip=skip, limit=limit)
-        total = await self._project_repository.count_by_workspace(workspace_id)
-        return projects, total
+        if viewer_id is None:
+            return projects, len(projects)
+        projects = await self._visible_projects(projects, viewer_id)
+        return projects, len(projects)
 
-    async def get_projects_paginated(self, page: int = 1, limit: int = 10) -> tuple[list[Project], int]:
-        """Получить проекты с пагинацией"""
+    async def get_projects_paginated(
+        self, page: int = 1, limit: int = 10, viewer_id: int | None = None
+    ) -> tuple[list[Project], int]:
+        """Получить проекты с пагинацией (черновики скрыты от не-авторов)"""
         skip = (page - 1) * limit
         projects = await self._project_repository.get_projects_with_details(skip=skip, limit=limit)
-        total = await self._project_repository.count()
-        return projects, total
+        if viewer_id is None:
+            return projects, len(projects)
+        projects = await self._visible_projects(projects, viewer_id)
+        return projects, len(projects)
+
+    async def search_projects_by_text(self, query: str, limit: int = 10, viewer_id: int | None = None) -> list[Project]:
+        """Поиск проектов по тексту (черновики скрыты от не-авторов)"""
+        projects = await self._project_repository.search_by_text(query, limit=limit)
+        if viewer_id is None:
+            return projects
+        return await self._visible_projects(projects, viewer_id)
 
     def to_project_list_item(self, project: Project) -> ProjectListItem:
         participants = project.participants or []
@@ -242,31 +391,181 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
 
         tags = [tag.name for tag in getattr(project, "tags", []) or []]
 
+        current_stage = getattr(project, "current_stage", None)
+
         return ProjectListItem(
             id=project.id,
             name=project.name,
             status=status_data,
             deadline=project.deadline,
+            theme=project.theme,
             description=project.description,
             participants_count=len(participants),
             progress=project.progress or 0,
             tags=tags,
             participants_preview=preview,
+            author_id=project.author_id,
+            current_stage_id=project.current_stage_id,
+            current_stage_name=current_stage.name if current_stage else None,
         )
+
+    async def _resolve_workspace_deadline(self, workspace_id: int | None):
+        """Получить дедлайн по умолчанию из настроек пространства (или None)."""
+        if not workspace_id:
+            return None
+        space_settings = await self._project_repository.uow.session.execute(
+            select(SpaceSettings).where(SpaceSettings.space_id == workspace_id)
+        )
+        settings = space_settings.scalar_one_or_none()
+        return settings.default_project_deadline if settings else None
+
+    async def _workspace_requires_project_type(self, workspace_id: int | None) -> bool:
+        """Требуется ли тип проекта при создании в пространстве (по умолчанию — да)."""
+        if not workspace_id:
+            return False
+        space_settings = await self._project_repository.uow.session.execute(
+            select(SpaceSettings).where(SpaceSettings.space_id == workspace_id)
+        )
+        settings = space_settings.scalar_one_or_none()
+        if not settings:
+            return True
+        return settings.require_project_type_on_create
+
+    async def _raise_if_project_type_required(self, workspace_id: int | None, project_type_id: int | None) -> None:
+        """Запретить создание проекта без типа, если это требует настройка пространства."""
+        if project_type_id:
+            return
+        if not await self._workspace_requires_project_type(workspace_id):
+            return
+        raise ValidationError("Project type is required to create a project in this workspace")
+
+    async def _workspace_allows_multi_participation(self, workspace_id: int | None) -> bool:
+        """Разрешено ли в пространстве участие в нескольких проектах одновременно."""
+        if not workspace_id:
+            return True
+        space_settings = await self._project_repository.uow.session.execute(
+            select(SpaceSettings).where(SpaceSettings.space_id == workspace_id)
+        )
+        settings = space_settings.scalar_one_or_none()
+        if not settings:
+            return True
+        return settings.allow_multi_project_participation
+
+    async def workspace_allows_multi_participation(self, workspace_id: int | None) -> bool:
+        """Публичная обёртка: разрешено ли участие в нескольких проектах в пространстве."""
+        return await self._workspace_allows_multi_participation(workspace_id)
+
+    async def _cancel_sibling_pending(self, user_id: int, exclude_response_id: int, workspace_id: int | None) -> None:
+        """Если в пространстве запрещено участие в нескольких проектах — пометить остальные
+        ожидающие отклики/приглашения пользователя как «уже в команде»."""
+        if workspace_id is None or await self._workspace_allows_multi_participation(workspace_id):
+            return
+        await self._project_repository.mark_sibling_pending_as_in_team(user_id, exclude_response_id, workspace_id)
+
+    async def _resolve_allow_multi_participation_batch(self, workspace_ids: set[int | None]) -> dict[int | None, bool]:
+        """Разрешено ли участие в нескольких проектах для каждого пространства (пакетно)."""
+        if not workspace_ids:
+            return {}
+        if None in workspace_ids:
+            workspace_ids = workspace_ids - {None}
+        if not workspace_ids:
+            return {}
+        result = await self._project_repository.uow.session.execute(
+            select(SpaceSettings.space_id, SpaceSettings.allow_multi_project_participation).where(
+                SpaceSettings.space_id.in_(workspace_ids)
+            )
+        )
+        rows = dict(result.all())
+        return {wid: rows.get(wid, True) for wid in workspace_ids}
+
+    async def _assign_initial_stage(self, project: Project) -> None:
+        """Если у проекта выбран тип — ставим текущий этап = первый (или ожидание утверждения)."""
+        if not project.project_type_id:
+            return
+        first_stage = await self._project_repository.uow.session.execute(
+            select(ProjectStage)
+            .where(ProjectStage.project_type_id == project.project_type_id)
+            .order_by(ProjectStage.order)
+            .limit(1)
+        )
+        stage = first_stage.scalar_one_or_none()
+        if not stage:
+            return
+        project.current_stage_id = stage.id
+        project.stage_pending_approval = stage.requires_approval
+
+        all_stages = await self._project_repository.uow.session.execute(
+            select(ProjectStage)
+            .where(ProjectStage.project_type_id == project.project_type_id)
+            .order_by(ProjectStage.order)
+        )
+        stage_list = list(all_stages.scalars().all())
+        if stage_list:
+            idx = next((i for i, s in enumerate(stage_list) if s.id == stage.id), 0)
+            project.progress = round(((idx + 1) / len(stage_list)) * 100)
+
+        await self._project_repository.uow.session.flush()
 
     async def create_project(self, project_data: ProjectCreate, author_id: int) -> Project:
         """Создать новый проект"""
         if not project_data.author_id:
             project_data.author_id = author_id
 
+        # Только управляющие роли пространства (manager/admin/teacher) могут создавать проекты
+        if project_data.workspace_id:
+            ws_participation = await self._project_repository.uow.session.execute(
+                select(WorkSpaceParticipation, Role)
+                .join(Role, Role.id == WorkSpaceParticipation.role_id)
+                .where(
+                    WorkSpaceParticipation.workspace_id == project_data.workspace_id,
+                    WorkSpaceParticipation.participant_id == author_id,
+                )
+            )
+            row = ws_participation.first()
+            if not row or row[1].name not in PROJECT_CREATE_ROLES:
+                raise PermissionError(
+                    "Only a project manager (role in 'manager'/'admin'/'teacher') can create a project in this workspace"
+                )
+
+            existing_count = await self._project_repository.uow.session.execute(
+                select(func.count())
+                .select_from(Project)
+                .where(
+                    Project.workspace_id == project_data.workspace_id,
+                    Project.author_id == author_id,
+                )
+            )
+            if existing_count.scalar_one() > 0:
+                raise PermissionError("Вы уже создали проект в этом пространстве. Можно создать только один проект.")
+
+            # Если в настройках пространства включено требование типа проекта — блокируем создание без типа
+            await self._raise_if_project_type_required(project_data.workspace_id, project_data.project_type_id)
+
         # Преобразуем в dict и вырезаем теги и вакансии
         payload = project_data.model_dump(exclude_none=True)
         tags_names = payload.pop("tags", None)
         vacancies_data = payload.pop("vacancies", None)
 
+        # Дедлайн берётся из настроек пространства и всегда имеет приоритет
+        workspace_deadline = await self._resolve_workspace_deadline(project_data.workspace_id)
+        if workspace_deadline:
+            payload["deadline"] = workspace_deadline
+
+        # Черновик по умолчанию: если статус не указан, помечаем проект как draft
+        if not payload.get("status_id"):
+            draft_status = await self._project_repository.uow.session.execute(
+                select(ProjectStatus).where(ProjectStatus.name == "draft")
+            )
+            draft = draft_status.scalar_one_or_none()
+            if draft:
+                payload["status_id"] = draft.id
+
         # 1. Создаем основной объект проекта
         project = await self._project_repository.create(payload)
         await self._project_repository.uow.session.flush()
+
+        # Если выбран тип проекта — автоматически ставим текущий этап = первый
+        await self._assign_initial_stage(project)
 
         # Подгружаем и теги, и статус сразу, чтобы Pydantic не спотыкался
         await self._project_repository.uow.session.refresh(project, ["tags", "status"])
@@ -311,7 +610,9 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
                 await self._project_repository.uow.session.flush()
 
         # Чтобы Pydantic увидел обновленные связи после flush
-        await self._project_repository.uow.session.refresh(project, ["tags", "status", "vacancies", "participants"])
+        await self._project_repository.uow.session.refresh(
+            project, ["tags", "status", "vacancies", "participants", "project_type", "current_stage"]
+        )
 
         return project
 
@@ -365,25 +666,280 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
                     self._project_repository.uow.session.add(vacancy)
                 await self._project_repository.uow.session.flush()
 
-            await self._project_repository.uow.session.refresh(project, ["tags", "status", "participants", "vacancies"])
+            await self._project_repository.uow.session.refresh(
+                project, ["tags", "status", "participants", "vacancies", "project_type", "current_stage"]
+            )
 
         return project
 
     async def remove_participant(self, project_id: int, participant_user_id: int, current_user_id: int) -> bool:
+        """Удалить участника из команды проекта (автор или глобальный админ)."""
         project = await self.get_project_by_id(project_id)
         if not project:
             return False
-        if project.author_id != current_user_id:
-            raise PermissionError("Only project author can remove participants")
+        if not await self._can_manage_team(project, current_user_id):
+            raise PermissionError("Only project author or admin can remove participants")
+        if project.author_id == participant_user_id:
+            raise ValidationError("Cannot remove the project author")
+        # Увеличиваем количество мест в вакансии если участник был принят по роли
+        accepted = await self._project_repository.get_accepted_response_for_participant(project_id, participant_user_id)
+        if accepted and accepted.vacancy_id:
+            await self._project_repository.increment_vacancy_count(accepted.vacancy_id)
         return await self._project_repository.remove_participant(project_id, participant_user_id)
 
-    async def delete_project(self, project_id: int, current_user_id: int) -> bool:
-        """Удалить проект (только автор может удалять)"""
+    async def _can_manage_team(self, project: Project, user_id: int) -> bool:
+        """Может ли пользователь управлять командой проекта (автор или глобальный админ)."""
+        if project.author_id == user_id:
+            return True
+        result = await self._project_repository.uow.session.execute(
+            select(Role.name).join(User, User.role_id == Role.id).where(User.id == user_id)
+        )
+        return result.scalar_one_or_none() == "admin"
+
+    async def apply_for_project(
+        self, project_id: int, user_id: int, vacancy_id: int | None = None, resume_id: int | None = None
+    ) -> Response:
+        """Откликнуться на проект"""
+        project = await self._project_repository.get_by_id(project_id)
+        if not project:
+            raise NotFoundError("Project not found")
+        if not resume_id:
+            raise ValidationError("Resume is required to apply for a project")
+        if self._resume_repository:
+            resume = await self._resume_repository.get_by_id(resume_id)
+            if not resume:
+                raise ValidationError("Resume not found")
+            if resume.author_id != user_id:
+                raise ValidationError("You can only attach your own resume")
+        if project.author_id == user_id:
+            raise ValidationError("You cannot apply to your own project")
+        if await self._project_repository.is_user_in_project(project_id, user_id):
+            raise ValidationError("You are already a participant of this project")
+        if await self._project_repository.has_pending_response(project_id, user_id):
+            raise ValidationError("You already have a pending response for this project")
+        if await self._project_repository.has_pending_invitation(project_id, user_id):
+            raise ValidationError("You already have a pending invitation for this project")
+        response = await self._project_repository.create_response(
+            respondent_id=user_id,
+            project_id=project_id,
+            vacancy_id=vacancy_id,
+            resume_id=resume_id,
+            type="response",
+        )
+        if self._notification_service and project.author:
+            user = await self._project_repository.uow.session.get(User, user_id)
+            actor_name = f"{user.first_name} {user.last_name or ''}".strip() if user else "User"
+            await self._notification_service.create_notification(
+                user_id=project.author_id,
+                type=NotificationType.response_received,
+                actor_name=actor_name,
+                actor_id=user_id,
+                project_id=project_id,
+                project_name=project.name,
+                vacancy_title=response.vacancy.title if response.vacancy else None,
+                response_id=response.id,
+            )
+        if self._mail_service and project.author and project.author.email:
+            await self._mail_service.send_response_received_email(
+                to=project.author.email,
+                first_name=project.author.first_name or "Уважаемый автор",
+                project_name=project.name,
+                project_id=project.id,
+            )
+        return response
+
+    async def invite_to_project(
+        self,
+        project_id: int,
+        inviter_id: int,
+        invitee_id: int,
+        vacancy_id: int | None = None,
+        resume_id: int | None = None,
+    ) -> Response:
+        """Пригласить пользователя в проект"""
+        project = await self._project_repository.get_by_id(project_id)
+        if not project:
+            raise NotFoundError("Project not found")
+        if project.author_id != inviter_id:
+            raise PermissionError("Only project author can invite")
+        if await self._project_repository.is_user_in_project(project_id, invitee_id):
+            raise ValidationError("User is already a participant of this project")
+        if await self._project_repository.has_pending_response(project_id, invitee_id):
+            raise ValidationError("User already has a pending response for this project")
+        invitation = await self._project_repository.create_response(
+            respondent_id=invitee_id,
+            project_id=project_id,
+            vacancy_id=vacancy_id,
+            resume_id=resume_id,
+            type="invitation",
+            inviter_id=inviter_id,
+        )
+        if self._notification_service and project.author:
+            actor_name = f"{project.author.first_name} {project.author.last_name or ''}".strip()
+            await self._notification_service.create_notification(
+                user_id=invitee_id,
+                type=NotificationType.invitation_received,
+                actor_name=actor_name,
+                actor_id=inviter_id,
+                project_id=project_id,
+                project_name=project.name,
+                vacancy_title=invitation.vacancy.title if invitation.vacancy else None,
+                invitation_id=invitation.id,
+            )
+        if self._mail_service:
+            invitee = await self._project_repository.uow.session.get(User, invitee_id)
+            if invitee and invitee.email:
+                await self._mail_service.send_invitation_received_email(
+                    to=invitee.email,
+                    first_name=invitee.first_name or "Пользователь",
+                    project_name=project.name,
+                    vacancy_title=invitation.vacancy.title if invitation.vacancy else None,
+                )
+        return invitation
+
+    async def accept_response(self, response_id: int, author_id: int) -> Response:
+        """Принять отклик (автор проекта) — участник получает уведомление и решает, вступить ли"""
+        response = await self._project_repository.get_response_by_id(response_id)
+        if not response:
+            raise NotFoundError("Response not found")
+        if response.type != "response":
+            raise ValidationError("This is not a response")
+        if response.status != "pending":
+            raise ValidationError("Can only accept pending responses")
+        project = await self._project_repository.get_by_id(response.project_id)
+        if not project or project.author_id != author_id:
+            raise PermissionError("Only project author can accept responses")
+        if project.max_participants is not None and len(project.participants) >= project.max_participants:
+            raise ValidationError("Project has reached maximum number of participants")
+        result = await self._project_repository.update_response_status(response_id, "accepted")
+        if not result:
+            raise NotFoundError("Response not found")
+        if self._notification_service and project.author:
+            actor_name = f"{project.author.first_name} {project.author.last_name or ''}".strip()
+            await self._notification_service.create_notification(
+                user_id=response.respondent_id,
+                type=NotificationType.response_accepted,
+                actor_name=actor_name,
+                actor_id=author_id,
+                project_id=response.project_id,
+                project_name=project.name,
+                vacancy_title=response.vacancy.title if response.vacancy else None,
+                response_id=response.id,
+            )
+        if self._mail_service:
+            respondent = await self._project_repository.uow.session.get(User, response.respondent_id)
+            if respondent and respondent.email:
+                await self._mail_service.send_response_accepted_email(
+                    to=respondent.email,
+                    first_name=respondent.first_name or "Пользователь",
+                    project_name=project.name,
+                    vacancy_title=response.vacancy.title if response.vacancy else None,
+                )
+        return result
+
+    async def confirm_join(self, response_id: int, user_id: int) -> Response:
+        """Участник подтверждает вступление в проект после принятия отклика"""
+        response = await self._project_repository.get_response_by_id(response_id)
+        if not response:
+            raise NotFoundError("Response not found")
+        if response.respondent_id != user_id:
+            raise PermissionError("This response is not yours")
+        if response.type != "response":
+            raise ValidationError("This is not a response")
+        if response.status != "accepted":
+            raise ValidationError("Can only confirm accepted responses")
+        project = await self._project_repository.get_by_id(response.project_id)
+        if project and project.max_participants is not None and len(project.participants) >= project.max_participants:
+            raise ValidationError("Project has reached maximum number of participants")
+        if (
+            project
+            and not await self._workspace_allows_multi_participation(project.workspace_id)
+            and await self._project_repository.is_user_participant_in_other_project(
+                user_id, project.workspace_id, response.project_id
+            )
+        ):
+            raise ValidationError("Вы уже участвуете в другом проекте этого пространства")
+        await self._project_repository.add_participant(response.project_id, user_id)
+        await self._project_repository.update_response_status(response_id, "in_team")
+        if response.vacancy_id:
+            await self._project_repository.decrement_vacancy_count(response.vacancy_id)
+        # Остальные ожидающие отклики и приглашения пользователя в этом пространстве — «уже в команде»
+        await self._cancel_sibling_pending(user_id, response_id, project.workspace_id if project else None)
+        if self._notification_service and project:
+            user = await self._project_repository.uow.session.get(User, user_id)
+            actor_name = f"{user.first_name} {user.last_name or ''}".strip() if user else "User"
+            await self._notification_service.create_notification(
+                user_id=project.author_id,
+                type=NotificationType.response_confirmed,
+                actor_name=actor_name,
+                actor_id=user_id,
+                project_id=response.project_id,
+                project_name=project.name,
+                vacancy_title=response.vacancy.title if response.vacancy else None,
+                response_id=response_id,
+            )
+        if self._mail_service and project.author and project.author.email:
+            await self._mail_service.send_response_confirmed_email(
+                to=project.author.email,
+                first_name=project.author.first_name or "Уважаемый автор",
+                project_name=project.name,
+                project_id=project.id,
+                vacancy_title=response.vacancy.title if response.vacancy else None,
+            )
+        return response
+
+    async def reject_response(self, response_id: int, author_id: int) -> Response:
+        """Отклонить отклик (автор проекта)"""
+        response = await self._project_repository.get_response_by_id(response_id)
+        if not response:
+            raise NotFoundError("Response not found")
+        if response.type != "response":
+            raise ValidationError("This is not a response")
+        if response.status != "pending":
+            raise ValidationError("Can only reject pending responses")
+        project = await self._project_repository.get_by_id(response.project_id)
+        if not project or project.author_id != author_id:
+            raise PermissionError("Only project author can reject responses")
+        result = await self._project_repository.update_response_status(response_id, "rejected")
+        if not result:
+            raise NotFoundError("Response not found")
+        if self._notification_service and project.author:
+            actor_name = f"{project.author.first_name} {project.author.last_name or ''}".strip()
+            await self._notification_service.create_notification(
+                user_id=response.respondent_id,
+                type=NotificationType.response_rejected,
+                actor_name=actor_name,
+                actor_id=author_id,
+                project_id=response.project_id,
+                project_name=project.name,
+                response_id=response.id,
+            )
+        if self._mail_service:
+            respondent = await self._project_repository.uow.session.get(User, response.respondent_id)
+            if respondent and respondent.email:
+                await self._mail_service.send_response_rejected_email(
+                    to=respondent.email,
+                    first_name=respondent.first_name or "Пользователь",
+                    project_name=project.name,
+                )
+        return result
+
+    async def get_project_responses(self, project_id: int, author_id: int) -> list[Response]:
+        """Получить все отклики проекта (только автор)"""
+        project = await self._project_repository.get_by_id(project_id)
+        if not project:
+            raise NotFoundError("Project not found")
+        if project.author_id != author_id:
+            raise PermissionError("Only project author can view responses")
+        return await self._project_repository.get_responses_by_project_id(project_id)
+
+    async def delete_project(self, project_id: int, is_admin: bool = False) -> bool:
+        """Удалить проект (только при наличии права project:delete)"""
         project = await self.get_project_by_id(project_id)
         if not project:
             return False
 
-        if project.author_id != current_user_id:
-            raise PermissionError("Only project author can delete project")
+        if not is_admin:
+            raise PermissionError("You don't have permission to delete this project")
 
         return await self._project_repository.delete(project_id)

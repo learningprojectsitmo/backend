@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from src.core.exceptions import NotFoundError, PermissionError, ValidationError
 from src.core.logging_config import get_logger
 from src.model.kanban_models import Subtask, Task
+from src.model.notification import NotificationType
 from src.schema.kanban import (
     ColumnCreate,
     ColumnResponse,
@@ -27,9 +29,12 @@ from src.schema.kanban import (
 from src.services.base_service import BaseService
 
 if TYPE_CHECKING:
+    from src.model.user import User
     from src.repository.kanban_repository import KanbanColumnRepository, KanbanSubtaskRepository, KanbanTaskRepository
     from src.repository.project_repository import ProjectRepository
     from src.repository.user_repository import UserRepository
+    from src.services.mail_service import MailService
+    from src.services.notification_service import NotificationService
 
 MAX_SUBTASKS_PER_TASK = 5
 
@@ -42,6 +47,9 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
         kanban_subtask_repository: KanbanSubtaskRepository,
         user_repository: UserRepository,
         project_repository: ProjectRepository,
+        *,
+        notification_service: NotificationService | None = None,
+        mail_service: MailService | None = None,
     ):
         super().__init__(kanban_task_repository)
         self._kanban_column_repository = kanban_column_repository
@@ -49,6 +57,8 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
         self._kanban_subtask_repository = kanban_subtask_repository
         self._user_repository = user_repository
         self._project_repository = project_repository
+        self._notification_service = notification_service
+        self._mail_service = mail_service
         self._logger = get_logger(__name__)
 
     #   === Внутренние помощники ===
@@ -65,6 +75,14 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
         has_access = await self._project_repository.is_user_in_project(project_id, user_id)
         if not has_access:
             raise PermissionError(f"User {user_id} has no access to project {project_id}")
+
+    async def _validate_assignees_are_members(self, project_id: int, assignee_ids: list[int] | None) -> None:
+        """Ответственные за задачу должны быть участниками проекта (команды)."""
+        if not assignee_ids:
+            return
+        for assignee_id in assignee_ids:
+            if not await self._project_repository.is_user_in_project(project_id, assignee_id):
+                raise ValidationError(f"User {assignee_id} is not a member of project {project_id}")
 
     #   === Метод для проектов ===
 
@@ -166,6 +184,9 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
         if not column:
             raise NotFoundError(f"Column with id {task_data.column_id} not found")
 
+        await self._check_project_access(column.project_id, current_user_id)
+        await self._validate_assignees_are_members(column.project_id, getattr(task_data, "assignee_ids", None))
+
         task = await self._kanban_task_repository.create(task_data, current_user_id)
 
         # TODO: Отправить уведомления
@@ -179,12 +200,18 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
         if not task:
             raise NotFoundError(f"Task with id {task_id} not found")
 
+        column = await self._kanban_column_repository.get_by_id(task.column_id)
+        if not column:
+            raise NotFoundError(f"Column with id {task.column_id} not found")
+        await self._check_project_access(column.project_id, current_user_id)
+
         if task_data.column_id is not None and task_data.column_id != task.column_id:
             new_column = await self._kanban_column_repository.get_by_id(task_data.column_id)
             if not new_column:
                 raise NotFoundError(f"Column with id {task_data.column_id} not found")
 
         if task_data.assignee_ids:
+            await self._validate_assignees_are_members(column.project_id, task_data.assignee_ids)
             users = await self._user_repository.get_multi_by_ids(task_data.assignee_ids)
             found_ids = {u.id for u in users}
             missing = [uid for uid in task_data.assignee_ids if uid not in found_ids]
@@ -205,6 +232,11 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
         task = await self._kanban_task_repository.get_by_id(task_id)
         if not task:
             raise NotFoundError(f"Task with id {task_id} not found")
+
+        column = await self._kanban_column_repository.get_by_id(task.column_id)
+        if not column:
+            raise NotFoundError(f"Column with id {task.column_id} not found")
+        await self._check_project_access(column.project_id, current_user_id)
 
         target_column = await self._kanban_column_repository.get_by_id_with_for_update(move_data.column_id)
         if not target_column:
@@ -231,6 +263,11 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
         task = await self._kanban_task_repository.get_by_id(task_id)
         if not task:
             raise NotFoundError(f"Task with id {task_id} not found")
+
+        column = await self._kanban_column_repository.get_by_id(task.column_id)
+        if not column:
+            raise NotFoundError(f"Column with id {task.column_id} not found")
+        await self._check_project_access(column.project_id, current_user_id)
 
         result = await self._kanban_task_repository.delete(task_id)
 
@@ -275,6 +312,11 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
         if not task:
             raise NotFoundError(f"Task with id {subtask_data.task_id} not found")
 
+        column = await self._kanban_column_repository.get_by_id(task.column_id)
+        if not column:
+            raise NotFoundError(f"Column with id {task.column_id} not found")
+        await self._check_project_access(column.project_id, current_user_id)
+
         current_subtasks = await self._kanban_subtask_repository.get_subtasks_by_task(subtask_data.task_id)
         if len(current_subtasks) >= MAX_SUBTASKS_PER_TASK:
             raise ValidationError(
@@ -297,6 +339,14 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
         if not subtask:
             raise NotFoundError(f"Subtask with id {subtask_id} not found")
 
+        task = await self._kanban_task_repository.get_by_id(subtask.task_id)
+        if not task:
+            raise NotFoundError(f"Task with id {subtask.task_id} not found")
+        column = await self._kanban_column_repository.get_by_id(task.column_id)
+        if not column:
+            raise NotFoundError(f"Column with id {task.column_id} not found")
+        await self._check_project_access(column.project_id, current_user_id)
+
         updated_subtask = await self._kanban_subtask_repository.update(subtask_id, subtask_data)
         if not updated_subtask:
             raise NotFoundError(f"Subtask with id {subtask_id} not found")
@@ -311,6 +361,14 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
         subtask = await self._kanban_subtask_repository.get_by_id(subtask_id)
         if not subtask:
             raise NotFoundError(f"Subtask with id {subtask_id} not found")
+
+        task = await self._kanban_task_repository.get_by_id(subtask.task_id)
+        if not task:
+            raise NotFoundError(f"Task with id {subtask.task_id} not found")
+        column = await self._kanban_column_repository.get_by_id(task.column_id)
+        if not column:
+            raise NotFoundError(f"Column with id {task.column_id} not found")
+        await self._check_project_access(column.project_id, current_user_id)
 
         updated_subtask = await self._kanban_subtask_repository.update(
             subtask_id, SubtaskUpdate(is_completed=not subtask.is_completed)
@@ -329,6 +387,14 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
         subtask = await self._kanban_subtask_repository.get_by_id(subtask_id)
         if not subtask:
             raise NotFoundError(f"Subtask with id {subtask_id} not found")
+
+        task = await self._kanban_task_repository.get_by_id(subtask.task_id)
+        if not task:
+            raise NotFoundError(f"Task with id {subtask.task_id} not found")
+        column = await self._kanban_column_repository.get_by_id(task.column_id)
+        if not column:
+            raise NotFoundError(f"Column with id {task.column_id} not found")
+        await self._check_project_access(column.project_id, current_user_id)
 
         result = await self._kanban_subtask_repository.delete(subtask_id)
 
@@ -430,12 +496,96 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
 
     #   === Уведомления для задач ===
 
+    @staticmethod
+    def _actor_full_name(user: User | None) -> str:
+        """Полное имя пользователя-инициатора для уведомлений и писем."""
+        if not user:
+            return "Пользователь"
+        return f"{user.first_name} {user.last_name or ''}".strip()
+
+    @staticmethod
+    def _task_project_name(task: Task) -> str:
+        """Название проекта задачи (с запасным значением)."""
+        return task.project.name if task.project else "проект"
+
+    async def _recipients_for_task(self, task: Task, actor_id: int) -> dict[int, User]:
+        """Получатели события: ответственные за задачу и её создатель, кроме актора."""
+        recipients: dict[int, User] = {}
+        for assignee in task.assignees or []:
+            if assignee.id != actor_id:
+                recipients[assignee.id] = assignee
+        if task.created_by_id != actor_id:
+            creator = await self._user_repository.get_by_id(task.created_by_id)
+            if creator:
+                recipients[creator.id] = creator
+        return recipients
+
+    async def _dispatch_kanban_event(
+        self,
+        recipients: dict[int, User],
+        *,
+        type: NotificationType,
+        actor_id: int,
+        project_id: int,
+        project_name: str,
+        task_title: str,
+        column_name: str | None = None,
+        subtask_title: str | None = None,
+        email_sender: Callable[[User], Awaitable[None]] | None = None,
+    ) -> None:
+        """Создать in-app уведомления и разослать письма получателям канбан-события."""
+        if self._notification_service is None and email_sender is None:
+            return
+        actor = await self._user_repository.get_by_id(actor_id)
+        actor_name = self._actor_full_name(actor)
+        for recipient in recipients.values():
+            if self._notification_service:
+                await self._notification_service.create_notification(
+                    user_id=recipient.id,
+                    type=type,
+                    actor_name=actor_name,
+                    actor_id=actor_id,
+                    project_id=project_id,
+                    project_name=project_name,
+                    task_title=task_title,
+                    column_name=column_name,
+                    subtask_title=subtask_title,
+                )
+            if email_sender and self._mail_service and recipient.email:
+                await email_sender(recipient)
+
     async def _notify_task_created(self, task: Task, created_by_id: int) -> None:
         """Уведомление о создании задачи."""
         creator = await self._user_repository.get_by_id(created_by_id)
         self._logger.info(
             f"TASK CREATED: '{task.title}' (ID: {task.id}) "
             f"in column {task.column_id} by {creator.first_name} {creator.last_name}"
+        )
+        recipients = await self._recipients_for_task(task, created_by_id)
+        if not recipients:
+            return
+        project_name = self._task_project_name(task)
+        column_name = task.column.name if task.column else None
+        mail_service = self._mail_service
+
+        async def email_sender(user: User) -> None:
+            await mail_service.send_task_created_email(
+                to=user.email or "",
+                first_name=user.first_name or "Коллега",
+                task_title=task.title,
+                project_name=project_name,
+                project_id=task.project_id,
+            )
+
+        await self._dispatch_kanban_event(
+            recipients=recipients,
+            type=NotificationType.task_created,
+            actor_id=created_by_id,
+            project_id=task.project_id,
+            project_name=project_name,
+            task_title=task.title,
+            column_name=column_name,
+            email_sender=email_sender if mail_service else None,
         )
 
     async def _notify_task_updated(self, old_task: Task, new_task: Task, updated_by_id: int) -> None:
@@ -450,13 +600,45 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
             changes.append("priority")
         if old_task.due_date != new_task.due_date:
             changes.append("due_date")
+        old_assignee_ids = {u.id for u in old_task.assignees or []}
+        new_assignee_ids = {u.id for u in new_task.assignees or []}
+        if old_assignee_ids != new_assignee_ids:
+            changes.append("assignees")
 
         self._logger.info(
             f"TASK UPDATED: '{new_task.title}' (ID: {new_task.id}) "
             f"changed fields: {changes} by {updater.first_name} {updater.last_name}"
         )
+        if not changes:
+            return
+        recipients = await self._recipients_for_task(new_task, updated_by_id)
+        if not recipients:
+            return
+        project_name = self._task_project_name(new_task)
+        mail_service = self._mail_service
+
+        async def email_sender(user: User) -> None:
+            await mail_service.send_task_updated_email(
+                to=user.email or "",
+                first_name=user.first_name or "Коллега",
+                task_title=new_task.title,
+                project_name=project_name,
+                project_id=new_task.project_id,
+                changes=changes,
+            )
+
+        await self._dispatch_kanban_event(
+            recipients=recipients,
+            type=NotificationType.task_updated,
+            actor_id=updated_by_id,
+            project_id=new_task.project_id,
+            project_name=project_name,
+            task_title=new_task.title,
+            email_sender=email_sender if mail_service else None,
+        )
 
     async def _notify_task_moved(self, old_task: Task, new_task: Task, moved_by_id: int) -> None:
+        """Уведомление о перемещении задачи."""
         mover = await self._user_repository.get_by_id(moved_by_id)
 
         old_column_name = old_task.column.name if old_task.column else "?"
@@ -467,13 +649,70 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
             f"from column '{old_column_name}' to column '{new_column_name}' "
             f"by {mover.first_name} {mover.last_name}"
         )
+        recipients = await self._recipients_for_task(new_task, moved_by_id)
+        if not recipients:
+            return
+        project_name = self._task_project_name(new_task)
+        mail_service = self._mail_service
+
+        async def email_sender(user: User) -> None:
+            await mail_service.send_task_moved_email(
+                to=user.email or "",
+                first_name=user.first_name or "Коллега",
+                task_title=new_task.title,
+                project_name=project_name,
+                project_id=new_task.project_id,
+                from_column=old_column_name,
+                to_column=new_column_name,
+            )
+
+        await self._dispatch_kanban_event(
+            recipients=recipients,
+            type=NotificationType.task_moved,
+            actor_id=moved_by_id,
+            project_id=new_task.project_id,
+            project_name=project_name,
+            task_title=new_task.title,
+            column_name=new_column_name,
+            email_sender=email_sender if mail_service else None,
+        )
 
     async def _notify_task_deleted(self, task: Task, deleted_by_id: int) -> None:
         """Уведомление об удалении задачи."""
         deleter = await self._user_repository.get_by_id(deleted_by_id)
         self._logger.info(f"TASK DELETED: '{task.title}' (ID: {task.id}) by {deleter.first_name} {deleter.last_name}")
+        recipients = await self._recipients_for_task(task, deleted_by_id)
+        if not recipients:
+            return
+        project_name = self._task_project_name(task)
+        mail_service = self._mail_service
+
+        async def email_sender(user: User) -> None:
+            await mail_service.send_task_deleted_email(
+                to=user.email or "",
+                first_name=user.first_name or "Коллега",
+                task_title=task.title,
+                project_name=project_name,
+                project_id=task.project_id,
+            )
+
+        await self._dispatch_kanban_event(
+            recipients=recipients,
+            type=NotificationType.task_deleted,
+            actor_id=deleted_by_id,
+            project_id=task.project_id,
+            project_name=project_name,
+            task_title=task.title,
+            email_sender=email_sender if mail_service else None,
+        )
 
     #   === Уведомления для подзадач ===
+
+    async def _load_subtask_task(self, subtask: Subtask) -> Task | None:
+        """Полностью загрузить задачу подзадачи (с assignees и колонкой)."""
+        if subtask.task and subtask.task.assignees:
+            return subtask.task
+        return await self._kanban_task_repository.get_by_id(subtask.task_id)
 
     async def _notify_subtask_created(self, subtask: Subtask, created_by_id: int) -> None:
         """Уведомление о создании подзадачи."""
@@ -481,6 +720,35 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
         self._logger.info(
             f"SUBTASK CREATED: '{subtask.title}' (ID: {subtask.id}) "
             f"for task {subtask.task_id} by {creator.first_name} {creator.last_name}"
+        )
+        task = await self._load_subtask_task(subtask)
+        if not task:
+            return
+        recipients = await self._recipients_for_task(task, created_by_id)
+        if not recipients:
+            return
+        project_name = self._task_project_name(task)
+        mail_service = self._mail_service
+
+        async def email_sender(user: User) -> None:
+            await mail_service.send_subtask_created_email(
+                to=user.email or "",
+                first_name=user.first_name or "Коллега",
+                task_title=task.title,
+                project_name=project_name,
+                project_id=task.project_id,
+                subtask_title=subtask.title,
+            )
+
+        await self._dispatch_kanban_event(
+            recipients=recipients,
+            type=NotificationType.subtask_created,
+            actor_id=created_by_id,
+            project_id=task.project_id,
+            project_name=project_name,
+            task_title=task.title,
+            subtask_title=subtask.title,
+            email_sender=email_sender if mail_service else None,
         )
 
     async def _notify_subtask_updated(self, old_subtask: Subtask, new_subtask: Subtask, updated_by_id: int) -> None:
@@ -496,6 +764,38 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
             f"SUBTASK UPDATED: '{new_subtask.title}' (ID: {new_subtask.id}) "
             f"changed fields: {changes} by {updater.first_name} {updater.last_name}"
         )
+        if not changes:
+            return
+        task = await self._load_subtask_task(new_subtask)
+        if not task:
+            return
+        recipients = await self._recipients_for_task(task, updated_by_id)
+        if not recipients:
+            return
+        project_name = self._task_project_name(task)
+        mail_service = self._mail_service
+
+        async def email_sender(user: User) -> None:
+            await mail_service.send_subtask_updated_email(
+                to=user.email or "",
+                first_name=user.first_name or "Коллега",
+                task_title=task.title,
+                project_name=project_name,
+                project_id=task.project_id,
+                subtask_title=new_subtask.title,
+                completed=new_subtask.is_completed if "is_completed" in changes else None,
+            )
+
+        await self._dispatch_kanban_event(
+            recipients=recipients,
+            type=NotificationType.subtask_updated,
+            actor_id=updated_by_id,
+            project_id=task.project_id,
+            project_name=project_name,
+            task_title=task.title,
+            subtask_title=new_subtask.title,
+            email_sender=email_sender if mail_service else None,
+        )
 
     async def _notify_subtask_toggled(self, subtask: Subtask, toggled_by_id: int) -> None:
         """Уведомление о переключении статуса подзадачи."""
@@ -505,10 +805,69 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
             f"SUBTASK {status.upper()}: '{subtask.title}' (ID: {subtask.id}) "
             f"by {toggler.first_name} {toggler.last_name}"
         )
+        task = await self._load_subtask_task(subtask)
+        if not task:
+            return
+        recipients = await self._recipients_for_task(task, toggled_by_id)
+        if not recipients:
+            return
+        project_name = self._task_project_name(task)
+        mail_service = self._mail_service
+
+        async def email_sender(user: User) -> None:
+            await mail_service.send_subtask_updated_email(
+                to=user.email or "",
+                first_name=user.first_name or "Коллега",
+                task_title=task.title,
+                project_name=project_name,
+                project_id=task.project_id,
+                subtask_title=subtask.title,
+                completed=subtask.is_completed,
+            )
+
+        await self._dispatch_kanban_event(
+            recipients=recipients,
+            type=NotificationType.subtask_updated,
+            actor_id=toggled_by_id,
+            project_id=task.project_id,
+            project_name=project_name,
+            task_title=task.title,
+            subtask_title=subtask.title,
+            email_sender=email_sender if mail_service else None,
+        )
 
     async def _notify_subtask_deleted(self, subtask: Subtask, deleted_by_id: int) -> None:
         """Уведомление об удалении подзадачи."""
         deleter = await self._user_repository.get_by_id(deleted_by_id)
         self._logger.info(
             f"SUBTASK DELETED: '{subtask.title}' (ID: {subtask.id}) by {deleter.first_name} {deleter.last_name}"
+        )
+        task = await self._load_subtask_task(subtask)
+        if not task:
+            return
+        recipients = await self._recipients_for_task(task, deleted_by_id)
+        if not recipients:
+            return
+        project_name = self._task_project_name(task)
+        mail_service = self._mail_service
+
+        async def email_sender(user: User) -> None:
+            await mail_service.send_subtask_deleted_email(
+                to=user.email or "",
+                first_name=user.first_name or "Коллега",
+                task_title=task.title,
+                project_name=project_name,
+                project_id=task.project_id,
+                subtask_title=subtask.title,
+            )
+
+        await self._dispatch_kanban_event(
+            recipients=recipients,
+            type=NotificationType.subtask_deleted,
+            actor_id=deleted_by_id,
+            project_id=task.project_id,
+            project_name=project_name,
+            task_title=task.title,
+            subtask_title=subtask.title,
+            email_sender=email_sender if mail_service else None,
         )

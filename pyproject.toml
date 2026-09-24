@@ -26,6 +26,8 @@ dependencies = [
     "asyncpg>=0.31.0",
     "anyio>=4.11.0",
     "greenlet>=3.2.4",
+    "aiosmtplib>=3.0.2",
+    "sentry-sdk[fastapi]>=2.68.1",
 ]
 
 [project.optional-dependencies]
@@ -134,6 +136,12 @@ ignore = [
     "RUF003", "RUF001", "TRY003",  # -> remve ater chadge
     "TC001", "TC003", "PLR0911"
 ]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["PLR2004"]  # magic values are fine in hand-written given-when-then asserts
+
+[tool.ruff.lint.pylint]
+max-positional-args = 15  # FastAPI endpoints/DI factories legitimately exceed ruff's default of 5
 
 [tool.ruff.lint.flake8-bugbear]
 extend-immutable-calls = ["fastapi.Depends", "fastapi.Query"]

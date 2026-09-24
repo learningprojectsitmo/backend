@@ -20,12 +20,14 @@ class SpaceSettingsCreate(BaseModel):
 
     space_id: int
     settings_type_id: int = 1
-    visibility: str = "public"
+    visibility: str = "private"
     join_policy: str = "open"
     default_role_id: int | None = None
     icon_url: str | None = None
     allow_multi_project_participation: bool = False
     allow_multi_project_creation: bool = False
+    default_project_deadline: datetime | None = None
+    require_project_type_on_create: bool = True
 
 
 class SpaceSettingsUpdate(BaseModel):
@@ -37,6 +39,8 @@ class SpaceSettingsUpdate(BaseModel):
     icon_url: str | None = None
     allow_multi_project_participation: bool | None = None
     allow_multi_project_creation: bool | None = None
+    default_project_deadline: datetime | None = None
+    require_project_type_on_create: bool | None = None
 
 
 class SpaceSettingsFull(BaseModel):
@@ -51,6 +55,8 @@ class SpaceSettingsFull(BaseModel):
     icon_url: str | None = None
     allow_multi_project_participation: bool = False
     allow_multi_project_creation: bool = False
+    default_project_deadline: datetime | None = None
+    require_project_type_on_create: bool = True
     created_at: datetime
     updated_at: datetime
 

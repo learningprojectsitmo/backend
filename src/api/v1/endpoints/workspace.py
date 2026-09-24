@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from src.core.container import get_settings_service, get_workspace_service
-from src.core.dependencies import get_current_user, setup_audit
+from src.core.container import get_settings_service, get_stage_service, get_workspace_service
+from src.core.dependencies import get_current_user, permission_required, setup_audit
 from src.core.exceptions import PermissionError
 from src.model.user import User
 from src.schema.workspace import (
@@ -16,9 +16,13 @@ from src.schema.workspace import (
     WorkSpaceFull,
     WorkspaceParticipantItem,
     WorkspaceParticipantListResponse,
+    WorkspaceResumeFiltersResponse,
+    WorkspaceResumeItem,
+    WorkspaceResumeListResponse,
     WorkSpaceUpdate,
 )
 from src.services.settings_service import SpaceSettingsService
+from src.services.stage_service import ProjectStageService
 from src.services.workspace_service import WorkSpaceService
 
 workspace_router = APIRouter(prefix="/workspaces", tags=["workspace"])
@@ -84,12 +88,14 @@ async def create_workspace(
     workspace_data: WorkSpaceCreate,
     workspace_service: WorkSpaceService = Depends(get_workspace_service),
     settings_service: SpaceSettingsService = Depends(get_settings_service),
-    current_user: User = Depends(get_current_user),
+    stage_service: ProjectStageService = Depends(get_stage_service),
+    current_user: User = Depends(permission_required("workspace:create")),
     _audit=Depends(setup_audit),
 ) -> WorkSpaceFull:
     """Создать новый workspace"""
     workspace = await workspace_service.create_workspace(workspace_data, current_user.id)
     await settings_service.create_defaults(workspace.id)
+    await stage_service.copy_system_types_to_workspace(workspace.id)
     return WorkSpaceFull.model_validate(workspace)
 
 
@@ -98,7 +104,7 @@ async def update_workspace(
     workspace_id: int,
     workspace_data: WorkSpaceUpdate,
     workspace_service: WorkSpaceService = Depends(get_workspace_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("workspace:update")),
     _audit=Depends(setup_audit),
 ) -> WorkSpaceFull:
     """Обновить workspace (только автор может обновлять)"""
@@ -128,7 +134,7 @@ async def get_workspace_participants(
     date_from: str | None = Query(None, description="Фильтр от даты (YYYY-MM-DD)"),
     date_to: str | None = Query(None, description="Фильтр до даты (YYYY-MM-DD)"),
     workspace_service: WorkSpaceService = Depends(get_workspace_service),
-    _current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("workspace:read")),
 ) -> WorkspaceParticipantListResponse:
     """Получить список участников workspace с пагинацией и фильтрацией"""
     workspace = await workspace_service.get_workspace_by_id(workspace_id)
@@ -157,15 +163,69 @@ async def get_workspace_participants(
     )
 
 
+@workspace_router.get("/{workspace_id}/resumes", response_model=WorkspaceResumeListResponse)
+async def get_workspace_resumes(
+    workspace_id: int,
+    page: int = Query(1, ge=1, description="Номер страницы"),
+    limit: int = Query(10, ge=1, le=100, description="Количество резюме на странице"),
+    search: str | None = Query(None, description="Поиск по имени/заголовку/навыкам/интересам"),
+    skills: list[str] | None = Query(None, description="Фильтр по навыкам"),
+    interests: list[str] | None = Query(None, description="Фильтр по интересам"),
+    workspace_service: WorkSpaceService = Depends(get_workspace_service),
+    _current_user: User = Depends(get_current_user),
+) -> WorkspaceResumeListResponse:
+    """Получить видимые резюме участников workspace с пагинацией и фильтрацией"""
+    workspace = await workspace_service.get_workspace_by_id(workspace_id)
+    if not workspace:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    skip = (page - 1) * limit
+    items, total = await workspace_service.get_workspace_resumes(
+        workspace_id,
+        search,
+        skills,
+        interests,
+        skip,
+        limit,
+    )
+    parsed = [WorkspaceResumeItem.model_validate(item) for item in items]
+
+    return WorkspaceResumeListResponse(
+        items=parsed,
+        total=total,
+        page=page,
+        limit=limit,
+        total_pages=(total + limit - 1) // limit if limit > 0 else 0,
+    )
+
+
+@workspace_router.get("/{workspace_id}/resumes/filters", response_model=WorkspaceResumeFiltersResponse)
+async def get_workspace_resume_filters(
+    workspace_id: int,
+    workspace_service: WorkSpaceService = Depends(get_workspace_service),
+    _current_user: User = Depends(get_current_user),
+) -> WorkspaceResumeFiltersResponse:
+    """Получить доступные скиллы и интересы для фильтрации резюме workspace"""
+    workspace = await workspace_service.get_workspace_by_id(workspace_id)
+    if not workspace:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    filters = await workspace_service.get_workspace_resume_filters(workspace_id)
+    return WorkspaceResumeFiltersResponse(**filters)
+
+
 @workspace_router.delete("/{workspace_id}/participants/{user_id}")
 async def remove_workspace_participant(
     workspace_id: int,
     user_id: int,
     workspace_service: WorkSpaceService = Depends(get_workspace_service),
-    _current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("workspace:update")),
 ) -> dict[str, str]:
-    """Удалить участника из workspace"""
-    success = await workspace_service.remove_workspace_participant(workspace_id, user_id)
+    """Удалить участника из workspace (только автор)"""
+    try:
+        success = await workspace_service.remove_workspace_participant(workspace_id, user_id, current_user.id)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
     if not success:
         raise HTTPException(status_code=404, detail="Participant not found")
     return {"message": "Participant removed successfully"}
@@ -175,7 +235,7 @@ async def remove_workspace_participant(
 async def delete_workspace(
     workspace_id: int,
     workspace_service: WorkSpaceService = Depends(get_workspace_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(permission_required("workspace:delete")),
 ) -> dict[str, str]:
     """Удалить workspace (только автор может удалять)"""
 

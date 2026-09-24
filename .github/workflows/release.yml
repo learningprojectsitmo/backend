@@ -1,0 +1,72 @@
+name: Release (build + push GHCR + dispatch)
+
+on:
+    push:
+        branches: [main]
+    workflow_dispatch:
+        inputs:
+            ref:
+                description: "Build ref/branch (default: current)"
+                required: false
+                default: main
+
+env:
+    REGISTRY: ghcr.io
+    IMAGE_NAME: learningprojectsitmo/backend
+
+# push в GHCR (learningprojectsitmo) + RF
+permissions:
+    contents: read
+    packages: write
+
+jobs:
+    build-push:
+        name: Build & push image to GHCR
+        runs-on: ubuntu-latest
+        env:
+            RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+              with:
+                  ref: ${{ inputs.ref || 'main' }}
+
+            - name: Set up Docker Buildx
+              uses: docker/setup-buildx-action@v3
+
+            - name: Log in to GHCR
+              uses: docker/login-action@v3
+              with:
+                  registry: ${{ env.REGISTRY }}
+                  username: ${{ github.actor }}
+                  password: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Extract image metadata
+              id: meta
+              uses: docker/metadata-action@v5
+              with:
+                  images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+                  tags: |
+                      type=ref,event=branch # main (обновляемый)
+                      type=sha,prefix=sha-   # sha-… (иммутабельный, для rollback)
+
+            - name: Build and push
+              uses: docker/build-push-action@v6
+              with:
+                  context: .
+                  file: Dockerfile.prod
+                  push: true
+                  tags: ${{ steps.meta.outputs.tags }}
+                  labels: ${{ steps.meta.outputs.labels }}
+                  cache-from: type=gha,scope=backend
+                  cache-to: type=gha,mode=max,scope=backend
+
+            # Уведомить deploy-репозиторий (только если настроен токен)
+            - name: Notify deploy repo
+              if: env.RELEASE_TOKEN != ''
+              uses: peter-evans/repository-dispatch@v3
+              with:
+                  token: ${{ env.RELEASE_TOKEN }}
+                  repository: learningprojectsitmo/deploy
+                  event-type: app-update
+                  client-payload: '{"service":"backend","image":"ghcr.io/learningprojectsitmo/backend:main"}'
