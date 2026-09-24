@@ -68,5 +68,5 @@ jobs:
               with:
                   token: ${{ env.RELEASE_TOKEN }}
                   repository: learningprojectsitmo/deploy
-                  event-type: app-update
-                  client-payload: '{"service":"backend","image":"ghcr.io/learningprojectsitmo/backend:main"}'
+                  event-type: backend-updated
+                  client-payload: '{"services":"backend","image":"ghcr.io/learningprojectsitmo/backend:main"}'
