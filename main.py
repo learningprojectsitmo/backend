@@ -13,6 +13,7 @@ from src.core.container import seed_fixtures_on_startup
 from src.core.database import Base, engine
 from src.core.db_seed import seed_project_statuses, seed_project_types, seed_settings_types
 from src.core.logging_config import get_logger, setup_logging
+from src.core.metrics import setup_metrics
 from src.core.middleware.logging_middleware import setup_logging_middleware
 from src.core.sentry import setup_sentry
 
@@ -62,6 +63,10 @@ app.include_router(v1_router)
 
 # Настройка middleware для логирования
 setup_logging_middleware(app)
+
+# Prometheus: /metrics вне /v1 (edge в backend проксирует только /v1/,
+# поэтому наружу метрики не отдаются) + счётчики RPS/latency/ошибок
+setup_metrics(app)
 
 app.add_middleware(
     CORSMiddleware,

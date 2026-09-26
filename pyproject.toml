@@ -28,6 +28,7 @@ dependencies = [
     "greenlet>=3.2.4",
     "aiosmtplib>=3.0.2",
     "sentry-sdk[fastapi]>=2.68.1",
+    "prometheus-client>=0.21.0",
 ]
 
 [project.optional-dependencies]
