@@ -30,6 +30,9 @@ def _resume(resume_id: int, *, is_visible: bool) -> Resume:
         author_id=1,
         header=f"Резюме {resume_id}",
         is_visible=is_visible,
+        # Атрибут до flush равен None (default применяется на INSERT), а
+        # ResumeFull требует bool — поэтому проставляем явно.
+        is_default=False,
         has_experience=True,
         views_count=0,
     )

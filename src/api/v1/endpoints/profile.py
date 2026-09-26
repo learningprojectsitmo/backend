@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import date
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from src.core.container import (
@@ -48,22 +50,30 @@ async def fetch_public_profile_activity(
     user_id: int,
     page: int = Query(1, ge=1),
     limit: int = Query(ACTIVITY_ITEMS_LIMIT, ge=1, le=100),
+    day: date | None = Query(
+        None,
+        description="День в формате YYYY-MM-DD: лента показывает только этот день",
+    ),
     current_user: User = Depends(get_current_user),
     audit_service: AuditService = Depends(get_audit_service),
 ) -> ActivityResponse:
     """Получить активность пользователя по ID (публичная лента действий)"""
-    return await audit_service.get_activity(user_id, page=page, limit=limit)
+    return await audit_service.get_activity(user_id, page=page, limit=limit, day=day)
 
 
 @profile_router.get("/activity", response_model=ActivityResponse)
 async def fetch_profile_activity(
     page: int = Query(1, ge=1),
     limit: int = Query(ACTIVITY_ITEMS_LIMIT, ge=1, le=100),
+    day: date | None = Query(
+        None,
+        description="День в формате YYYY-MM-DD: лента показывает только этот день",
+    ),
     current_user: User = Depends(get_current_user),
     audit_service: AuditService = Depends(get_audit_service),
 ) -> ActivityResponse:
     """Получить активность текущего пользователя (heatmap + лента действий)"""
-    return await audit_service.get_activity(current_user.id, page=page, limit=limit)
+    return await audit_service.get_activity(current_user.id, page=page, limit=limit, day=day)
 
 
 # ─── Portfolio CRUD ──────────────────────────────────────────────────────

@@ -1,11 +1,19 @@
 from __future__ import annotations
 
+from datetime import date
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from src.core.container import get_auth_service, get_kanban_service, get_project_service
+from src.core.container import (
+    get_audit_service,
+    get_auth_service,
+    get_kanban_service,
+    get_project_service,
+)
 from src.core.dependencies import get_current_user, permission_required, setup_audit
 from src.core.exceptions import PermissionError
 from src.model.user import User
+from src.schema.audit import ActivityResponse
 from src.schema.project import (
     ApplyRequest,
     InviteRequest,
@@ -17,6 +25,7 @@ from src.schema.project import (
     ProjectListResponse,
     ProjectUpdate,
 )
+from src.services.audit_service import ACTIVITY_ITEMS_LIMIT, AuditService
 from src.services.auth_service import AuthService
 from src.services.kanban_service import KanbanService
 from src.services.project_service import ProjectService
@@ -79,6 +88,35 @@ async def fetch_project(
         current_user.id,
         await project_service.workspace_allows_multi_participation(project.workspace_id),
     )
+
+
+@project_router.get("/{project_id}/activity", response_model=ActivityResponse)
+async def fetch_project_activity(
+    project_id: int,
+    page: int = Query(1, ge=1),
+    limit: int = Query(ACTIVITY_ITEMS_LIMIT, ge=1, le=100),
+    day: date | None = Query(
+        None,
+        description="День в формате YYYY-MM-DD: лента показывает только этот день",
+    ),
+    project_service: ProjectService = Depends(get_project_service),
+    audit_service: AuditService = Depends(get_audit_service),
+    current_user: User = Depends(get_current_user),
+) -> ActivityResponse:
+    """Получить историю активности проекта (лента действий всех участников)"""
+
+    project = await project_service.get_project_by_id(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="There is no project with that id!")
+
+    if (
+        project_service.is_draft(project)
+        and project.author_id != current_user.id
+        and not await project_service.is_workspace_editor(current_user.id, project.workspace_id)
+    ):
+        raise HTTPException(status_code=404, detail="There is no project with that id!")
+
+    return await audit_service.get_project_activity(project_id, page=page, limit=limit, day=day)
 
 
 @project_router.get("/", response_model=ProjectListResponse)

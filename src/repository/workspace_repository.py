@@ -274,6 +274,7 @@ class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUp
         interests: list[str] | None = None,
         skip: int = 0,
         limit: int = 10,
+        default_only: bool = False,
     ) -> tuple[list[dict], int]:
         """Получить видимые резюме участников workspace со скиллами и интересами, с фильтрацией и пагинацией"""
 
@@ -329,6 +330,12 @@ class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUp
                 Resume.header != "",
             )
         )
+
+        if default_only:
+            # JOIN по author_id даёт по строке на каждое резюме участника.
+            # Основное резюме ровно одно на автора (uq_resume_author_default),
+            # поэтому этот фильтр схлопывает участника в одну карточку.
+            base_query = base_query.where(Resume.is_default.is_(True))
 
         # Фильтры
         if search:

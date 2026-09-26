@@ -222,6 +222,9 @@ class ResumeUpdate(BaseModel):
     has_experience: bool | None = None
     no_experience_description: str | None = Field(None, max_length=MAX_TEXT_LENGTH)
     is_visible: bool | None = None
+    # Сделать резюме основным. Переключение снимает флаг с предыдущего
+    # основного резюме того же автора в той же транзакции.
+    is_default: bool | None = None
 
 
 class ResumeFull(ResumeCreate):
@@ -229,6 +232,9 @@ class ResumeFull(ResumeCreate):
     author_id: int
     views_count: int = 0
     invitations_count: int = 0
+    # В ResumeCreate поля нет намеренно: какое резюме станет основным,
+    # решает сервис (первое созданное), а не клиент.
+    is_default: bool = False
     created_at: datetime | None = None
     updated_at: datetime | None = None
 

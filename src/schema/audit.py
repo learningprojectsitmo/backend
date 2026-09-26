@@ -29,6 +29,13 @@ class ActivityDay(BaseModel):
     count: int
 
 
+class ActivityActor(BaseModel):
+    """Автор действия — нужен в ленте проекта, где участников много"""
+
+    id: int
+    name: str
+
+
 class ActivityItem(BaseModel):
     """Отдельное действие пользователя (для ленты)"""
 
@@ -36,14 +43,20 @@ class ActivityItem(BaseModel):
     kind: str  # например "project:INSERT", "response:UPDATE"
     description: str
     performed_at: datetime
+    actor: ActivityActor | None = None
 
 
 class ActivityResponse(BaseModel):
-    """Активность пользователя: агрегат по дням + лента действий"""
+    """Активность: агрегат по дням + лента действий
+
+    `since` — начало окна (дата регистрации пользователя либо дата создания
+    проекта). Фронтенд строит по нему сетку, а не фиксированный год.
+    """
 
     total: int
     page: int = 1
     limit: int = 50
     total_pages: int = 1
+    since: date | None = None
     summary: list[ActivityDay]
     items: list[ActivityItem]

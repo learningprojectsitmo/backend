@@ -145,10 +145,11 @@ class WorkSpaceService(BaseService[WorkSpace, WorkSpaceCreate, WorkSpaceUpdate])
         interests: list[str] | None = None,
         skip: int = 0,
         limit: int = 10,
+        default_only: bool = False,
     ) -> tuple[list[dict], int]:
         """Получить видимые резюме участников workspace с фильтрацией и пагинацией"""
         return await self._workspace_repository.get_workspace_resumes(
-            workspace_id, search, skills, interests, skip, limit
+            workspace_id, search, skills, interests, skip, limit, default_only=default_only
         )
 
     async def get_workspace_resume_filters(self, workspace_id: int) -> dict[str, list[str]]:

@@ -117,6 +117,10 @@ async def update_resume(
         _get_resume_or_raise_not_found()
     except PermissionError as e:
         raise HTTPException(status_code=403, detail=str(e)) from e
+    except ValueError as e:
+        # Нарушение инварианта «основное резюме ровно одно и оно показывается
+        # в пространстве» — сообщение сервиса уже годное для пользователя.
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to update resume: {e!s}") from e
     else:

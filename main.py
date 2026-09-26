@@ -38,11 +38,18 @@ async def lifespan(_app: FastAPI):
     setup_audit_listeners()
 
     async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+        if settings.AUTO_CREATE_TABLES:
+            await conn.run_sync(Base.metadata.create_all)
+            logger.info("Database tables created/verified")
+        else:
+            # Схемой владеет Alembic: она должна быть уже применена сервисом
+            # migrate. Не проверяем наличие таблиц через create_all — он
+            # только создаёт, но не ALTERит, поэтому проверка молча прошла бы
+            # на базе без новых колонок.
+            logger.info("AUTO_CREATE_TABLES=false, schema is managed by Alembic")
         await conn.run_sync(seed_project_statuses)
         await conn.run_sync(seed_project_types)
         await conn.run_sync(seed_settings_types)
-        logger.info("Database tables created/verified")
 
     # Базовые справочные данные + пользователь-администратор
     await seed_fixtures_on_startup()

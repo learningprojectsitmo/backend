@@ -16,6 +16,13 @@ class Settings(BaseSettings):
     # Environment
     ENVIRONMENT: str = "development"
 
+    # Схема БД. В development базу поднимает Base.metadata.create_all — это
+    # удобно, пока разработчик гоняет фичи без миграций. В production схемой
+    # владеет только Alembic: create_all не умеет ALTERить существующие
+    # таблицы и молча пропускает новые колонки, поэтому флаг обязан быть
+    # выключен (deploy/docker-compose.yml ставит "false").
+    AUTO_CREATE_TABLES: bool = True
+
     # JWT
     SECRET_KEY: str = "your-secret-key-here"
     ALGORITHM: str = "HS256"

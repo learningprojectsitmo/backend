@@ -54,6 +54,60 @@ jobs:
   #     - name: Run mypy
   #       run: mypy src/
 
+  migrations:
+    name: Migrations
+    runs-on: ubuntu-latest
+    # Гейт дрейфа: baseline поднимает схему с нуля, затем `alembic check`
+    # сравнивает её с моделями. Любое расхождение (забытый индекс в модели,
+    # колонка без миграции, тип) валит сборку — на прод такое попасть не
+    # сможет молча.
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ci_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/ci_db
+      SECRET_KEY: ci-secret-key-not-used-for-crypto
+      ENVIRONMENT: ci
+      AUTO_CREATE_TABLES: "false"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Apply migrations to an empty database
+        run: alembic upgrade head
+
+      - name: Fail on schema drift
+        run: alembic check
+
+      - name: Migration is reversible
+        run: |
+          alembic downgrade base
+          alembic upgrade head
+          alembic check
+
   test:
     name: Tests
     runs-on: ubuntu-latest

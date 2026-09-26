@@ -31,6 +31,74 @@ class ResumeRepository(BaseRepository[Resume, ResumeCreate, ResumeUpdate]):
         )
         return result.scalar()
 
+    async def unset_other_defaults(self, author_id: int, keep_id: int) -> int:
+        """Снять признак основного со всех остальных резюме автора.
+
+        Нужен для переключения «основное» НА этот резюме: guard
+        ``id != keep_id`` не даёт снять флаг, который в той же транзакции
+        только что поставили.
+        """
+
+        result = await self.uow.session.execute(
+            update(Resume)
+            .where(
+                Resume.author_id == author_id,
+                Resume.id != keep_id,
+                Resume.is_default.is_(True),
+            )
+            .values(is_default=False),
+        )
+        return result.rowcount or 0
+
+    async def clear_default(self, resume_id: int) -> None:
+        """Немедленно снять признак основного с конкретного резюме.
+
+        Отдельный метод, а не unset_other_defaults: здесь очищается именно та
+        строка, которую unset_other_defaults исключал бы по ``id != keep_id``.
+        UPDATE выполняется сразу, тогда как мутация ORM-объекта ушла бы в flush
+        на commit — и между ними у автора было бы два основных, что ломает
+        uq_resume_author_default.
+        """
+
+        await self.uow.session.execute(
+            update(Resume).where(Resume.id == resume_id).values(is_default=False),
+        )
+
+    async def get_next_default_candidate_id(
+        self,
+        author_id: int,
+        *,
+        exclude_id: int,
+        visible_only: bool,
+    ) -> int | None:
+        """Наиболее подходящее резюме, которым можно заменить основное.
+
+        ``exclude_id`` обязателен: в момент вызова скрываемое/удаляемое резюме
+        ещё находится в БД и иначе единственный кандидат на замену — оно само.
+
+        Сначала ищутся видимые с непустым заголовком, чтобы участник не исчез из
+        списка резюме пространства; если видимых не осталось — любое, чтобы
+        основное всегда оставалось ровно одно.
+        """
+
+        query = select(Resume.id).where(Resume.author_id == author_id, Resume.id != exclude_id)
+        if visible_only:
+            query = query.where(Resume.is_visible.is_(True), Resume.header != "")
+            query = query.order_by(Resume.id)
+        else:
+            query = query.order_by(
+                Resume.is_visible.desc(),
+                (Resume.header != "").desc(),
+                Resume.id,
+            )
+        result = await self.uow.session.execute(query.limit(1))
+        return result.scalar()
+
+    async def set_default(self, resume_id: int) -> None:
+        await self.uow.session.execute(
+            update(Resume).where(Resume.id == resume_id).values(is_default=True),
+        )
+
     async def get_by_id_with_all(self, resume_id: int) -> Resume | None:
         query = (
             select(Resume)

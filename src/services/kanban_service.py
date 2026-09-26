@@ -33,6 +33,7 @@ if TYPE_CHECKING:
     from src.repository.kanban_repository import KanbanColumnRepository, KanbanSubtaskRepository, KanbanTaskRepository
     from src.repository.project_repository import ProjectRepository
     from src.repository.user_repository import UserRepository
+    from src.services.audit_service import AuditService
     from src.services.mail_service import MailService
     from src.services.notification_service import NotificationService
 
@@ -50,6 +51,7 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
         *,
         notification_service: NotificationService | None = None,
         mail_service: MailService | None = None,
+        audit_service: AuditService | None = None,
     ):
         super().__init__(kanban_task_repository)
         self._kanban_column_repository = kanban_column_repository
@@ -59,6 +61,7 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
         self._project_repository = project_repository
         self._notification_service = notification_service
         self._mail_service = mail_service
+        self._audit_service = audit_service
         self._logger = get_logger(__name__)
 
     #   === Внутренние помощники ===
@@ -222,10 +225,32 @@ class KanbanService(BaseService[Task, TaskCreate, TaskUpdate]):
         if not updated_task:
             raise NotFoundError(f"Task with id {task_id} not found")
 
+        await self._log_assignee_changes(task, updated_task, task_data)
+
         # TODO: Отправить уведомления об изменениях
         await self._notify_task_updated(task, updated_task, current_user_id)
 
         return TaskResponse.model_validate(updated_task)
+
+    async def _log_assignee_changes(self, old_task: Task, new_task: Task, task_data: TaskUpdate) -> None:
+        """Записать в аудит смену исполнителей задачи.
+
+        Связь many-to-many обновляется в обход ORM-событий, поэтому ORM-слушатели
+        её не видят, а для читателя ленты это заметное действие.
+        """
+        if self._audit_service is None or task_data.assignee_ids is None:
+            return
+
+        before = {u.id for u in old_task.assignees}
+        after = {u.id for u in new_task.assignees}
+        if before == after:
+            return
+
+        await self._audit_service.log_task_assignees(
+            new_task,
+            added=sorted(after - before),
+            removed=sorted(before - after),
+        )
 
     async def move_task(self, task_id: int, move_data: TaskMove, current_user_id: int) -> TaskResponse:
         """Переместить задачу (drag-and-drop)"""

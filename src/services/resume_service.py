@@ -124,7 +124,14 @@ class ResumeService(BaseService[Resume, ResumeCreate, ResumeUpdate]):
         """Создать новое резюме с копированием данных из профиля"""
         if not resume_data.author_id:
             resume_data.author_id = author_id
+        # Первое резюме автора автоматически становится основным, иначе в
+        # пространстве у него не будет ни одной карточки. Флаг выставляется
+        # явно, а не через ResumeCreate, чтобы клиент не мог его подделать.
+        is_first_resume = await self._resume_repository.count_by_author_id(author_id) == 0
         resume = await self._resume_repository.create(resume_data)
+        if is_first_resume:
+            await self._resume_repository.set_default(resume.id)
+            resume.is_default = True
         await self._copy_profile_data_to_resume(resume.id, author_id)
         await self._resume_repository.uow.session.flush()
         return resume
@@ -180,7 +187,61 @@ class ResumeService(BaseService[Resume, ResumeCreate, ResumeUpdate]):
         if resume.author_id != current_user_id:
             raise PermissionError("Only author can update resume")
 
-        return await self._resume_repository.update(resume_id, resume_data)
+        if resume_data.is_default:
+            # Снимаем флаг с предыдущего основного до записи нового: обе
+            # операции попадают в одну транзакцию, а partial unique index
+            # uq_resume_author_default не даст записать два is_default = true.
+            await self._resume_repository.unset_other_defaults(resume.author_id, resume.id)
+            resume.is_default = True
+        elif resume_data.is_default is False and resume.is_default:
+            # Снять признак с основного нельзя — «основное» должно остаться
+            # ровно одно, иначе в пространстве у автора не будет карточки.
+            await self._move_default_away_from(
+                resume,
+                reason="снять признак основного",
+                fallback_hint="сделайте основным другое видимое резюме",
+            )
+            resume.is_default = False
+
+        if resume_data.is_visible is False and resume.is_default:
+            # Скрытие основного переносит признак на другое видимое резюме.
+            await self._move_default_away_from(resume, reason="скрыть основное резюме")
+            resume.is_default = False
+
+        # is_default не отдаём в update(): признак уже выставлен мутацией ORM-
+        # объекта, а попытка записать False нарушила бы инвариант «ровно одно».
+        payload = resume_data.model_dump(exclude_unset=True, exclude={"is_default"})
+        return await self._resume_repository.update(resume_id, payload)
+
+    async def _move_default_away_from(
+        self,
+        resume: Resume,
+        *,
+        reason: str = "скрыть основное резюме",
+        fallback_hint: str = "сначала создайте или покажите другое резюме",
+    ) -> int:
+        """Перенести признак основного с резюме на другое видимое.
+
+        Вызывается, когда основное резюме перестаёт подходить для показа в
+        пространстве: его скрывают или с него снимают признак. Если видимых
+        резюме больше нет, операция запрещается — иначе у автора не останется
+        ни одного основного.
+        """
+
+        candidate_id = await self._resume_repository.get_next_default_candidate_id(
+            resume.author_id,
+            exclude_id=resume.id,
+            visible_only=True,
+        )
+        if candidate_id is None:
+            raise ValueError(f"Нельзя {reason}: у вас нет другого видимого резюме. {fallback_hint.capitalize()}.")
+        # Порядок критичен: оба UPDATE'а выполняются немедленно, тогда как
+        # сброс флага через мутацию ORM-объекта ушёл бы в flush на commit. Если
+        # сначала поставить кандидату, у автора окажется два is_default = true и
+        # uq_resume_author_default упадёт.
+        await self._resume_repository.clear_default(resume.id)
+        await self._resume_repository.set_default(candidate_id)
+        return candidate_id
 
     async def delete_resume(self, resume_id: int, current_user_id: int) -> bool:
         """Удалить резюме (только автор может удалять)"""
@@ -191,7 +252,34 @@ class ResumeService(BaseService[Resume, ResumeCreate, ResumeUpdate]):
         if resume.author_id != current_user_id:
             raise PermissionError("Only author can delete resume")
 
-        return await self._resume_repository.delete(resume_id)
+        was_default = resume.is_default
+        deleted = await self._resume_repository.delete(resume_id)
+        if deleted and was_default:
+            # Удаление основного не должно оставлять автора без основного
+            # резюме, иначе в пространстве у него не будет карточки.
+            # Сначала ищем видимое (оно и попадёт в карточку), но если
+            # видимых не осталось — берём любое: лучше скрытое основное,
+            # чем автор вообще без признака. Скрытым основным можно сделать
+            # резюме напрямую через API, поэтому этот случай реален.
+            candidate_id = await self._resume_repository.get_next_default_candidate_id(
+                resume.author_id,
+                exclude_id=resume_id,
+                visible_only=True,
+            )
+            if candidate_id is None:
+                candidate_id = await self._resume_repository.get_next_default_candidate_id(
+                    resume.author_id,
+                    exclude_id=resume_id,
+                    visible_only=False,
+                )
+            if candidate_id is not None:
+                # session.delete() только помечает объект, а DELETE уходит на
+                # flush. Без явного flush кандидат получил бы is_default = true
+                # при ещё существующей строке основного, и уникальный индекс
+                # упал бы.
+                await self._resume_repository.uow.session.flush()
+                await self._resume_repository.set_default(candidate_id)
+        return deleted
 
     # ─── ResumeLink CRUD ────────────────────────────────────────────────────
 

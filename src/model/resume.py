@@ -3,7 +3,19 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Date,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    func,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.core.database import Base
@@ -15,6 +27,18 @@ if TYPE_CHECKING:
 class Resume(Base):
     __tablename__ = "resume"
 
+    # Partial unique index: «основное резюме» не больше одного на автора.
+    # Объявлен именно здесь, а не только в миграции, иначе autogenerate считает
+    # его посторонним и предлагает удалить (проверяется `alembic check`).
+    __table_args__ = (
+        Index(
+            "uq_resume_author_default",
+            "author_id",
+            unique=True,
+            postgresql_where=text("is_default"),
+        ),
+    )
+
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     author_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
     header: Mapped[str] = mapped_column(Text, nullable=False)
@@ -25,6 +49,10 @@ class Resume(Base):
     has_experience: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     no_experience_description: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_visible: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Основное резюме автора: ровно одно на пользователя (гарантируется
+    # partial unique index uq_resume_author_default). Именно оно показывается
+    # в списке резюме пространства, чтобы у участника была одна карточка.
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     views_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(

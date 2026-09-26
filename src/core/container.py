@@ -312,6 +312,12 @@ async def get_invitation_service(
     return InvitationService(invitation_repository)
 
 
+async def get_audit_service(
+    audit_repository: AuditRepository = Depends(get_audit_repository),
+) -> AuditService:
+    return AuditService(audit_repository)
+
+
 async def get_kanban_service(
     kanban_column_repository: KanbanColumnRepository = Depends(get_kanban_column_repository),
     kanban_task_repository: KanbanTaskRepository = Depends(get_kanban_task_repository),
@@ -321,6 +327,7 @@ async def get_kanban_service(
     *,
     notification_service: NotificationService = Depends(get_notification_service),
     mail_service: MailService = Depends(get_mail_service),
+    audit_service: AuditService = Depends(get_audit_service),
 ) -> KanbanService:
     return KanbanService(
         kanban_column_repository,
@@ -330,13 +337,8 @@ async def get_kanban_service(
         project_repository,
         notification_service=notification_service,
         mail_service=mail_service,
+        audit_service=audit_service,
     )
-
-
-async def get_audit_service(
-    audit_repository: AuditRepository = Depends(get_audit_repository),
-) -> AuditService:
-    return AuditService(audit_repository)
 
 
 async def get_portfolio_service(

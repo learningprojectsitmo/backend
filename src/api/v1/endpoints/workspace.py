@@ -171,6 +171,13 @@ async def get_workspace_resumes(
     search: str | None = Query(None, description="Поиск по имени/заголовку/навыкам/интересам"),
     skills: list[str] | None = Query(None, description="Фильтр по навыкам"),
     interests: list[str] | None = Query(None, description="Фильтр по интересам"),
+    default_only: bool = Query(
+        False,
+        description=(
+            "Только основные резюме участников. Включается на странице пространства: "
+            "иначе INNER JOIN по author_id даст по карточке на каждое резюме участника."
+        ),
+    ),
     workspace_service: WorkSpaceService = Depends(get_workspace_service),
     _current_user: User = Depends(get_current_user),
 ) -> WorkspaceResumeListResponse:
@@ -187,6 +194,7 @@ async def get_workspace_resumes(
         interests,
         skip,
         limit,
+        default_only=default_only,
     )
     parsed = [WorkspaceResumeItem.model_validate(item) for item in items]
 

@@ -422,7 +422,9 @@ class TestWorkSpaceService:
         # then
         assert items == mock_items
         assert total == 1
-        mock_repository.get_workspace_resumes.assert_called_once_with(1, "python", ["Python", "FastAPI"], ["AI"], 0, 10)
+        mock_repository.get_workspace_resumes.assert_called_once_with(
+            1, "python", ["Python", "FastAPI"], ["AI"], 0, 10, default_only=False
+        )
 
     @pytest.mark.asyncio
     async def test_should_get_workspace_resumes_without_filters(self):
@@ -439,7 +441,22 @@ class TestWorkSpaceService:
         # then
         assert items == []
         assert total == 0
-        mock_repository.get_workspace_resumes.assert_called_once_with(1, None, None, None, 0, 10)
+        mock_repository.get_workspace_resumes.assert_called_once_with(1, None, None, None, 0, 10, default_only=False)
+
+    @pytest.mark.asyncio
+    async def test_should_forward_default_only_flag_to_repository(self):
+        """default_only должен доходить до репозитория — им схлопывается участник в одну карточку"""
+        # given
+        mock_repository = Mock(spec=WorkSpaceRepository)
+        mock_repository.get_workspace_resumes.return_value = ([], 0)
+
+        workspace_service = WorkSpaceService(mock_repository)
+
+        # when
+        await workspace_service.get_workspace_resumes(workspace_id=1, default_only=True)
+
+        # then
+        mock_repository.get_workspace_resumes.assert_called_once_with(1, None, None, None, 0, 10, default_only=True)
 
     @pytest.mark.asyncio
     async def test_should_get_workspace_resume_filters(self):
