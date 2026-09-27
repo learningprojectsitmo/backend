@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from src.model.project import Project
 from src.schema.stage import ProjectStageInfo
+from src.util.urls import build_resume_url
 
 
 class ParticipantPreview(BaseModel):
@@ -276,7 +277,7 @@ class ProjectFull(ProjectCreate):
                 user_id=r.respondent_id,
                 name=f"{r.respondent.first_name} {r.respondent.last_name}",
                 contacts=getattr(r.respondent, "email", ""),
-                resume_url=f"/resume/{r.resume_id}" if r.resume_id else "",
+                resume_url=build_resume_url(r.resume_id, workspace_id=project.workspace_id),
                 response_date=str(r.created_at.date()) if r.created_at else "",
                 vacancy_id=getattr(r.vacancy, "id", None) if r.vacancy else None,
                 role=getattr(r.vacancy, "title", "") if r.vacancy else "",

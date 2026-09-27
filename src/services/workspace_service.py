@@ -117,13 +117,14 @@ class WorkSpaceService(BaseService[WorkSpace, WorkSpaceCreate, WorkSpaceUpdate])
         skip: int = 0,
         limit: int = 10,
         search: str | None = None,
-        project_id: int | None = None,
+        project_ids: list[int] | None = None,
+        role_ids: list[int] | None = None,
         date_from: str | None = None,
         date_to: str | None = None,
     ) -> tuple[list[dict], int]:
         """Получить участников workspace с пагинацией и фильтрацией"""
         return await self._workspace_repository.get_participants(
-            workspace_id, skip, limit, search, project_id, date_from, date_to
+            workspace_id, skip, limit, search, project_ids, role_ids, date_from, date_to
         )
 
     async def remove_workspace_participant(self, workspace_id: int, user_id: int, current_user_id: int) -> bool:

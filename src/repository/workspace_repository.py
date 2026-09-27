@@ -23,6 +23,7 @@ from src.model.workspace import WorkSpace, WorkSpaceCategories, WorkSpacePartici
 from src.model.workspace_invitation import WorkspaceInvitation
 from src.repository.base_repository import BaseRepository
 from src.schema.workspace import WorkSpaceCreate, WorkSpaceUpdate
+from src.util.urls import build_resume_url
 
 
 class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUpdate]):
@@ -151,11 +152,17 @@ class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUp
         skip: int = 0,
         limit: int = 10,
         search: str | None = None,
-        project_id: int | None = None,
+        project_ids: list[int] | None = None,
+        role_ids: list[int] | None = None,
         date_from: str | None = None,
         date_to: str | None = None,
     ) -> tuple[list[dict], int]:
-        """Получить участников workspace с пагинацией, поиском и фильтрацией"""
+        """Получить участников workspace с пагинацией, поиском и фильтрацией
+
+        ``project_ids`` и ``role_ids`` работают по принципу ИЛИ: участник попадает
+        в выдачу, если он состоит хотя бы в одном из указанных проектов / имеет
+        хотя бы одну из указанных ролей. Пустой список — фильтр не применяется.
+        """
 
         user_name = func.concat_ws(" ", User.last_name, User.first_name, User.middle_name).label("name")
 
@@ -212,17 +219,21 @@ class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUp
                     User.tg_nickname.ilike(f"%{search}%"),
                 )
             )
-        if project_id is not None:
-            # Semi-join: только участники, состоящие в указанном проекте
+        if project_ids:
+            # Semi-join: только участники, состоящие хотя бы в одном из указанных
+            # проектов. ИЛИ-семантика, поэтому «выбрать все проекты» не прячет
+            # участников без проектов — но пустой список фильтр не включает.
             in_project = (
                 select(ProjectParticipation.participant_id)
                 .join(Project, Project.id == ProjectParticipation.project_id)
                 .where(
-                    ProjectParticipation.project_id == project_id,
+                    ProjectParticipation.project_id.in_(project_ids),
                     Project.workspace_id == workspace_id,
                 )
             )
             base_query = base_query.where(WorkSpaceParticipation.participant_id.in_(in_project))
+        if role_ids:
+            base_query = base_query.where(WorkSpaceParticipation.role_id.in_(role_ids))
         if date_from:
             base_query = base_query.where(cast(WorkSpaceParticipation.created_at, Date) >= cast(date_from, Date))
         if date_to:
@@ -259,7 +270,7 @@ class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUp
                         "email": row["email"] or None,
                         "linkedin": None,
                     },
-                    "resume_url": f"/resume/{row['resume_id']}" if row["resume_id"] else "",
+                    "resume_url": build_resume_url(row["resume_id"], workspace_id=workspace_id),
                     "created_at": str(row["created_at"]),
                 }
             )

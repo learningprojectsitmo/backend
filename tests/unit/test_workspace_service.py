@@ -474,3 +474,65 @@ class TestWorkSpaceService:
         # then
         assert result == mock_filters
         mock_repository.get_workspace_resume_filters.assert_called_once_with(1)
+
+
+class TestWorkSpaceServiceParticipantFilters:
+    """Фильтры списка участников: сервис не должен терять ни один аргумент"""
+
+    @pytest.mark.asyncio
+    async def test_should_forward_all_participant_filters_to_repository(self):
+        """Все фильтры (проекты, роли, даты) должны дойти до repository без потерь"""
+        # given
+        mock_repository = Mock(spec=WorkSpaceRepository)
+        mock_repository.get_participants.return_value = ([], 0)
+
+        workspace_service = WorkSpaceService(mock_repository)
+
+        # when
+        items, total = await workspace_service.get_workspace_participants(
+            workspace_id=7,
+            skip=20,
+            limit=10,
+            search="ivan",
+            project_ids=[3, 4],
+            role_ids=[55, 57],
+            date_from="2026-01-01",
+            date_to="2026-02-01",
+        )
+
+        # then
+        assert items == []
+        assert total == 0
+        mock_repository.get_participants.assert_called_once_with(
+            7, 20, 10, "ivan", [3, 4], [55, 57], "2026-01-01", "2026-02-01"
+        )
+
+    @pytest.mark.asyncio
+    async def test_should_pass_empty_filter_lists_as_none(self):
+        """Пустой список — фильтр не применён, репозиторий ожидает None"""
+        # given
+        mock_repository = Mock(spec=WorkSpaceRepository)
+        mock_repository.get_participants.return_value = ([], 0)
+
+        workspace_service = WorkSpaceService(mock_repository)
+
+        # when
+        await workspace_service.get_workspace_participants(workspace_id=1, project_ids=[], role_ids=[])
+
+        # then
+        mock_repository.get_participants.assert_called_once_with(1, 0, 10, None, [], [], None, None)
+
+    @pytest.mark.asyncio
+    async def test_should_default_participant_filters_to_none(self):
+        """Без фильтров сервис отдаёт None, а не пустые списки"""
+        # given
+        mock_repository = Mock(spec=WorkSpaceRepository)
+        mock_repository.get_participants.return_value = ([], 0)
+
+        workspace_service = WorkSpaceService(mock_repository)
+
+        # when
+        await workspace_service.get_workspace_participants(workspace_id=1)
+
+        # then
+        mock_repository.get_participants.assert_called_once_with(1, 0, 10, None, None, None, None, None)

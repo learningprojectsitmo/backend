@@ -24,6 +24,7 @@ from src.schema.project import (
     ProjectUpdate,
 )
 from src.services.base_service import BaseService
+from src.util.urls import build_resume_url
 
 if TYPE_CHECKING:
     from src.repository.project_repository import ProjectRepository
@@ -105,14 +106,19 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         return result.first() is not None
 
     async def _get_user_resume_url(self, user_id: int) -> tuple[str, str]:
-        """Получить URL и заголовок первого резюме пользователя"""
+        """Получить URL и заголовок первого резюме пользователя.
+
+        Контекст пространства здесь не подставляется: ответы и приглашения
+        относятся к разным проектам, и единственный workspaceId ввёл бы
+        breadcrumb в чужое пространство.
+        """
         if not self._resume_repository:
             return "", ""
         resumes = await self._resume_repository.get_by_author_id(user_id)
         if not resumes:
             return "", ""
         resume = resumes[0]
-        return f"/resume/{resume.id}", resume.header or ""
+        return build_resume_url(resume.id), resume.header or ""
 
     async def get_project_by_id(self, project_id: int) -> Project | None:
         """Получить проект по ID"""
