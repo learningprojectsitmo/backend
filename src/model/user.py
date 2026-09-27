@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, func, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.core.database import Base
@@ -22,6 +22,13 @@ from src.model.resume import Resume
 
 class User(Base):
     __tablename__ = "user"
+
+    # Аутентификация идёт по `func.lower(email) == ...`
+    # (`UserRepository.get_by_email`), а btree на `user_email_key` для
+    # выражения с LOWER() непригоден — он не разворачивается к колонке.
+    # Поэтому нужен именно expression-индекс; он же покрывает и поиск
+    # по `NewUser`, и единственный запрос, где `user` ищется не по PK.
+    __table_args__ = (Index("ix_user_lower_email", text("lower(email)")),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
@@ -112,6 +119,10 @@ class Permission(Base):
 class UserPermission(Base):
     __tablename__ = "user_permission"
 
+    # `UserRepository.get_user_permissions` и `remove_permissions` фильтруют по
+    # обоим колонкам сразу; пара с правым столбцом закрывает их оба.
+    __table_args__ = (Index("ix_user_permission_user_permission", "user_id", "permission_id"),)
+
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
     permission_id: Mapped[int] = mapped_column(ForeignKey("permission.id"), nullable=False)
@@ -135,6 +146,10 @@ class Role(Base):
 
 class RolePermission(Base):
     __tablename__ = "role_permission"
+
+    # Проверка прав дергается на каждом защищённом запросе
+    # (`RoleRepository.get_role_permissions`).
+    __table_args__ = (Index("ix_role_permission_role_permission", "role_id", "permission_id"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     role_id: Mapped[int] = mapped_column(ForeignKey("role.id"), nullable=False)

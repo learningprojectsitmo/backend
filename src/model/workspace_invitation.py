@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import TIMESTAMP, Boolean, ForeignKey, Integer, String
+from sqlalchemy import TIMESTAMP, Boolean, ForeignKey, Index, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
@@ -11,6 +11,9 @@ from src.core.database import Base
 
 class WorkspaceInvitation(Base):
     __tablename__ = "workspace_invitation"
+
+    # Приглашения workspace: фильтр по активным + сортировка по дате.
+    __table_args__ = (Index("ix_ws_invitation_workspace_active_created", "workspace_id", "is_active", "created_at"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     workspace_id: Mapped[int] = mapped_column(ForeignKey("workspace.id"), nullable=False)

@@ -29,6 +29,7 @@ dependencies = [
     "aiosmtplib>=3.0.2",
     "sentry-sdk[fastapi]>=2.68.1",
     "prometheus-client>=0.21.0",
+    "nh3>=0.3.7",
 ]
 
 [project.optional-dependencies]

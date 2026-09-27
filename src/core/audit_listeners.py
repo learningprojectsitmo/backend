@@ -22,6 +22,7 @@ from src.model.project import (
 )
 from src.model.resume import Resume
 from src.model.user import User
+from src.model.wiki import WikiPage
 
 
 def _safe_value(value):
@@ -387,6 +388,24 @@ def audit_task_assignee_insert(mapper, connection, target: TaskAssignee) -> None
 @event.listens_for(TaskAssignee, "after_delete")
 def audit_task_assignee_delete(mapper, connection, target: TaskAssignee) -> None:
     _audit_delete(mapper, connection, target, "task_assignee", _project_id_via_task)
+
+
+# ─── Вики проекта ──────────────────────────────────────────────────────────
+
+
+@event.listens_for(WikiPage, "after_insert")
+def audit_wiki_page_insert(mapper, connection, target: WikiPage) -> None:
+    _audit_insert(mapper, connection, target, "wiki_page", _self_project_id)
+
+
+@event.listens_for(WikiPage, "before_update")
+def audit_wiki_page_update(mapper, connection, target: WikiPage) -> None:
+    _audit_update(mapper, connection, target, "wiki_page", _self_project_id)
+
+
+@event.listens_for(WikiPage, "after_delete")
+def audit_wiki_page_delete(mapper, connection, target: WikiPage) -> None:
+    _audit_delete(mapper, connection, target, "wiki_page", _self_project_id)
 
 
 def setup_audit_listeners() -> None:

@@ -46,13 +46,16 @@ class IdeaService(BaseService[Idea, IdeaCreate, IdeaCreate]):
         total = await self._idea_repository.count_filtered(search=search, status=status, tag=tag)
         total_pages = (total + limit - 1) // limit if total > 0 else 0
 
-        items = []
-        for idea in ideas:
-            user_vote = None
-            if current_user_id is not None:
-                vote = await self._idea_repository.get_user_vote(idea.id, current_user_id)
-                user_vote = vote.direction if vote else None
-            items.append(self._to_list_item(idea, user_vote))
+        # Голоса текущего пользователя — одним запросом на всю страницу.
+        # Раньше здесь стоял `get_user_vote` в цикле, то есть N+1: на странице
+        # из `limit` идей выполнялось до `limit` одинаковых запросов.
+        votes = (
+            await self._idea_repository.get_user_votes([i.id for i in ideas], current_user_id)
+            if current_user_id is not None
+            else {}
+        )
+
+        items = [self._to_list_item(idea, votes.get(idea.id)) for idea in ideas]
 
         return {
             "items": items,

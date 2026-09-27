@@ -20,6 +20,7 @@ from src.model.resume import (
 )
 from src.model.settings import SettingsType, SpaceSettings
 from src.model.user import Permission, Role, RolePermission, User, UserPermission
+from src.model.wiki import WikiPage
 from src.model.workspace import WorkSpace, WorkSpaceCategories, WorkSpaceParticipation, WorkSpaceStatus
 from src.model.workspace_invitation import WorkspaceInvitation
 
@@ -62,6 +63,7 @@ __all__ = [
     "TaskHistory",
     "User",
     "UserPermission",
+    "WikiPage",
     "WorkSpace",
     "WorkSpaceCategories",
     "WorkSpaceParticipation",

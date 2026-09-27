@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Table, Text, UniqueConstraint, func
+from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String, Table, Text, UniqueConstraint, func, text
 from sqlalchemy import Column as SAColumn
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from src.model.kanban_models import Column
     from src.model.resume import Resume
     from src.model.user import User
+    from src.model.wiki import WikiPage
     from src.model.workspace import WorkSpace
 
 project_tag = Table(
@@ -25,6 +26,9 @@ project_tag = Table(
 
 class Project(Base):
     __tablename__ = "project"
+
+    # Список проектов workspace и проверка «один проект на workspace».
+    __table_args__ = (Index("ix_project_workspace_id", "workspace_id", "id"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
@@ -87,6 +91,11 @@ class Project(Base):
         cascade="all, delete-orphan",
     )
 
+    wiki_pages: Mapped[list[WikiPage]] = relationship(
+        back_populates="project",
+        cascade="all, delete-orphan",
+    )
+
     def __repr__(self) -> str:
         return (
             f"Project(id={self.id!r}, author_id={self.author_id!r}, "
@@ -127,6 +136,13 @@ class Tag(Base):
 class ProjectParticipation(Base):
     __tablename__ = "project_participation"
 
+    # Проверка доступа к проекту выполняется на каждом запросе к доске.
+    # Обратный список: проекмы, в которых участвует пользователь.
+    __table_args__ = (
+        Index("ix_pp_project_participant", "project_id", "participant_id"),
+        Index("ix_pp_participant", "participant_id"),
+    )
+
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     project_id: Mapped[int] = mapped_column(ForeignKey("project.id"), nullable=False)
     participant_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
@@ -147,6 +163,13 @@ class ProjectParticipation(Base):
 
 class Response(Base):
     __tablename__ = "response"
+
+    # Проверки «есть ли уже отклик/приглашение» для конкретного проекта.
+    # Списки откликов и приглашений пользователя.
+    __table_args__ = (
+        Index("ix_response_respondent_project_status", "respondent_id", "project_id", "status"),
+        Index("ix_response_respondent_type", "respondent_id", "type"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     respondent_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
@@ -174,6 +197,9 @@ class Response(Base):
 
 class ProjectVacancy(Base):
     __tablename__ = "project_vacancy"
+
+    # Вакансии проекта грузятся вместе с проектом.
+    __table_args__ = (Index("ix_project_vacancy_project", "project_id"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     project_id: Mapped[int] = mapped_column(ForeignKey("project.id"), nullable=False)
@@ -219,6 +245,10 @@ class ProjectType(Base):
 class ProjectStage(Base):
     __tablename__ = "project_stage"
 
+    # Этапы типа проекта подтягиваются selectinload при каждой выборке
+    # проекта и сортируются по order.
+    __table_args__ = (Index("ix_project_stage_type_order", "project_type_id", "order"),)
+
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     order: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -241,6 +271,9 @@ class ProjectStage(Base):
 
 class StageTransition(Base):
     __tablename__ = "stage_transition"
+
+    # История переходов по этапам проекта.
+    __table_args__ = (Index("ix_stage_transition_project_created", "project_id", text("created_at DESC")),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     project_id: Mapped[int] = mapped_column(ForeignKey("project.id"), nullable=False)
@@ -293,6 +326,9 @@ class ProjectSpecification(Base):
 
 class SpecificationComment(Base):
     __tablename__ = "project_specification_comment"
+
+    # Комментарии к ТЗ в порядке создания.
+    __table_args__ = (Index("ix_spec_comment_spec_created", "specification_id", "created_at"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     specification_id: Mapped[int] = mapped_column(ForeignKey("project_specification.id"), nullable=False)

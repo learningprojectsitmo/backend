@@ -26,6 +26,7 @@ from src.repository.specification_repository import (
 )
 from src.repository.stage_repository import ProjectTypeRepository, StageTransitionRepository
 from src.repository.user_repository import NewUserRepository, UserPermissionRepository, UserRepository
+from src.repository.wiki_repository import WikiRepository
 from src.repository.workspace_repository import WorkSpaceRepository
 from src.services.admin_service import AdminService
 from src.services.audit_service import AuditService
@@ -50,6 +51,7 @@ from src.services.settings_service import SpaceSettingsService
 from src.services.specification_service import SpecificationService
 from src.services.stage_service import ProjectStageService
 from src.services.user_service import UserService
+from src.services.wiki_service import WikiService
 from src.services.workspace_service import WorkSpaceService
 
 
@@ -162,6 +164,10 @@ async def get_kanban_task_repository(uow: IUnitOfWork = Depends(get_uow)) -> Kan
 
 async def get_kanban_subtask_repository(uow: IUnitOfWork = Depends(get_uow)) -> KanbanSubtaskRepository:
     return KanbanSubtaskRepository(uow)
+
+
+async def get_wiki_repository(uow: IUnitOfWork = Depends(get_uow)) -> WikiRepository:
+    return WikiRepository(uow)
 
 
 # ========== Сервисы ==========
@@ -289,6 +295,13 @@ async def get_workspace_service(
     workspace_repository: WorkSpaceRepository = Depends(get_workspace_repository),
 ) -> WorkSpaceService:
     return WorkSpaceService(workspace_repository)
+
+
+async def get_wiki_service(
+    wiki_repository: WikiRepository = Depends(get_wiki_repository),
+    project_repository: ProjectRepository = Depends(get_project_repository),
+) -> WikiService:
+    return WikiService(wiki_repository, project_repository=project_repository)
 
 
 async def get_search_service(

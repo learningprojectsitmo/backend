@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import selectinload
 
@@ -87,6 +89,25 @@ class IdeaRepository(BaseRepository[Idea, IdeaCreate, IdeaCreate]):
         )
         result = await self.uow.session.execute(query)
         return result.scalar_one_or_none()
+
+    async def get_user_votes(self, idea_ids: Sequence[int], user_id: int) -> dict[int, str]:
+        """Голоса пользователя сразу по всем идеям: `idea_id -> direction`.
+
+        Один запрос на страницу вместо запроса на идею. Список карты нужен
+        `get_ideas_filtered`, где раньше был N+1: `get_user_vote` в цикле по
+        `ideas` давал до `limit` одинаковых запросов.
+
+        Пустой `idea_ids` не превращается в `IN ()`: возвращаем пустую карту,
+        чтобы вызывающая сторона несла один и тот же смысл в обоих случаях.
+        """
+        if not idea_ids:
+            return {}
+        query = select(IdeaVote.idea_id, IdeaVote.direction).where(
+            IdeaVote.idea_id.in_(idea_ids),
+            IdeaVote.user_id == user_id,
+        )
+        result = await self.uow.session.execute(query)
+        return dict(result.all())
 
     async def delete_vote(self, vote_id: int) -> None:
         await self.uow.session.execute(delete(IdeaVote).where(IdeaVote.id == vote_id))
