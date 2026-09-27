@@ -1085,6 +1085,7 @@ class TestMultiProjectRestriction:
         invitation = self._make_pending_invitation(5, 2, 3)
         invitation.project = Project(id=3, name="P", description="D", author_id=1, workspace_id=7)
         mock_repository.get_invitations_by_invitee_id = AsyncMock(return_value=[invitation])
+        mock_repository.get_user_project_scopes = AsyncMock(return_value=[])
         flags_result = Mock()
         flags_result.all.return_value = [(7, False)]
         mock_session.execute = AsyncMock(return_value=flags_result)
@@ -1097,6 +1098,248 @@ class TestMultiProjectRestriction:
         # then
         assert result.total == 1
         assert result.items[0].allow_multi_project_participation is False
+
+    def _setup_profile_list(
+        self,
+        *,
+        responses: list[Response],
+        allow_multi: bool,
+        user_scopes: list[tuple[int, int | None]],
+    ) -> tuple[Mock, AsyncMock, ProjectService]:
+        """Репозиторий для списков профиля: отклики/приглашения + занятость по пространствам."""
+        mock_repository = Mock(spec=ProjectRepository)
+        mock_uow = Mock()
+        mock_session = AsyncMock()
+        mock_uow.session = mock_session
+        mock_repository.uow = mock_uow
+        mock_repository.get_responses_by_respondent_id = AsyncMock(return_value=responses)
+        mock_repository.get_invitations_by_invitee_id = AsyncMock(return_value=responses)
+        mock_repository.get_user_project_scopes = AsyncMock(return_value=user_scopes)
+        flags_result = Mock()
+        flags_result.all.return_value = [(7, allow_multi)]
+        mock_session.execute = AsyncMock(return_value=flags_result)
+        return mock_repository, mock_session, ProjectService(mock_repository)
+
+    @staticmethod
+    def _make_project_with_stage() -> Project:
+        """Проект с этапом: ProjectFull.from_orm требует заполненный stage."""
+        stage = ProjectStage(id=1, name="S", order=1, requires_approval=False, project_type_id=1)
+        return Project(
+            id=3,
+            name="P",
+            author_id=1,
+            workspace_id=7,
+            max_participants=None,
+            current_stage=stage,
+            # server_default не применяется, пока объект не сброшен в БД
+            stage_pending_approval=False,
+        )
+
+    def _make_profile_response(
+        self, response_id: int, status: str, project_id: int, workspace_id: int | None
+    ) -> Response:
+        response = Response(
+            id=response_id,
+            respondent_id=2,
+            project_id=project_id,
+            type="response",
+            status=status,
+            created_at=datetime(2026, 1, 1),
+        )
+        response.project = Project(
+            id=project_id, name=f"P{project_id}", description="D", author_id=1, workspace_id=workspace_id
+        )
+        return response
+
+    @pytest.mark.asyncio
+    async def test_should_mark_accepted_response_as_in_team_when_joined_another_project(self):
+        # given: отклик принят, но участник уже в другом проекте этого пространства
+        response = self._make_profile_response(1, "accepted", project_id=3, workspace_id=7)
+        _, _, project_service = self._setup_profile_list(
+            responses=[response], allow_multi=False, user_scopes=[(3, 7), (5, 7)]
+        )
+
+        # when
+        result = await project_service.get_my_responses(2)
+
+        # then
+        assert result.items[0].status == "in_team"
+        assert result.items[0].busy_in_other_project is True
+
+    @pytest.mark.asyncio
+    async def test_should_mark_pending_response_as_in_team_when_joined_another_project(self):
+        # given
+        response = self._make_profile_response(1, "pending", project_id=3, workspace_id=7)
+        _, _, project_service = self._setup_profile_list(
+            responses=[response], allow_multi=False, user_scopes=[(3, 7), (5, 7)]
+        )
+
+        # when
+        result = await project_service.get_my_responses(2)
+
+        # then
+        assert result.items[0].status == "in_team"
+
+    @pytest.mark.asyncio
+    async def test_should_keep_accepted_response_when_user_joined_same_project_only(self):
+        # given: единственный проект пользователя — тот, на который он откликнулся
+        response = self._make_profile_response(1, "accepted", project_id=3, workspace_id=7)
+        _, _, project_service = self._setup_profile_list(responses=[response], allow_multi=False, user_scopes=[(3, 7)])
+
+        # when
+        result = await project_service.get_my_responses(2)
+
+        # then
+        assert result.items[0].status == "accepted"
+        assert result.items[0].busy_in_other_project is False
+
+    @pytest.mark.asyncio
+    async def test_should_scope_busy_to_response_workspace(self):
+        # given: занят в проекте ДРУГОГО пространства — это не помеха
+        response = self._make_profile_response(1, "accepted", project_id=3, workspace_id=7)
+        _, _, project_service = self._setup_profile_list(
+            responses=[response], allow_multi=False, user_scopes=[(3, 7), (9, 8)]
+        )
+
+        # when
+        result = await project_service.get_my_responses(2)
+
+        # then
+        assert result.items[0].status == "accepted"
+        assert result.items[0].busy_in_other_project is False
+
+    @pytest.mark.asyncio
+    async def test_should_keep_accepted_response_when_multi_participation_allowed(self):
+        # given: в пространстве разрешено состоять в нескольких проектах
+        response = self._make_profile_response(1, "accepted", project_id=3, workspace_id=7)
+        _, _, project_service = self._setup_profile_list(
+            responses=[response], allow_multi=True, user_scopes=[(3, 7), (5, 7)]
+        )
+
+        # when
+        result = await project_service.get_my_responses(2)
+
+        # then
+        assert result.items[0].status == "accepted"
+        assert result.items[0].busy_in_other_project is False
+
+    @pytest.mark.asyncio
+    async def test_should_not_rewrite_rejected_response(self):
+        # given: решение сторон пересмотру не подлежит
+        response = self._make_profile_response(1, "rejected", project_id=3, workspace_id=7)
+        _, _, project_service = self._setup_profile_list(
+            responses=[response], allow_multi=False, user_scopes=[(3, 7), (5, 7)]
+        )
+
+        # when
+        result = await project_service.get_my_responses(2)
+
+        # then
+        assert result.items[0].status == "rejected"
+        assert result.items[0].busy_in_other_project is True
+
+    @pytest.mark.asyncio
+    async def test_should_mark_pending_invitation_as_in_team_when_joined_another_project(self):
+        # given
+        invitation = self._make_profile_response(5, "pending", project_id=3, workspace_id=7)
+        invitation.type = "invitation"
+        _, _, project_service = self._setup_profile_list(
+            responses=[invitation], allow_multi=False, user_scopes=[(3, 7), (5, 7)]
+        )
+
+        # when
+        result = await project_service.get_my_invitations(2)
+
+        # then
+        assert result.items[0].status == "in_team"
+        assert result.items[0].busy_in_other_project is True
+
+    @pytest.mark.asyncio
+    async def test_build_full_should_pass_busy_ids_to_schema(self):
+        # given
+        mock_repository = Mock(spec=ProjectRepository)
+        mock_uow = Mock()
+        mock_session = AsyncMock()
+        mock_uow.session = mock_session
+        mock_repository.uow = mock_uow
+        project = self._make_project_with_stage()
+        mock_repository.get_workspace_busy_participant_ids = AsyncMock(return_value={2, 5})
+        mock_session.execute = AsyncMock(return_value=self._settings_result(False))
+
+        project_service = ProjectService(mock_repository)
+
+        # when
+        full = await project_service.build_full(project, 1)
+
+        # then
+        mock_repository.get_workspace_busy_participant_ids.assert_awaited_once_with(7, 3)
+        assert full.workspace_id == 7
+
+    @pytest.mark.asyncio
+    async def test_build_full_should_skip_busy_query_when_multi_allowed(self):
+        # given
+        mock_repository = Mock(spec=ProjectRepository)
+        mock_uow = Mock()
+        mock_session = AsyncMock()
+        mock_uow.session = mock_session
+        mock_repository.uow = mock_uow
+        project = self._make_project_with_stage()
+        mock_repository.get_workspace_busy_participant_ids = AsyncMock()
+        mock_session.execute = AsyncMock(return_value=self._settings_result(True))
+
+        project_service = ProjectService(mock_repository)
+
+        # when
+        await project_service.build_full(project, 1)
+
+        # then
+        mock_repository.get_workspace_busy_participant_ids.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_invite_to_project_should_block_candidate_busy_in_another_project(self):
+        # given
+        mock_repository = Mock(spec=ProjectRepository)
+        mock_uow = Mock()
+        mock_session = AsyncMock()
+        mock_uow.session = mock_session
+        mock_repository.uow = mock_uow
+        project = Project(id=3, name="P", author_id=1, workspace_id=7, max_participants=None)
+        mock_repository.get_by_id = AsyncMock(return_value=project)
+        mock_repository.is_user_in_project = AsyncMock(return_value=False)
+        mock_repository.has_pending_response = AsyncMock(return_value=False)
+        mock_repository.is_user_participant_in_other_project = AsyncMock(return_value=True)
+        mock_session.execute = AsyncMock(return_value=self._settings_result(False))
+
+        project_service = ProjectService(mock_repository)
+
+        # when / then
+        with pytest.raises(ValidationError, match="уже состоит в другом проекте"):
+            await project_service.invite_to_project(3, 1, 2)
+        mock_repository.create_response.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_invite_to_project_should_allow_busy_candidate_when_multi_allowed(self):
+        # given
+        mock_repository = Mock(spec=ProjectRepository)
+        mock_uow = Mock()
+        mock_session = AsyncMock()
+        mock_uow.session = mock_session
+        mock_repository.uow = mock_uow
+        project = Project(id=3, name="P", author_id=1, workspace_id=7, max_participants=None)
+        mock_repository.get_by_id = AsyncMock(return_value=project)
+        mock_repository.is_user_in_project = AsyncMock(return_value=False)
+        mock_repository.has_pending_response = AsyncMock(return_value=False)
+        mock_repository.is_user_participant_in_other_project = AsyncMock(return_value=True)
+        mock_repository.create_response = AsyncMock(return_value=Response(id=9, project_id=3, respondent_id=2))
+        mock_session.execute = AsyncMock(return_value=self._settings_result(True))
+
+        project_service = ProjectService(mock_repository)
+
+        # when
+        await project_service.invite_to_project(3, 1, 2)
+
+        # then
+        mock_repository.create_response.assert_awaited_once()
 
 
 class TestRemoveParticipant:

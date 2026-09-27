@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 
-from src.core.container import get_stage_service
+from src.core.container import get_project_service, get_stage_service
 from src.core.dependencies import get_current_user, permission_required, setup_audit
 from src.core.exceptions import BaseAppException
 from src.model.user import User
@@ -16,6 +16,7 @@ from src.schema.stage import (
     RejectStageRequest,
     StageHistoryResponse,
 )
+from src.services.project_service import ProjectService
 from src.services.stage_service import ProjectStageService
 
 type_router = APIRouter(prefix="/project-types", tags=["project-type"], dependencies=[Depends(setup_audit)])
@@ -145,6 +146,7 @@ async def remove_stage(
 async def advance_stage(
     project_id: int,
     stage_service: ProjectStageService = Depends(get_stage_service),
+    project_service: ProjectService = Depends(get_project_service),
     current_user: User = Depends(permission_required("project:update")),
 ) -> ProjectFull:
     """Автор инициирует переход на следующий этап"""
@@ -152,13 +154,14 @@ async def advance_stage(
         project = await stage_service.advance_stage(project_id, current_user.id)
     except BaseAppException as e:
         raise HTTPException(status_code=e.status_code, detail=e.detail) from e
-    return ProjectFull.from_orm(project, current_user.id)
+    return await project_service.build_full(project, current_user.id)
 
 
 @stage_router.post("/{project_id}/approve", response_model=ProjectFull)
 async def approve_stage(
     project_id: int,
     stage_service: ProjectStageService = Depends(get_stage_service),
+    project_service: ProjectService = Depends(get_project_service),
     current_user: User = Depends(permission_required("project:update")),
 ) -> ProjectFull:
     """Преподаватель утверждает текущий этап"""
@@ -166,7 +169,7 @@ async def approve_stage(
         project = await stage_service.approve_stage(project_id, current_user.id)
     except BaseAppException as e:
         raise HTTPException(status_code=e.status_code, detail=e.detail) from e
-    return ProjectFull.from_orm(project, current_user.id)
+    return await project_service.build_full(project, current_user.id)
 
 
 @stage_router.post("/{project_id}/reject", response_model=ProjectFull)
@@ -174,6 +177,7 @@ async def reject_stage(
     project_id: int,
     body: RejectStageRequest = Body(default_factory=RejectStageRequest),
     stage_service: ProjectStageService = Depends(get_stage_service),
+    project_service: ProjectService = Depends(get_project_service),
     current_user: User = Depends(permission_required("project:update")),
 ) -> ProjectFull:
     """Преподаватель отклоняет этап с возвратом на предыдущий"""
@@ -181,7 +185,7 @@ async def reject_stage(
         project = await stage_service.reject_stage(project_id, current_user.id, body.comment)
     except BaseAppException as e:
         raise HTTPException(status_code=e.status_code, detail=e.detail) from e
-    return ProjectFull.from_orm(project, current_user.id)
+    return await project_service.build_full(project, current_user.id)
 
 
 @stage_router.get("/{project_id}/history", response_model=StageHistoryResponse)

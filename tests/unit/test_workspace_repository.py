@@ -320,3 +320,105 @@ class TestGetParticipantsHasResumeFilter:
         # then
         count_sql = _sql_of(execute.await_args_list[0].args)
         assert "resume_id IS NULL" in count_sql
+
+
+class TestGetWorkspaceInviteCandidates:
+    """Отбор кандидатов идёт по составу пространства, а не по ленте резюме"""
+
+    @pytest.mark.asyncio
+    async def test_should_not_filter_by_resume_visibility_or_header(self):
+        # given
+        repository, execute = _make_repository()
+
+        # when
+        await repository.get_workspace_invite_candidates(workspace_id=1, project_id=5)
+
+        # then: скрытые и беззаголовковые резюме обязаны попадать в выборку
+        sql = _sql_of(execute.await_args_list[-1].args)
+        assert "is_visible" not in sql
+        assert "LEFT OUTER JOIN" in sql
+
+    @pytest.mark.asyncio
+    async def test_should_scope_busy_to_same_workspace_and_other_projects(self):
+        # given
+        repository, execute = _make_repository()
+
+        # when
+        await repository.get_workspace_invite_candidates(workspace_id=1, project_id=5)
+
+        # then
+        sql = _sql_of(execute.await_args_list[-1].args)
+        assert "workspace_id = 1" in sql
+        assert "project.id != 5" in sql
+
+    @pytest.mark.asyncio
+    async def test_should_pass_pagination_as_skip_and_limit(self):
+        # given
+        repository, execute = _make_repository()
+
+        # when
+        await repository.get_workspace_invite_candidates(1, 5, search="ivan", skip=20, limit=10)
+
+        # then
+        query = execute.await_args_list[-1].args[0]
+        assert "ILIKE" in _sql_of(execute.await_args_list[-1].args)
+        assert query._offset == 20
+        assert query._limit == 10
+
+    @pytest.mark.asyncio
+    async def test_should_report_reason_in_project(self):
+        # given: участник уже состоит в проекте и одновременно имеет отклик
+        repository, execute = _make_repository()
+        rows = [
+            {
+                "participant_id": 2,
+                "participant_name": "Иван",
+                "email": "i@example.com",
+                "tg_nickname": None,
+                "resume_id": None,
+                "resume_header": None,
+                "skills": None,
+                "interests": None,
+                "in_project": True,
+                "busy": True,
+                "pending": True,
+            }
+        ]
+        execute.side_effect = [_make_result(scalar=1), _make_result(rows=rows)]
+
+        # when
+        items, total = await repository.get_workspace_invite_candidates(1, 5)
+
+        # then
+        assert total == 1
+        assert items[0]["reason"] == "in_project"
+        assert items[0]["can_invite"] is False
+
+    @pytest.mark.asyncio
+    async def test_should_allow_invite_when_no_reason(self):
+        # given: участник свободен, но резюме нет — приглашению резюме не требуется
+        repository, execute = _make_repository()
+        rows = [
+            {
+                "participant_id": 2,
+                "participant_name": "Иван",
+                "email": "i@example.com",
+                "tg_nickname": None,
+                "resume_id": None,
+                "resume_header": None,
+                "skills": None,
+                "interests": None,
+                "in_project": False,
+                "busy": False,
+                "pending": False,
+            }
+        ]
+        execute.side_effect = [_make_result(scalar=1), _make_result(rows=rows)]
+
+        # when
+        items, _ = await repository.get_workspace_invite_candidates(1, 5)
+
+        # then
+        assert items[0]["can_invite"] is True
+        assert items[0]["reason"] == ""
+        assert items[0]["resume_id"] is None

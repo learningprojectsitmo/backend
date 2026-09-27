@@ -356,6 +356,39 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         await self.uow.session.flush()
         return result.rowcount or 0
 
+    async def get_workspace_busy_participant_ids(self, workspace_id: int | None, exclude_project_id: int) -> set[int]:
+        """Участники, состоящие в любом ДРУГОМ проекте пространства.
+
+        Пустое пространство (``None``) — «никто не занят»: сравнивать не с чем,
+        а проектов без пространства в выборке не бывает.
+        """
+        if not workspace_id:
+            return set()
+        result = await self.uow.session.execute(
+            select(ProjectParticipation.participant_id)
+            .join(Project, Project.id == ProjectParticipation.project_id)
+            .where(
+                Project.workspace_id == workspace_id,
+                Project.id != exclude_project_id,
+            )
+            .distinct()
+        )
+        return set(result.scalars().all())
+
+    async def get_user_project_scopes(self, user_id: int) -> list[tuple[int, int | None]]:
+        """Пары (project_id, workspace_id) всех проектов, в которых состоит участник.
+
+        Нужен, чтобы ответить «занят ли он в другом проекте ЭТОГО пространства»
+        для профиля, где отклики смешаны из разных пространств: одним общим
+        флагом нельзя, занятость всегда считается внутри пространства отклика.
+        """
+        result = await self.uow.session.execute(
+            select(Project.id, Project.workspace_id)
+            .join(ProjectParticipation, ProjectParticipation.project_id == Project.id)
+            .where(ProjectParticipation.participant_id == user_id)
+        )
+        return [(row[0], row[1]) for row in result.all()]
+
     async def is_user_participant_in_other_project(
         self, user_id: int, workspace_id: int, exclude_project_id: int
     ) -> bool:

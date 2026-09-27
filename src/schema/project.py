@@ -41,8 +41,53 @@ class ResponseItem(BaseModel):
     type: str = "response"
     status: str = "pending"
     allow_multi_project_participation: bool = True
+    busy_in_other_project: bool = False
 
     model_config = ConfigDict(from_attributes=True)
+
+
+#: Статусы, которые производный пересчёт может превратить в ``in_team``.
+#: ``rejected``/``withdrawn`` — решения сторон, их не пересматриваем.
+CLOSABLE_STATUSES = ("pending", "accepted")
+
+
+def resolve_status_fields(
+    status: str,
+    busy: bool,
+    allow_multi_project_participation: bool,
+) -> dict[str, str | bool]:
+    """Готовые поля ``status``/``busy_in_other_project`` для схем отклика.
+
+    Отдельная функция вместо кортежа, потому что call sites передают результат
+    через ``**`` в конструктор Pydantic-модели.
+    """
+    if busy and not allow_multi_project_participation and status in CLOSABLE_STATUSES:
+        return {"status": "in_team", "busy_in_other_project": True}
+    return {"status": status, "busy_in_other_project": busy}
+
+
+def resolve_busy_status(
+    status: str,
+    user_id: int | None,
+    busy_user_ids: set[int] | None,
+    allow_multi_project_participation: bool,
+) -> dict[str, str | bool]:
+    """Статус отклика/приглашения с поправкой на участие в другом проекте.
+
+    Хранимое поле обновляется только в момент вступления и только для строк,
+    которые тогда были ``pending``. Поэтому принятый, но неподтверждённый отклик
+    навсегда остаётся ``accepted``, и кнопка «Подтвердить участие» упрётся в 400
+    «вы уже участвуете в другом проекте этого пространства». Здесь статус
+    пересчитывается на чтении, и зависшие строки чинятся без миграции данных.
+
+    Пересчёт применяется только когда в пространстве запрещено участие в
+    нескольких проектах: в режиме с множественными командами человек, состоящий
+    в двух проектах, законен и помечать его «уже в команде» неверно.
+
+    ``busy_user_ids`` — участники, состоящие в другом проекте пространства.
+    """
+    busy = bool(user_id) and user_id in (busy_user_ids or set())
+    return resolve_status_fields(status, busy, allow_multi_project_participation)
 
 
 class ProjectStatusItem(BaseModel):
@@ -217,7 +262,10 @@ class ProjectFull(ProjectCreate):
 
     @staticmethod
     def from_orm(
-        project: Project, current_user_id: int | None = None, allow_multi_project_participation: bool = True
+        project: Project,
+        current_user_id: int | None = None,
+        allow_multi_project_participation: bool = True,
+        busy_user_ids: set[int] | None = None,
     ) -> ProjectFull:
         try:
             project_tags = project.tags or []
@@ -271,23 +319,30 @@ class ProjectFull(ProjectCreate):
             if p.participant
         ]
 
-        replycants = [
-            ResponseItem(
-                id=r.id,
-                user_id=r.respondent_id,
-                name=f"{r.respondent.first_name} {r.respondent.last_name}",
-                contacts=getattr(r.respondent, "email", ""),
-                resume_url=build_resume_url(r.resume_id, workspace_id=project.workspace_id),
-                response_date=str(r.created_at.date()) if r.created_at else "",
-                vacancy_id=getattr(r.vacancy, "id", None) if r.vacancy else None,
-                role=getattr(r.vacancy, "title", "") if r.vacancy else "",
-                type=r.type,
-                status=r.status,
-                allow_multi_project_participation=allow_multi_project_participation,
+        replycants = []
+        for r in all_responses:
+            if not r.respondent:
+                continue
+            replycants.append(
+                ResponseItem(
+                    id=r.id,
+                    user_id=r.respondent_id,
+                    name=f"{r.respondent.first_name} {r.respondent.last_name}",
+                    contacts=getattr(r.respondent, "email", ""),
+                    resume_url=build_resume_url(r.resume_id, workspace_id=project.workspace_id),
+                    response_date=str(r.created_at.date()) if r.created_at else "",
+                    vacancy_id=getattr(r.vacancy, "id", None) if r.vacancy else None,
+                    role=getattr(r.vacancy, "title", "") if r.vacancy else "",
+                    type=r.type,
+                    allow_multi_project_participation=allow_multi_project_participation,
+                    **resolve_busy_status(
+                        r.status,
+                        r.respondent_id,
+                        busy_user_ids,
+                        allow_multi_project_participation,
+                    ),
+                )
             )
-            for r in all_responses
-            if r.respondent
-        ]
 
         try:
             vacancies_list = project.vacancies or []
@@ -428,6 +483,7 @@ class MyResponseItem(BaseModel):
     resume_title: str = ""
     date: str
     status: str
+    busy_in_other_project: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -454,6 +510,7 @@ class MyInvitationItem(BaseModel):
     date: str
     status: str
     allow_multi_project_participation: bool = True
+    busy_in_other_project: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 

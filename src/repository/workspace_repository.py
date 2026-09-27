@@ -437,6 +437,173 @@ class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUp
 
         return items, total
 
+    async def get_workspace_invite_candidates(
+        self,
+        workspace_id: int,
+        project_id: int,
+        search: str | None = None,
+        skip: int = 0,
+        limit: int = 50,
+    ) -> tuple[list[dict], int]:
+        """Кого можно пригласить в проект — состав пространства, а не лента резюме.
+
+        Отличие от :meth:`get_workspace_resumes`, из которого диалог приглашения
+        брал кандидатов раньше: там INNER JOIN по ``author_id`` отсекал всех, кто
+        скрыл резюме (``is_visible = false``) или оставил пустой заголовок, а
+        ``limit`` по умолчанию 10 обрезал пространство целиком. Здесь отбор идёт
+        по :class:`WorkSpaceParticipation`, а резюме подключено LEFT JOIN, поэтому
+        в списке есть и участник без резюме — приглашению резюме не требуется.
+
+        Флаги считаются в том же пространстве, что и проект: ``busy`` — «состоит
+        в другом проекте ЭТОГО пространства», ``pending`` — «есть незакрытый отклик
+        или уже отправленное приглашение в ЭТОТ проект».
+        """
+        user_name = func.concat_ws(" ", User.last_name, User.first_name, User.middle_name).label("participant_name")
+
+        skills_subq = (
+            select(
+                ResumeSkill.resume_id,
+                func.array_agg(ResumeSkill.name).label("skills"),
+            )
+            .group_by(ResumeSkill.resume_id)
+            .subquery()
+        )
+
+        interests_subq = (
+            select(
+                ResumeInterest.resume_id,
+                func.array_agg(ResumeInterest.name).label("interests"),
+            )
+            .group_by(ResumeInterest.resume_id)
+            .subquery()
+        )
+
+        # Первое резюме автора — тот же приём, что в get_participants: брать
+        # is_default нельзя, у участника основного резюме может не быть вовсе,
+        # и тогда INNER JOIN выкинул бы его из списка целиком.
+        first_resume = (
+            select(Resume.author_id, Resume.id.label("resume_id"), Resume.header.label("resume_header"))
+            .distinct(Resume.author_id)
+            .order_by(Resume.author_id, Resume.id)
+            .subquery()
+        )
+
+        in_project_expr = (
+            select(ProjectParticipation.id)
+            .where(
+                ProjectParticipation.project_id == project_id,
+                ProjectParticipation.participant_id == WorkSpaceParticipation.participant_id,
+            )
+            .exists()
+            .correlate(WorkSpaceParticipation)
+        )
+
+        busy_expr = (
+            select(ProjectParticipation.id)
+            .join(Project, Project.id == ProjectParticipation.project_id)
+            .where(
+                Project.workspace_id == workspace_id,
+                Project.id != project_id,
+                ProjectParticipation.participant_id == WorkSpaceParticipation.participant_id,
+            )
+            .exists()
+            .correlate(WorkSpaceParticipation)
+        )
+
+        # Без фильтра по Response.type: и отклик, и уже отправленное приглашение
+        # закрывают возможность повторного приглашения одинаково.
+        pending_expr = (
+            select(Response.id)
+            .where(
+                Response.project_id == project_id,
+                Response.respondent_id == WorkSpaceParticipation.participant_id,
+                Response.status == "pending",
+            )
+            .exists()
+            .correlate(WorkSpaceParticipation)
+        )
+
+        base_query = (
+            select(
+                WorkSpaceParticipation.participant_id,
+                user_name,
+                User.email,
+                User.tg_nickname,
+                first_resume.c.resume_id,
+                first_resume.c.resume_header,
+                skills_subq.c.skills,
+                interests_subq.c.interests,
+                in_project_expr.label("in_project"),
+                busy_expr.label("busy"),
+                pending_expr.label("pending"),
+            )
+            .select_from(WorkSpaceParticipation)
+            .join(User, User.id == WorkSpaceParticipation.participant_id)
+            .outerjoin(first_resume, first_resume.c.author_id == WorkSpaceParticipation.participant_id)
+            .outerjoin(skills_subq, skills_subq.c.resume_id == first_resume.c.resume_id)
+            .outerjoin(interests_subq, interests_subq.c.resume_id == first_resume.c.resume_id)
+            .where(WorkSpaceParticipation.workspace_id == workspace_id)
+        )
+
+        if search:
+            pattern = f"%{search}%"
+            base_query = base_query.where(
+                or_(
+                    User.first_name.ilike(pattern),
+                    User.last_name.ilike(pattern),
+                    User.middle_name.ilike(pattern),
+                    first_resume.c.resume_header.ilike(pattern),
+                )
+            )
+
+        count_result = await self.uow.session.execute(select(func.count()).select_from(base_query.subquery()))
+        total = count_result.scalar()
+
+        query = (
+            base_query.order_by(user_name.asc().nulls_last(), WorkSpaceParticipation.participant_id)
+            .offset(skip)
+            .limit(limit)
+        )
+        result = await self.uow.session.execute(query)
+        rows = result.mappings().all()
+
+        items = []
+        for row in rows:
+            in_project = bool(row["in_project"])
+            busy = bool(row["busy"])
+            pending = bool(row["pending"])
+            if in_project:
+                reason = "in_project"
+            elif pending:
+                reason = "pending"
+            elif busy:
+                reason = "busy"
+            else:
+                reason = ""
+            items.append(
+                {
+                    "user_id": row["participant_id"],
+                    "name": row["participant_name"] or "",
+                    "contacts": {
+                        "telegram": row["tg_nickname"] or None,
+                        "email": row["email"] or None,
+                        "linkedin": None,
+                    },
+                    "resume_id": row["resume_id"],
+                    "resume_url": build_resume_url(row["resume_id"], workspace_id=workspace_id),
+                    "resume_header": row["resume_header"] or "",
+                    "skills": [s for s in (row["skills"] or []) if s],
+                    "interests": [i for i in (row["interests"] or []) if i],
+                    "in_project": in_project,
+                    "busy": busy,
+                    "pending": pending,
+                    "can_invite": reason == "",
+                    "reason": reason,
+                }
+            )
+
+        return items, total
+
     async def get_workspace_resume_filters(self, workspace_id: int) -> dict[str, list[str]]:
         """Получить все доступные скиллы и интересы для фильтрации резюме workspace"""
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from src.core.container import get_settings_service, get_stage_service, get_workspace_service
+from src.core.container import get_project_service, get_settings_service, get_stage_service, get_workspace_service
 from src.core.dependencies import get_current_user, permission_required, setup_audit
 from src.core.exceptions import PermissionError
 from src.model.user import User
@@ -14,6 +14,8 @@ from src.schema.workspace import (
     SpacesListResponse,
     WorkSpaceCreate,
     WorkSpaceFull,
+    WorkspaceInviteCandidateItem,
+    WorkspaceInviteCandidateListResponse,
     WorkspaceParticipantItem,
     WorkspaceParticipantListResponse,
     WorkspaceResumeFiltersResponse,
@@ -21,6 +23,7 @@ from src.schema.workspace import (
     WorkspaceResumeListResponse,
     WorkSpaceUpdate,
 )
+from src.services.project_service import ProjectService
 from src.services.settings_service import SpaceSettingsService
 from src.services.stage_service import ProjectStageService
 from src.services.workspace_service import WorkSpaceService
@@ -205,6 +208,50 @@ async def get_workspace_resumes(
     parsed = [WorkspaceResumeItem.model_validate(item) for item in items]
 
     return WorkspaceResumeListResponse(
+        items=parsed,
+        total=total,
+        page=page,
+        limit=limit,
+        total_pages=(total + limit - 1) // limit if limit > 0 else 0,
+    )
+
+
+@workspace_router.get("/{workspace_id}/invite-candidates", response_model=WorkspaceInviteCandidateListResponse)
+async def get_workspace_invite_candidates(
+    workspace_id: int,
+    project_id: int = Query(..., description="ID проекта, для которого ищутся кандидаты"),
+    page: int = Query(1, ge=1, description="Номер страницы"),
+    limit: int = Query(50, ge=1, le=200, description="Количество кандидатов на странице"),
+    search: str | None = Query(None, description="Поиск по имени/заголовку резюме"),
+    workspace_service: WorkSpaceService = Depends(get_workspace_service),
+    project_service: ProjectService = Depends(get_project_service),
+    _current_user: User = Depends(get_current_user),
+) -> WorkspaceInviteCandidateListResponse:
+    """Кого из участников пространства можно пригласить в проект.
+
+    Отдельный источник вместо ленты резюме: лента отсекает скрытые резюме и
+    обрезается пагинацией, из-за чего список приглашения оказывался пустым.
+    Здесь отбор идёт по составу пространства, а занятость считается внутри
+    этого же пространства.
+    """
+    workspace = await workspace_service.get_workspace_by_id(workspace_id)
+    if not workspace:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    project = await project_service.get_project_by_id(project_id)
+    if not project or project.workspace_id != workspace_id:
+        raise HTTPException(status_code=400, detail="Project does not belong to this workspace")
+
+    items, total = await workspace_service.get_workspace_invite_candidates(
+        workspace_id,
+        project_id,
+        search,
+        page,
+        limit,
+    )
+    parsed = [WorkspaceInviteCandidateItem.model_validate(item) for item in items]
+
+    return WorkspaceInviteCandidateListResponse(
         items=parsed,
         total=total,
         page=page,

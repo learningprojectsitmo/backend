@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, ClassVar
 from sqlalchemy import select
 
 from src.core.exceptions import PermissionError
+from src.model.settings import SpaceSettings
 from src.model.user import Role, User
 from src.model.workspace import WorkSpace, WorkSpaceCategories
 from src.schema.workspace import WorkSpaceCreate, WorkSpaceUpdate
@@ -165,8 +166,47 @@ class WorkSpaceService(BaseService[WorkSpace, WorkSpaceCreate, WorkSpaceUpdate])
         )
 
     async def get_workspace_resume_filters(self, workspace_id: int) -> dict[str, list[str]]:
-        """Получить доступные скиллы и интересы для фильтрации резюме workspace"""
+        """Получить все доступные скиллы и интересы для фильтрации резюме workspace"""
         return await self._workspace_repository.get_workspace_resume_filters(workspace_id)
+
+    async def get_workspace_invite_candidates(
+        self,
+        workspace_id: int,
+        project_id: int,
+        search: str | None = None,
+        page: int = 1,
+        limit: int = 50,
+    ) -> tuple[list[dict], int]:
+        """Кого из участников пространства можно пригласить в проект.
+
+        Флаг ``busy`` («состоит в другом проекте этого пространства») снимается,
+        если пространство разрешает участие в нескольких проектах: там человек
+        в двух командах законен, и запрещать приглашать его нельзя.
+        """
+        skip = (page - 1) * limit
+        items, total = await self._workspace_repository.get_workspace_invite_candidates(
+            workspace_id, project_id, search, skip, limit
+        )
+        if await self._allows_multi_participation(workspace_id):
+            for item in items:
+                if item.get("busy"):
+                    item["busy"] = False
+                    if item.get("reason") == "busy":
+                        item["reason"] = ""
+                        item["can_invite"] = True
+        return items, total
+
+    async def _allows_multi_participation(self, workspace_id: int | None) -> bool:
+        """Разрешено ли в пространстве участие в нескольких проектах (по умолчанию — да)."""
+        if not workspace_id:
+            return True
+        result = await self._workspace_repository.uow.session.execute(
+            select(SpaceSettings).where(SpaceSettings.space_id == workspace_id)
+        )
+        settings = result.scalar_one_or_none()
+        if not settings:
+            return True
+        return settings.allow_multi_project_participation
 
     async def get_all_categories(self) -> list:
         """Получить все категории workspace"""
