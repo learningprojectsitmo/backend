@@ -10,7 +10,7 @@ from src.core.container import (
     get_permission_repository,
 )
 from src.core.logging_config import get_logger
-from src.core.security import oauth2_scheme
+from src.core.security import oauth2_scheme, optional_oauth2_scheme
 
 if TYPE_CHECKING:
     from src.model.user import User
@@ -77,11 +77,20 @@ def is_admin_user(current_user: User) -> bool:
 
 
 async def get_current_user_no_exception(
-    token: str = Depends(oauth2_scheme),
+    token: str | None = Depends(optional_oauth2_scheme),
     auth_service: AuthService = Depends(get_auth_service),
 ) -> User | None:
-    """Получить текущего пользователя без исключения (возвращает None если ошибка)"""
+    """Опциональная аутентификация: вернуть пользователя или None.
+
+    Используется публичными ручками, которые отдают один и тот же контент
+    анонимному посетителю и авторизованному. Токен берётся через
+    optional_oauth2_scheme, иначе отсутствие заголовка Authorization дало бы
+    401 до входа в тело функции.
+    """
     logger = get_logger(__name__)
+
+    if not token:
+        return None
 
     try:
         user = await auth_service.get_current_user(token)

@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import inspect
 import json
+import re
 from types import SimpleNamespace
-from typing import ClassVar
+from typing import ClassVar, get_type_hints
 from unittest.mock import Mock
 
 import pytest
+from sqlalchemy import inspect as sqlalchemy_inspect
 from sqlalchemy.sql.dml import Insert
 
 from src.core import audit_listeners as al
@@ -15,6 +17,7 @@ from src.model.audit import AuditLog
 
 RESOLVERS = (
     al._self_project_id,
+    al._project_own_id,
     al._project_id_via_task,
     al._project_id_via_specification,
 )
@@ -55,7 +58,7 @@ class TestResolverContract:
     def test_should_be_callable_by_resolve_project_id(self, resolver) -> None:
         # given
         connection = FakeConnection(scalar=7)
-        target = SimpleNamespace(project_id=7, task_id=1, specification_id=1)
+        target = SimpleNamespace(id=7, project_id=7, task_id=1, specification_id=1)
 
         # when / then
         assert al._resolve_project_id(connection, target, resolver) == 7
@@ -215,17 +218,17 @@ class TestRegisteredListeners:
 
     EXPECTED: ClassVar[dict[str, set[str]]] = {
         "user": {"before_update", "after_insert"},
-        "resume": {"before_update", "after_insert", "after_delete"},
-        "project": {"after_insert", "before_update", "after_delete"},
-        "response": {"after_insert", "before_update", "after_delete"},
-        "project_participation": {"after_insert", "after_delete"},
+        "resume": {"before_update", "after_insert", "before_delete"},
+        "project": {"after_insert", "before_update", "before_delete"},
+        "response": {"after_insert", "before_update", "before_delete"},
+        "project_participation": {"after_insert", "before_delete"},
         "stage_transition": {"after_insert"},
         "specification": {"after_insert", "before_update"},
-        "specification_comment": {"after_insert", "after_delete"},
-        "column": {"after_insert", "before_update", "after_delete"},
-        "task": {"after_insert", "before_update", "after_delete"},
-        "subtask": {"after_insert", "before_update", "after_delete"},
-        "task_assignee": {"after_insert", "after_delete"},
+        "specification_comment": {"after_insert", "before_delete"},
+        "column": {"after_insert", "before_update", "before_delete"},
+        "task": {"after_insert", "before_update", "before_delete"},
+        "subtask": {"after_insert", "before_update", "before_delete"},
+        "task_assignee": {"after_insert", "before_delete"},
     }
 
     def test_should_cover_every_expected_entity_and_event(self) -> None:
@@ -264,10 +267,59 @@ class TestRegisteredListeners:
         assert {"entity_type", "entity_id", "action", "old_values", "new_values", "project_id"} <= columns
 
 
+class TestResolverReadsEntityAttribute:
+    """Резолвер project_id должен читать то, что у сущности реально есть.
+
+    Регрессия: у `Project` нет колонки `project_id` — её роль играет `Project.id`.
+    Все три listener'а проекта передавали `_self_project_id`, который читал
+    `target.project_id`; `AttributeError` глотался широким `except Exception`
+    внутри `_audit_*`, и аудит проектов не писался. Прежние тесты проверяли
+    только арность резолвера, поэтому бас прошёл незамеченным.
+    """
+
+    @pytest.mark.parametrize(
+        ("resolver", "attribute"),
+        [
+            (al._self_project_id, "project_id"),
+            (al._project_own_id, "id"),
+            (al._project_id_via_task, "task_id"),
+            (al._project_id_via_specification, "specification_id"),
+        ],
+    )
+    def test_should_read_the_documented_attribute(self, resolver, attribute) -> None:
+        # given / then
+        assert attribute in _target_attributes_read_by(resolver)
+
+    def test_should_resolve_for_every_registered_listener(self) -> None:
+        # given
+        mismatches: list[str] = []
+
+        # when
+        for name, entity, resolver in _listeners_with_resolvers():
+            available = _entity_attributes(entity)
+            missing = _target_attributes_read_by(resolver) - available
+            if missing:
+                mismatches.append(f"{name} ({entity.__name__}) читает отсутствующие атрибуты: {sorted(missing)}")
+
+        # then
+        assert not mismatches, "резолверы не соответствуют моделям:\n" + "\n".join(mismatches)
+
+    def test_should_write_project_audit_with_own_id(self) -> None:
+        # given — проект, у которого `project_id` не существует
+        connection = FakeConnection()
+        project = SimpleNamespace(id=17, name="Проект")
+
+        # when
+        resolved = al._resolve_project_id(connection, project, al._project_own_id)
+
+        # then — в ленте проекта запись лежит под его собственным id
+        assert resolved == 17
+
+
 def _parse_listener_name(name: str) -> tuple[str, str]:
     """`audit_task_assignee_insert` → ("task_assignee", "after_insert")."""
     body = name.removeprefix("audit_")
-    for suffix, event in (("insert", "after_insert"), ("update", "before_update"), ("delete", "after_delete")):
+    for suffix, event in (("insert", "after_insert"), ("update", "before_update"), ("delete", "before_delete")):
         if body.endswith(f"_{suffix}"):
             return body.removesuffix(f"_{suffix}"), event
     raise AssertionError(f"Не распознано имя listener: {name}")
@@ -284,3 +336,40 @@ def _iter_calls(func) -> list[object]:
         if resolver.__name__ in source:
             found.append(resolver)
     return found
+
+
+def _target_attributes_read_by(resolver) -> set[str]:
+    """Атрибуты, которые резолвер читает у `target`.
+
+    Разбирается исходник, а не вызывается функция: резолверы ходят в БД, а
+    контракт, который мы проверяем, — статический.
+    """
+    source = inspect.getsource(resolver)
+    reads = set(re.findall(r"target\.(\w+)", source))
+    reads |= set(re.findall(r'getattr\(target,\s*"(\w+)"', source))
+    return reads
+
+
+def _entity_attributes(entity) -> set[str]:
+    """Атрибуты, доступные на экземпляре модели."""
+    return set(sqlalchemy_inspect(entity).attrs.keys()) | {column.name for column in entity.__table__.columns}
+
+
+def _listeners_with_resolvers() -> list[tuple[str, type, object]]:
+    """Связки (имя listener'а, модель, резолвер) по аннотации `target`.
+
+    В модуле включён `from __future__ import annotations`, поэтому аннотации
+    приходят строками и требуют `get_type_hints`.
+    """
+    pairs: list[tuple[str, type, object]] = []
+    for name, func in vars(al).items():
+        if not name.startswith("audit_") or not callable(func):
+            continue
+        resolvers = _iter_calls(func)
+        if not resolvers:
+            continue
+        entity = get_type_hints(func)["target"]
+        assert isinstance(entity, type), f"{name}: аннотация target не является классом"
+        for resolver in resolvers:
+            pairs.append((name, entity, resolver))
+    return pairs

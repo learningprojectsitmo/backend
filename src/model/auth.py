@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, func, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.core.database import Base
@@ -14,6 +14,16 @@ if TYPE_CHECKING:
 
 class Session(Base):
     __tablename__ = "session"
+
+    # Сессии пользователя (`get_by_user_id`), текущая сессия
+    # (`get_current_session`, `scalar_one_or_none` — индекс обязан доказать,
+    # что строк не больше одной) и админский список активных.
+    #
+    # `last_activity` намеренно НЕ включён: он переписывается на каждом
+    # авторизованном запросе (`SessionRepository.touch` и ротация токена),
+    # и индекс с ним гонял бы горячий индекс на каждом запросе ради
+    # сортировки списка из нескольких строк.
+    __table_args__ = (Index("ix_session_user_active", "user_id", "is_active"),)
 
     id: Mapped[str] = mapped_column(String(255), primary_key=True)  # UUID для уникальности
     user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
@@ -68,6 +78,10 @@ class PasswordReset(Base):
 
 class NewUser(Base):
     __tablename__ = "newuser"
+
+    # Как и у `User`: поиск идёт через `func.lower(email)`, поэтому индекс
+    # на саму колонку не используется планировщиком.
+    __table_args__ = (Index("ix_newuser_lower_email", text("lower(email)")),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     code: Mapped[int] = mapped_column()

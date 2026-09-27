@@ -21,6 +21,7 @@ from src.api.v1.endpoints.settings import settings_router
 from src.api.v1.endpoints.specification import specification_router
 from src.api.v1.endpoints.stage import stage_router, type_router
 from src.api.v1.endpoints.user import user_permission_router, user_router
+from src.api.v1.endpoints.wiki import wiki_router
 from src.api.v1.endpoints.workspace import workspace_router
 
 routers = APIRouter(prefix="/v1")
@@ -49,6 +50,7 @@ router_list = [
     specification_router,
     admin_router,
     search_router,
+    wiki_router,
 ]
 
 for router in router_list:

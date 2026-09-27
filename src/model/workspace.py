@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import TIMESTAMP, ForeignKey, Integer, String, Text
+from sqlalchemy import TIMESTAMP, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -30,6 +30,9 @@ class WorkSpaceCategories(Base):
 
 class WorkSpace(Base):
     __tablename__ = "workspace"
+
+    # Пространства пользователя.
+    __table_args__ = (Index("ix_workspace_author_id", "author_id"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(Text, nullable=False)
@@ -65,6 +68,13 @@ class WorkSpaceStatus(Base):
 
 class WorkSpaceParticipation(Base):
     __tablename__ = "workspace_participation"
+
+    # Участники workspace и проверка membership — из шести мест в коде.
+    # Обратный список: workspace, в которых участвует пользователь.
+    __table_args__ = (
+        Index("ix_wp_workspace_participant", "workspace_id", "participant_id"),
+        Index("ix_wp_participant", "participant_id"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     workspace_id: Mapped[int] = mapped_column(ForeignKey("workspace.id"), nullable=False)

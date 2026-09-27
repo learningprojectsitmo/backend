@@ -37,6 +37,10 @@ class Resume(Base):
             unique=True,
             postgresql_where=text("is_default"),
         ),
+        # Резюме пользователя и `DISTINCT(author_id) ORDER BY id` в выборке
+        # workspace. Partial-индекс выше для этих запросов непригоден: он
+        # видит только строки с is_default.
+        Index("ix_resume_author_id", "author_id", "id"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -86,6 +90,10 @@ class Resume(Base):
 class ResumeExperience(Base):
     __tablename__ = "resume_experience"
 
+    # Подтаблица резюме тянется selectinload с сортировкой по
+    # sort_order при каждом рендере; индекса на resume_id не было.
+    __table_args__ = (Index("ix_resume_experience_resume_order", "resume_id", "sort_order"),)
+
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     resume_id: Mapped[int] = mapped_column(ForeignKey("resume.id"), nullable=False)
     company: Mapped[str] = mapped_column(String(200), nullable=False)
@@ -105,6 +113,10 @@ class ResumeExperience(Base):
 class ResumeSkill(Base):
     __tablename__ = "resume_skill"
 
+    # Подтаблица резюме тянется selectinload с сортировкой по
+    # sort_order при каждом рендере; индекса на resume_id не было.
+    __table_args__ = (Index("ix_resume_skill_resume_order", "resume_id", "sort_order"),)
+
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     resume_id: Mapped[int] = mapped_column(ForeignKey("resume.id"), nullable=False)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -115,6 +127,10 @@ class ResumeSkill(Base):
 
 class ResumeInterest(Base):
     __tablename__ = "resume_interest"
+
+    # Подтаблица резюме тянется selectinload с сортировкой по
+    # sort_order при каждом рендере; индекса на resume_id не было.
+    __table_args__ = (Index("ix_resume_interest_resume_order", "resume_id", "sort_order"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     resume_id: Mapped[int] = mapped_column(ForeignKey("resume.id"), nullable=False)
@@ -127,6 +143,10 @@ class ResumeInterest(Base):
 class ResumeLink(Base):
     __tablename__ = "resume_link"
 
+    # Подтаблица резюме тянется selectinload с сортировкой по
+    # sort_order при каждом рендере; индекса на resume_id не было.
+    __table_args__ = (Index("ix_resume_link_resume_order", "resume_id", "sort_order"),)
+
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     resume_id: Mapped[int] = mapped_column(ForeignKey("resume.id"), nullable=False)
     platform: Mapped[str] = mapped_column(String(50), nullable=False)
@@ -138,6 +158,10 @@ class ResumeLink(Base):
 
 class ResumeEducation(Base):
     __tablename__ = "resume_education"
+
+    # Подтаблица резюме тянется selectinload с сортировкой по
+    # sort_order при каждом рендере; индекса на resume_id не было.
+    __table_args__ = (Index("ix_resume_education_resume_order", "resume_id", "sort_order"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     resume_id: Mapped[int] = mapped_column(ForeignKey("resume.id"), nullable=False)
@@ -152,6 +176,10 @@ class ResumeEducation(Base):
 
 class ResumeLanguage(Base):
     __tablename__ = "resume_language"
+
+    # Подтаблица резюме тянется selectinload с сортировкой по
+    # sort_order при каждом рендере; индекса на resume_id не было.
+    __table_args__ = (Index("ix_resume_language_resume_order", "resume_id", "sort_order"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     resume_id: Mapped[int] = mapped_column(ForeignKey("resume.id"), nullable=False)

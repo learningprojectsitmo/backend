@@ -151,3 +151,42 @@ class WorkspaceResumeFiltersResponse(BaseModel):
 
     skills: list[str]
     interests: list[str]
+
+
+class WorkspaceInviteCandidateItem(BaseModel):
+    """Участник пространства, которого можно пригласить в проект.
+
+    Отличие от :class:`WorkspaceResumeItem`: строка — это человек, а не резюме.
+    Поэтому ``resume_id`` может быть ``None`` (приглашению резюме не требуется),
+    а отсутствие видимого резюме не делает участника неприглашаемым.
+    """
+
+    user_id: int
+    name: str
+    contacts: ParticipantContact = ParticipantContact()
+    resume_id: int | None = None
+    resume_url: str = ""
+    resume_header: str = ""
+    skills: list[str] = []
+    interests: list[str] = []
+    # Уже состоит в этом проекте.
+    in_project: bool = False
+    # Состоит в другом проекте ЭТОГО пространства.
+    busy: bool = False
+    # Есть незакрытый отклик или уже отправленное приглашение в этот проект.
+    pending: bool = False
+    can_invite: bool = True
+    # "", "in_project", "pending", "busy" — причина, по которой пригласить нельзя.
+    reason: str = ""
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class WorkspaceInviteCandidateListResponse(BaseModel):
+    """Список участников пространства, доступных для приглашения в проект"""
+
+    items: list[WorkspaceInviteCandidateItem]
+    total: int
+    page: int
+    limit: int
+    total_pages: int

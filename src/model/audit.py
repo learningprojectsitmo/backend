@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String, func, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.core.database import Base
@@ -14,6 +14,14 @@ if TYPE_CHECKING:
 
 class AuditLog(Base):
     __tablename__ = "audit_logs"
+
+    # Лента активности проекта и суточный график: фильтр по проекту
+    # плюс диапазон по времени. Таблица растёт быстрее всех — на каждую
+    # мутацию пишется строка аудита.
+    __table_args__ = (
+        Index("ix_audit_logs_project_performed", "project_id", text("performed_at DESC")),
+        Index("ix_audit_logs_user_performed", "performed_by", text("performed_at DESC")),
+    )
 
     id: Mapped[Integer] = mapped_column(Integer, primary_key=True, autoincrement=True)
 

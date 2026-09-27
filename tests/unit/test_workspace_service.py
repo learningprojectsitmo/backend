@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 
 from src.core.exceptions import PermissionError
+from src.model.settings import SpaceSettings
 from src.model.user import Role
 from src.model.workspace import WorkSpace
 from src.repository.workspace_repository import WorkSpaceRepository
@@ -474,3 +475,198 @@ class TestWorkSpaceService:
         # then
         assert result == mock_filters
         mock_repository.get_workspace_resume_filters.assert_called_once_with(1)
+
+
+class TestWorkSpaceServiceParticipantFilters:
+    """Фильтры списка участников: сервис не должен терять ни один аргумент"""
+
+    @pytest.mark.asyncio
+    async def test_should_forward_all_participant_filters_to_repository(self):
+        """Все фильтры (проекты, роли, даты) должны дойти до repository без потерь"""
+        # given
+        mock_repository = Mock(spec=WorkSpaceRepository)
+        mock_repository.get_participants.return_value = ([], 0)
+
+        workspace_service = WorkSpaceService(mock_repository)
+
+        # when
+        items, total = await workspace_service.get_workspace_participants(
+            workspace_id=7,
+            skip=20,
+            limit=10,
+            search="ivan",
+            project_ids=[3, 4],
+            role_ids=[55, 57],
+            date_from="2026-01-01",
+            date_to="2026-02-01",
+        )
+
+        # then
+        assert items == []
+        assert total == 0
+        mock_repository.get_participants.assert_called_once_with(
+            7,
+            skip=20,
+            limit=10,
+            search="ivan",
+            project_ids=[3, 4],
+            without_project=False,
+            role_ids=[55, 57],
+            has_resume=None,
+            date_from="2026-01-01",
+            date_to="2026-02-01",
+        )
+
+    @pytest.mark.asyncio
+    async def test_should_pass_empty_filter_lists_as_none(self):
+        """Пустой список — фильтр не применён, репозиторий ожидает None"""
+        # given
+        mock_repository = Mock(spec=WorkSpaceRepository)
+        mock_repository.get_participants.return_value = ([], 0)
+
+        workspace_service = WorkSpaceService(mock_repository)
+
+        # when
+        await workspace_service.get_workspace_participants(workspace_id=1, project_ids=[], role_ids=[])
+
+        # then
+        mock_repository.get_participants.assert_called_once_with(
+            1,
+            skip=0,
+            limit=10,
+            search=None,
+            project_ids=[],
+            without_project=False,
+            role_ids=[],
+            has_resume=None,
+            date_from=None,
+            date_to=None,
+        )
+
+    @pytest.mark.asyncio
+    async def test_should_default_participant_filters_to_none(self):
+        """Без фильтров сервис отдаёт None, а не пустые списки"""
+        # given
+        mock_repository = Mock(spec=WorkSpaceRepository)
+        mock_repository.get_participants.return_value = ([], 0)
+
+        workspace_service = WorkSpaceService(mock_repository)
+
+        # when
+        await workspace_service.get_workspace_participants(workspace_id=1)
+
+        # then
+        mock_repository.get_participants.assert_called_once_with(
+            1,
+            skip=0,
+            limit=10,
+            search=None,
+            project_ids=None,
+            without_project=False,
+            role_ids=None,
+            has_resume=None,
+            date_from=None,
+            date_to=None,
+        )
+
+
+class TestInviteCandidates:
+    """Кандидаты на приглашение: занятость снимается там, где разрешено несколько команд"""
+
+    def _make_candidate(self, **overrides) -> dict:
+        candidate = {
+            "user_id": 2,
+            "name": "Иван",
+            "contacts": {},
+            "resume_id": None,
+            "resume_url": None,
+            "resume_header": "",
+            "skills": [],
+            "interests": [],
+            "in_project": False,
+            "busy": True,
+            "pending": False,
+            "can_invite": False,
+            "reason": "busy",
+        }
+        candidate.update(overrides)
+        return candidate
+
+    def _setup(
+        self, *, allow_multi: bool, items: list[dict], total: int | None = None
+    ) -> tuple[Mock, WorkSpaceService]:
+        mock_repository = Mock(spec=WorkSpaceRepository)
+        uow = Mock()
+        uow.session = Mock()
+        settings_result = Mock()
+        settings_result.scalar_one_or_none.return_value = (
+            SpaceSettings(space_id=1, allow_multi_project_participation=allow_multi) if not allow_multi else None
+        )
+        uow.session.execute = AsyncMock(return_value=settings_result)
+        mock_repository.uow = uow
+        mock_repository.get_workspace_invite_candidates = AsyncMock(
+            return_value=(items, total if total is not None else len(items))
+        )
+        return mock_repository, WorkSpaceService(mock_repository)
+
+    @pytest.mark.asyncio
+    async def test_should_convert_page_to_skip(self):
+        # given
+        mock_repository, workspace_service = self._setup(allow_multi=False, items=[])
+
+        # when
+        await workspace_service.get_workspace_invite_candidates(1, project_id=5, page=3, limit=10)
+
+        # then
+        mock_repository.get_workspace_invite_candidates.assert_awaited_once_with(1, 5, None, 20, 10)
+
+    @pytest.mark.asyncio
+    async def test_should_keep_busy_reason_when_single_team_only(self):
+        # given
+        _, workspace_service = self._setup(allow_multi=False, items=[self._make_candidate()])
+
+        # when
+        items, _ = await workspace_service.get_workspace_invite_candidates(1, project_id=5)
+
+        # then
+        assert items[0]["busy"] is True
+        assert items[0]["reason"] == "busy"
+        assert items[0]["can_invite"] is False
+
+    @pytest.mark.asyncio
+    async def test_should_clear_busy_reason_when_multi_participation_allowed(self):
+        # given: настройки нет — по умолчанию участие в нескольких проектах разрешено
+        _, workspace_service = self._setup(allow_multi=True, items=[self._make_candidate()])
+
+        # when
+        items, _ = await workspace_service.get_workspace_invite_candidates(1, project_id=5)
+
+        # then
+        assert items[0]["busy"] is False
+        assert items[0]["reason"] == ""
+        assert items[0]["can_invite"] is True
+
+    @pytest.mark.asyncio
+    async def test_should_not_clear_busy_when_reason_is_in_project(self):
+        # given
+        _, workspace_service = self._setup(
+            allow_multi=True, items=[self._make_candidate(in_project=True, reason="in_project")]
+        )
+
+        # when
+        items, _ = await workspace_service.get_workspace_invite_candidates(1, project_id=5)
+
+        # then
+        assert items[0]["reason"] == "in_project"
+        assert items[0]["can_invite"] is False
+
+    @pytest.mark.asyncio
+    async def test_should_return_total_from_repository(self):
+        # given
+        _, workspace_service = self._setup(allow_multi=False, items=[self._make_candidate()], total=17)
+
+        # when
+        _, total = await workspace_service.get_workspace_invite_candidates(1, project_id=5)
+
+        # then
+        assert total == 17

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Index, Integer, String, func, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.core.database import Base
@@ -17,6 +17,10 @@ class Column(Base):
     """Колонка канбан-доски"""
 
     __tablename__ = "column"
+
+    # Доска грузится на каждом заходе в проект: колонки по проекту,
+    # отсортированные по position, плюс MAX(position) при вставке.
+    __table_args__ = (Index("ix_column_project_position", "project_id", "position"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     project_id: Mapped[int] = mapped_column(ForeignKey("project.id"), nullable=False)
@@ -47,6 +51,12 @@ class Task(Base):
     """Задача внутри колонки канбан-доски"""
 
     __tablename__ = "task"
+
+    # Задачи колонки в порядке доски и сдвиг position при reorder.
+    __table_args__ = (
+        Index("ix_task_column_position", "column_id", "position"),
+        Index("ix_task_project_column_position", "project_id", "column_id", "position"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
@@ -99,6 +109,10 @@ class TaskAssignee(Base):
 
     __tablename__ = "task_assignee"
 
+    # PK объявлен как (id, task_id, user_id) и не покрывает выборку
+    # задач пользователя, которая идёт по user_id.
+    __table_args__ = (Index("ix_task_assignee_user", "user_id"),)
+
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     task_id: Mapped[int] = mapped_column(ForeignKey("task.id", ondelete="CASCADE"), primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), primary_key=True)
@@ -112,6 +126,9 @@ class TaskHistory(Base):
     """История изменений задачи"""
 
     __tablename__ = "task_history"
+
+    # История задачи: выборка по задаче + сортировка по времени.
+    __table_args__ = (Index("ix_task_history_task_created", "task_id", text("created_at DESC")),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     task_id: Mapped[int] = mapped_column(ForeignKey("task.id", ondelete="CASCADE"), nullable=False)
@@ -142,6 +159,9 @@ class Subtask(Base):
     """Подзадача внутри задачи канбан-доски"""
 
     __tablename__ = "subtask"
+
+    # Подзадачи задачи в порядке position.
+    __table_args__ = (Index("ix_subtask_task_position", "task_id", "position"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     task_id: Mapped[int] = mapped_column(ForeignKey("task.id", ondelete="CASCADE"), nullable=False)

@@ -4,7 +4,7 @@ import enum
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import JSON, DateTime, Enum, ForeignKey, Integer, func
+from sqlalchemy import JSON, DateTime, Enum, ForeignKey, Index, Integer, func, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.core.database import Base
@@ -33,6 +33,15 @@ class NotificationType(enum.StrEnum):
 
 class Notification(Base):
     __tablename__ = "notification"
+
+    # Лента уведомлений: фильтр по юзеру + сортировка по времени, а
+    # также count по user_id. Заменяет ix_notification_user_id.
+    __table_args__ = (
+        Index("ix_notification_user_created", "user_id", text("created_at DESC")),
+        # Счётчик непрочитанных: строки по мере прочтения выпадают из индекса,
+        # поэтому он не растёт вместе с таблицей.
+        Index("ix_notification_user_unread", "user_id", postgresql_where=text("NOT read")),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False, index=True)

@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import Column as SAColumn
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Table, Text, func
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Table, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.core.database import Base
@@ -71,6 +71,10 @@ class Idea(Base):
 class IdeaVote(Base):
     __tablename__ = "idea_vote"
 
+    # Голос пользователя по идее — один запрос на страницу вместо
+    # одного на идею (бывший N+1 в IdeaService.get_ideas_filtered).
+    __table_args__ = (Index("ix_idea_vote_idea_user", "idea_id", "user_id"),)
+
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     idea_id: Mapped[int] = mapped_column(ForeignKey("idea.id"), nullable=False)
     user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
@@ -85,6 +89,9 @@ class IdeaVote(Base):
 
 class IdeaComment(Base):
     __tablename__ = "idea_comment"
+
+    # Комментарии к идее в порядке создания.
+    __table_args__ = (Index("ix_idea_comment_idea_created", "idea_id", "created_at"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     idea_id: Mapped[int] = mapped_column(ForeignKey("idea.id"), nullable=False)

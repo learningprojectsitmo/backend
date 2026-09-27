@@ -19,11 +19,14 @@ from src.schema.project import (
     MyResponseListResponse,
     ParticipantPreview,
     ProjectCreate,
+    ProjectFull,
     ProjectListItem,
     ProjectStatusItem,
     ProjectUpdate,
+    resolve_status_fields,
 )
 from src.services.base_service import BaseService
+from src.util.urls import build_resume_url
 
 if TYPE_CHECKING:
     from src.repository.project_repository import ProjectRepository
@@ -105,27 +108,88 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         return result.first() is not None
 
     async def _get_user_resume_url(self, user_id: int) -> tuple[str, str]:
-        """Получить URL и заголовок первого резюме пользователя"""
+        """Получить URL и заголовок первого резюме пользователя.
+
+        Контекст пространства здесь не подставляется: ответы и приглашения
+        относятся к разным проектам, и единственный workspaceId ввёл бы
+        breadcrumb в чужое пространство.
+        """
         if not self._resume_repository:
             return "", ""
         resumes = await self._resume_repository.get_by_author_id(user_id)
         if not resumes:
             return "", ""
         resume = resumes[0]
-        return f"/resume/{resume.id}", resume.header or ""
+        return build_resume_url(resume.id), resume.header or ""
 
     async def get_project_by_id(self, project_id: int) -> Project | None:
         """Получить проект по ID"""
         return await self._project_repository.get_by_id(project_id)
 
+    async def build_full(self, project: Project, current_user_id: int | None = None) -> ProjectFull:
+        """Собрать :class:`ProjectFull` с производными статусами откликов.
+
+        Единая точка сборки для всех эндпоинтов, отдающих карточку проекта: сам
+        статус «уже в другой команде» зависит от двух внешних факторов — занятости
+        участника и настройки пространства, — которые нельзя узнать из ORM-объекта.
+        Если собрать ``ProjectFull.from_orm`` напрямую (как было раньше), статус
+        откатывается к сырому значению из БД в одном из ответов API.
+        """
+        allow_multi = await self._workspace_allows_multi_participation(project.workspace_id)
+        busy_user_ids = (
+            set()
+            if allow_multi
+            else await self._project_repository.get_workspace_busy_participant_ids(project.workspace_id, project.id)
+        )
+        return ProjectFull.from_orm(project, current_user_id, allow_multi, busy_user_ids)
+
     async def get_projects_by_author(self, author_id: int) -> list[Project]:
         """Получить проекты по автору"""
         return await self._project_repository.get_by_author_id(author_id)
+
+    async def _resolve_busy_by_project(
+        self, user_id: int, items: list[tuple[int, int | None]]
+    ) -> tuple[dict[int, bool], dict[int | None, bool]]:
+        """Занят ли пользователь в другом проекте пространства — по id проекта.
+
+        Возвращает пару: занятость по каждому проекту из ``items`` и флаги
+        ``allow_multi_project_participation`` по пространствам. Отклики в профиле
+        смешаны из разных пространств, поэтому занятость нельзя посчитать одним
+        общим флагом: она всегда определяется внутри пространства самого отклика.
+        Все проекты пользователя выбираются одним запросом, дальше сравнение идёт
+        в Python.
+
+        Флаги пространств отдаются вместе с занятостью, чтобы вызывающая сторона
+        не повторяла тот же запрос к space_settings вторым разом.
+        """
+        if not items:
+            return {}, {}
+        scopes = await self._project_repository.get_user_project_scopes(user_id)
+        if not scopes:
+            return {}, {}
+
+        workspace_flags = await self._resolve_allow_multi_participation_batch({w for _, w in scopes})
+        user_projects_by_workspace: dict[int | None, set[int]] = {}
+        for project_id, workspace_id in scopes:
+            user_projects_by_workspace.setdefault(workspace_id, set()).add(project_id)
+
+        busy: dict[int, bool] = {}
+        for project_id, workspace_id in items:
+            if workspace_flags.get(workspace_id, True):
+                busy[project_id] = False
+                continue
+            others = user_projects_by_workspace.get(workspace_id, set()) - {project_id}
+            busy[project_id] = bool(others)
+        return busy, workspace_flags
 
     async def get_my_responses(self, user_id: int) -> MyResponseListResponse:
         """Получить отклики текущего пользователя"""
         responses = await self._project_repository.get_responses_by_respondent_id(user_id)
         resume_url, resume_title = await self._get_user_resume_url(user_id)
+        busy_by_project, allow_multi_by_workspace = await self._resolve_busy_by_project(
+            user_id,
+            [(r.project_id, r.project.workspace_id if r.project else None) for r in responses],
+        )
         items = [
             MyResponseItem(
                 id=r.id,
@@ -136,7 +200,11 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
                 resume_url=resume_url,
                 resume_title=resume_title,
                 date=r.created_at.isoformat() if r.created_at else "",
-                status=r.status,
+                **resolve_status_fields(
+                    r.status,
+                    busy_by_project.get(r.project_id, False),
+                    allow_multi_by_workspace.get(r.project.workspace_id if r.project else None, True),
+                ),
             )
             for r in responses
         ]
@@ -146,6 +214,10 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         """Получить приглашения текущего пользователя"""
         invitations = await self._project_repository.get_invitations_by_invitee_id(user_id)
         resume_url, resume_title = await self._get_user_resume_url(user_id)
+        busy_by_project, _ = await self._resolve_busy_by_project(
+            user_id,
+            [(inv.project_id, inv.project.workspace_id if inv.project else None) for inv in invitations],
+        )
         workspace_ids = {inv.project.workspace_id for inv in invitations if inv.project}
         flags = await self._resolve_allow_multi_participation_batch(workspace_ids)
         items = [
@@ -159,8 +231,12 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
                 resume_url=resume_url,
                 resume_title=resume_title,
                 date=inv.created_at.isoformat() if inv.created_at else "",
-                status=inv.status,
                 allow_multi_project_participation=flags.get(inv.project.workspace_id if inv.project else None, True),
+                **resolve_status_fields(
+                    inv.status,
+                    busy_by_project.get(inv.project_id, False),
+                    flags.get(inv.project.workspace_id if inv.project else None, True),
+                ),
             )
             for inv in invitations
         ]
@@ -766,6 +842,17 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
             raise ValidationError("User is already a participant of this project")
         if await self._project_repository.has_pending_response(project_id, invitee_id):
             raise ValidationError("User already has a pending response for this project")
+        # Кандидат в dialog приходит с can_invite=false и reason="busy", но это
+        # подсказка интерфейса: тот же запрет проверяем здесь, иначе прямой вызов
+        # API пригласит человека, которому в этом пространстве нельзя.
+        if (
+            project.workspace_id
+            and not await self._workspace_allows_multi_participation(project.workspace_id)
+            and await self._project_repository.is_user_participant_in_other_project(
+                invitee_id, project.workspace_id, project_id
+            )
+        ):
+            raise ValidationError("Участник уже состоит в другом проекте этого пространства")
         invitation = await self._project_repository.create_response(
             respondent_id=invitee_id,
             project_id=project_id,

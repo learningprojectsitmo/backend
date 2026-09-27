@@ -22,6 +22,7 @@ from src.model.project import (
 )
 from src.model.resume import Resume
 from src.model.user import User
+from src.model.wiki import WikiPage
 
 
 def _safe_value(value):
@@ -202,7 +203,18 @@ def _audit_update(mapper, connection, target, entity_type: str, project_id: Proj
 
 
 def _audit_delete(mapper, connection, target, entity_type: str, project_id: ProjectId = None) -> None:
-    """Логирование DELETE для сущности."""
+    """Логирование DELETE для сущности.
+
+    Вызывается из `before_delete`, а не `after_delete`: после удаления строки
+    атрибуты экземпляра протухают, и `_model_to_dict` поднимает
+    `ObjectDeletedError` («row is otherwise not present»). Исключение глоталось
+    широким `except Exception`, поэтому DELETE-аудит молча терялся для любой
+    сущности, которую в той же сессии сначала обновляли, а потом удаляли —
+    например, `wiki_page` или `task`. В `before_delete` строка ещё существует,
+    `_model_to_dict` читает значения, а `_project_id_via_task` успевает найти
+    родителя. Запись аудита идёт в той же транзакции, что и DELETE, поэтому
+    откат убирает их вместе.
+    """
 
     try:
         _insert_log(
@@ -229,6 +241,18 @@ def _self_project_id(connection, target) -> int:
     return target.project_id
 
 
+def _project_own_id(connection, target) -> int:
+    """Собственный id проекта для аудита самих `Project`.
+
+    Отдельный резолвер, потому что у `Project` колонки `project_id` нет —
+    её роль в ленте играет `Project.id`. Раньше здесь стоял `_self_project_id`,
+    который падал с `AttributeError` на всех трёх listener'ах проекта
+    (INSERT/UPDATE/DELETE); исключение глоталось в `_audit_*`, и аудит проектов
+    молча не писался.
+    """
+    return target.id
+
+
 # ─── Пользователь, резюме ───────────────────────────────────────────────────
 
 
@@ -252,7 +276,7 @@ def audit_resume_insert(mapper, connection, target: Resume) -> None:
     _audit_insert(mapper, connection, target, "resume")
 
 
-@event.listens_for(Resume, "after_delete")
+@event.listens_for(Resume, "before_delete")
 def audit_resume_delete(mapper, connection, target: Resume) -> None:
     _audit_delete(mapper, connection, target, "resume")
 
@@ -262,17 +286,17 @@ def audit_resume_delete(mapper, connection, target: Resume) -> None:
 
 @event.listens_for(Project, "after_insert")
 def audit_project_insert(mapper, connection, target: Project) -> None:
-    _audit_insert(mapper, connection, target, "project", _self_project_id)
+    _audit_insert(mapper, connection, target, "project", _project_own_id)
 
 
 @event.listens_for(Project, "before_update")
 def audit_project_update(mapper, connection, target: Project) -> None:
-    _audit_update(mapper, connection, target, "project", _self_project_id)
+    _audit_update(mapper, connection, target, "project", _project_own_id)
 
 
-@event.listens_for(Project, "after_delete")
+@event.listens_for(Project, "before_delete")
 def audit_project_delete(mapper, connection, target: Project) -> None:
-    _audit_delete(mapper, connection, target, "project", _self_project_id)
+    _audit_delete(mapper, connection, target, "project", _project_own_id)
 
 
 @event.listens_for(Response, "after_insert")
@@ -285,7 +309,7 @@ def audit_response_update(mapper, connection, target: Response) -> None:
     _audit_update(mapper, connection, target, "response", _self_project_id)
 
 
-@event.listens_for(Response, "after_delete")
+@event.listens_for(Response, "before_delete")
 def audit_response_delete(mapper, connection, target: Response) -> None:
     _audit_delete(mapper, connection, target, "response", _self_project_id)
 
@@ -295,7 +319,7 @@ def audit_project_participation_insert(mapper, connection, target: ProjectPartic
     _audit_insert(mapper, connection, target, "project_participation", _self_project_id)
 
 
-@event.listens_for(ProjectParticipation, "after_delete")
+@event.listens_for(ProjectParticipation, "before_delete")
 def audit_project_participation_delete(mapper, connection, target: ProjectParticipation) -> None:
     _audit_delete(mapper, connection, target, "project_participation", _self_project_id)
 
@@ -326,7 +350,7 @@ def audit_specification_comment_insert(mapper, connection, target: Specification
     _audit_insert(mapper, connection, target, "specification_comment", _project_id_via_specification)
 
 
-@event.listens_for(SpecificationComment, "after_delete")
+@event.listens_for(SpecificationComment, "before_delete")
 def audit_specification_comment_delete(mapper, connection, target: SpecificationComment) -> None:
     _audit_delete(mapper, connection, target, "specification_comment", _project_id_via_specification)
 
@@ -344,7 +368,7 @@ def audit_column_update(mapper, connection, target: Column) -> None:
     _audit_update(mapper, connection, target, "column", _self_project_id)
 
 
-@event.listens_for(Column, "after_delete")
+@event.listens_for(Column, "before_delete")
 def audit_column_delete(mapper, connection, target: Column) -> None:
     _audit_delete(mapper, connection, target, "column", _self_project_id)
 
@@ -359,7 +383,7 @@ def audit_task_update(mapper, connection, target: Task) -> None:
     _audit_update(mapper, connection, target, "task", _self_project_id)
 
 
-@event.listens_for(Task, "after_delete")
+@event.listens_for(Task, "before_delete")
 def audit_task_delete(mapper, connection, target: Task) -> None:
     _audit_delete(mapper, connection, target, "task", _self_project_id)
 
@@ -374,7 +398,7 @@ def audit_subtask_update(mapper, connection, target: Subtask) -> None:
     _audit_update(mapper, connection, target, "subtask", _project_id_via_task)
 
 
-@event.listens_for(Subtask, "after_delete")
+@event.listens_for(Subtask, "before_delete")
 def audit_subtask_delete(mapper, connection, target: Subtask) -> None:
     _audit_delete(mapper, connection, target, "subtask", _project_id_via_task)
 
@@ -384,9 +408,27 @@ def audit_task_assignee_insert(mapper, connection, target: TaskAssignee) -> None
     _audit_insert(mapper, connection, target, "task_assignee", _project_id_via_task)
 
 
-@event.listens_for(TaskAssignee, "after_delete")
+@event.listens_for(TaskAssignee, "before_delete")
 def audit_task_assignee_delete(mapper, connection, target: TaskAssignee) -> None:
     _audit_delete(mapper, connection, target, "task_assignee", _project_id_via_task)
+
+
+# ─── Вики проекта ──────────────────────────────────────────────────────────
+
+
+@event.listens_for(WikiPage, "after_insert")
+def audit_wiki_page_insert(mapper, connection, target: WikiPage) -> None:
+    _audit_insert(mapper, connection, target, "wiki_page", _self_project_id)
+
+
+@event.listens_for(WikiPage, "before_update")
+def audit_wiki_page_update(mapper, connection, target: WikiPage) -> None:
+    _audit_update(mapper, connection, target, "wiki_page", _self_project_id)
+
+
+@event.listens_for(WikiPage, "before_delete")
+def audit_wiki_page_delete(mapper, connection, target: WikiPage) -> None:
+    _audit_delete(mapper, connection, target, "wiki_page", _self_project_id)
 
 
 def setup_audit_listeners() -> None:

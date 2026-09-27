@@ -83,11 +83,7 @@ async def fetch_project(
     ):
         raise HTTPException(status_code=404, detail="There is no project with that id!")
 
-    return ProjectFull.from_orm(
-        project,
-        current_user.id,
-        await project_service.workspace_allows_multi_participation(project.workspace_id),
-    )
+    return await project_service.build_full(project, current_user.id)
 
 
 @project_router.get("/{project_id}/activity", response_model=ActivityResponse)
@@ -224,7 +220,7 @@ async def create_project(
     except PermissionError as e:
         raise HTTPException(status_code=403, detail=str(e)) from e
     await kanban_service.create_default_columns(project.id)
-    return ProjectFull.from_orm(project, current_user.id)
+    return await project_service.build_full(project, current_user.id)
 
 
 @project_router.put("/{project_id}", response_model=ProjectFull)
@@ -241,7 +237,7 @@ async def update_project(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    return ProjectFull.from_orm(project, current_user.id)
+    return await project_service.build_full(project, current_user.id)
 
 
 @project_router.post("/{project_id}/apply")
