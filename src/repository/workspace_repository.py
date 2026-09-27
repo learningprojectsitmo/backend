@@ -146,6 +146,39 @@ class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUp
         await self.uow.session.delete(participation)
         return True
 
+    @staticmethod
+    def _project_criterion(workspace_id: int, project_ids: list[int] | None, without_project: bool):
+        """Критерий отбора по проектам: две независимые ветки, объединённые ИЛИ.
+
+        Возвращает ``None``, если ни одна ветка не запрошена, — тогда условие
+        не добавляется вовсе.
+        """
+        branches = []
+        if project_ids:
+            in_project = (
+                select(ProjectParticipation.participant_id)
+                .join(Project, Project.id == ProjectParticipation.project_id)
+                .where(
+                    ProjectParticipation.project_id.in_(project_ids),
+                    Project.workspace_id == workspace_id,
+                )
+            )
+            branches.append(WorkSpaceParticipation.participant_id.in_(in_project))
+        if without_project:
+            # Ветка «без проектов» обязана быть именно NOT по подзапросу участия, а не
+            # IS NULL по user_projects.project_ids: подзапрос уже отфильтрован по
+            # workspace, поэтому отсутствие строки здесь означает нулевое число
+            # проектов в этом пространстве (в других пространствах проекты не в счёт).
+            any_project_in_workspace = (
+                select(ProjectParticipation.participant_id)
+                .join(Project, Project.id == ProjectParticipation.project_id)
+                .where(Project.workspace_id == workspace_id)
+            )
+            branches.append(WorkSpaceParticipation.participant_id.notin_(any_project_in_workspace))
+        if not branches:
+            return None
+        return or_(*branches)
+
     async def get_participants(
         self,
         workspace_id: int,
@@ -153,7 +186,9 @@ class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUp
         limit: int = 10,
         search: str | None = None,
         project_ids: list[int] | None = None,
+        without_project: bool = False,
         role_ids: list[int] | None = None,
+        has_resume: bool | None = None,
         date_from: str | None = None,
         date_to: str | None = None,
     ) -> tuple[list[dict], int]:
@@ -162,6 +197,13 @@ class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUp
         ``project_ids`` и ``role_ids`` работают по принципу ИЛИ: участник попадает
         в выдачу, если он состоит хотя бы в одном из указанных проектов / имеет
         хотя бы одну из указанных ролей. Пустой список — фильтр не применяется.
+
+        ``without_project`` добавляет вторую ветку ИЛИ — участников без единого
+        проекта в этом workspace. Без него найти их невозможно: выбор всех
+        проектов в фильтре даёт ``IN`` по всем id и прячет именно этих людей.
+
+        ``has_resume`` — три состояния: ``None`` не фильтрует, ``True`` оставляет
+        только с резюме, ``False`` только без резюме.
         """
 
         user_name = func.concat_ws(" ", User.last_name, User.first_name, User.middle_name).label("name")
@@ -219,21 +261,18 @@ class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUp
                     User.tg_nickname.ilike(f"%{search}%"),
                 )
             )
-        if project_ids:
-            # Semi-join: только участники, состоящие хотя бы в одном из указанных
-            # проектов. ИЛИ-семантика, поэтому «выбрать все проекты» не прячет
-            # участников без проектов — но пустой список фильтр не включает.
-            in_project = (
-                select(ProjectParticipation.participant_id)
-                .join(Project, Project.id == ProjectParticipation.project_id)
-                .where(
-                    ProjectParticipation.project_id.in_(project_ids),
-                    Project.workspace_id == workspace_id,
-                )
-            )
-            base_query = base_query.where(WorkSpaceParticipation.participant_id.in_(in_project))
+        # Фильтр по проектам: «состоит в одном из выбранных» и/или «не состоит ни в одном».
+        project_criterion = self._project_criterion(workspace_id, project_ids, without_project)
+        if project_criterion is not None:
+            base_query = base_query.where(project_criterion)
         if role_ids:
             base_query = base_query.where(WorkSpaceParticipation.role_id.in_(role_ids))
+        if has_resume is not None:
+            # first_resume подключён outerjoin, поэтому NULL означает «резюме нет».
+            if has_resume:
+                base_query = base_query.where(first_resume.c.resume_id.is_not(None))
+            else:
+                base_query = base_query.where(first_resume.c.resume_id.is_(None))
         if date_from:
             base_query = base_query.where(cast(WorkSpaceParticipation.created_at, Date) >= cast(date_from, Date))
         if date_to:

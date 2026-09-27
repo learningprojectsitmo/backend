@@ -504,7 +504,16 @@ class TestWorkSpaceServiceParticipantFilters:
         assert items == []
         assert total == 0
         mock_repository.get_participants.assert_called_once_with(
-            7, 20, 10, "ivan", [3, 4], [55, 57], "2026-01-01", "2026-02-01"
+            7,
+            skip=20,
+            limit=10,
+            search="ivan",
+            project_ids=[3, 4],
+            without_project=False,
+            role_ids=[55, 57],
+            has_resume=None,
+            date_from="2026-01-01",
+            date_to="2026-02-01",
         )
 
     @pytest.mark.asyncio
@@ -520,7 +529,18 @@ class TestWorkSpaceServiceParticipantFilters:
         await workspace_service.get_workspace_participants(workspace_id=1, project_ids=[], role_ids=[])
 
         # then
-        mock_repository.get_participants.assert_called_once_with(1, 0, 10, None, [], [], None, None)
+        mock_repository.get_participants.assert_called_once_with(
+            1,
+            skip=0,
+            limit=10,
+            search=None,
+            project_ids=[],
+            without_project=False,
+            role_ids=[],
+            has_resume=None,
+            date_from=None,
+            date_to=None,
+        )
 
     @pytest.mark.asyncio
     async def test_should_default_participant_filters_to_none(self):
@@ -535,4 +555,15 @@ class TestWorkSpaceServiceParticipantFilters:
         await workspace_service.get_workspace_participants(workspace_id=1)
 
         # then
-        mock_repository.get_participants.assert_called_once_with(1, 0, 10, None, None, None, None, None)
+        mock_repository.get_participants.assert_called_once_with(
+            1,
+            skip=0,
+            limit=10,
+            search=None,
+            project_ids=None,
+            without_project=False,
+            role_ids=None,
+            has_resume=None,
+            date_from=None,
+            date_to=None,
+        )

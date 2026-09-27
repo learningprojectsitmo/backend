@@ -178,3 +178,145 @@ class TestGetParticipantsFiltersCombined:
         # then
         sql = _sql_of(execute.await_args_list[-1].args)
         assert "project.workspace_id = 1" in sql
+
+
+class TestGetParticipantsWithoutProjectFilter:
+    """Фильтр «без проекта» — единственный способ найти людей без проектов"""
+
+    @pytest.mark.asyncio
+    async def test_should_exclude_participants_with_projects(self):
+        """Ветка «без проекта» строит NOT по подзапросу участия в проектах"""
+        # given
+        repository, execute = _make_repository()
+
+        # when
+        await repository.get_participants(workspace_id=1, without_project=True)
+
+        # then
+        sql = _sql_of(execute.await_args_list[-1].args)
+        assert "NOT IN" in sql
+        assert "project_participation.participant_id" in sql
+
+    @pytest.mark.asyncio
+    async def test_should_scope_without_project_to_the_workspace(self):
+        """Проекты в других пространствах не считаются — иначе «без проекта» врёт"""
+        # given
+        repository, execute = _make_repository()
+
+        # when
+        await repository.get_participants(workspace_id=1, without_project=True)
+
+        # then
+        sql = _sql_of(execute.await_args_list[-1].args)
+        assert "project.workspace_id = 1" in sql
+
+    @pytest.mark.asyncio
+    async def test_should_not_filter_when_flag_is_false(self):
+        """Выключенный флаг не должен добавлять условий"""
+        # given
+        repository, execute = _make_repository()
+
+        # when
+        await repository.get_participants(workspace_id=1, without_project=False)
+
+        # then
+        sql = _sql_of(execute.await_args_list[-1].args)
+        assert "NOT IN" not in sql
+
+    @pytest.mark.asyncio
+    async def test_should_not_filter_by_default(self):
+        """Без аргумента фильтр выключен"""
+        # given
+        repository, execute = _make_repository()
+
+        # when
+        await repository.get_participants(workspace_id=1)
+
+        # then
+        sql = _sql_of(execute.await_args_list[-1].args)
+        assert "NOT IN" not in sql
+
+    @pytest.mark.asyncio
+    async def test_should_combine_selected_projects_and_without_project_with_or(self):
+        """Выбранные проекты и «без проекта» — две ветки ИЛИ, не И"""
+        # given
+        repository, execute = _make_repository()
+
+        # when
+        await repository.get_participants(workspace_id=1, project_ids=[3], without_project=True)
+
+        # then
+        sql = _sql_of(execute.await_args_list[-1].args)
+        assert "OR" in sql
+        assert "project_participation.project_id IN (3)" in sql
+        assert "NOT IN" in sql
+
+    @pytest.mark.asyncio
+    async def test_should_apply_without_project_to_count_query_too(self):
+        """Фильтр должен попасть и в count, иначе пагинация врёт"""
+        # given
+        repository, execute = _make_repository()
+
+        # when
+        await repository.get_participants(workspace_id=1, without_project=True)
+
+        # then
+        count_sql = _sql_of(execute.await_args_list[0].args)
+        assert "NOT IN" in count_sql
+
+
+class TestGetParticipantsHasResumeFilter:
+    """Фильтр по наличию резюме"""
+
+    @pytest.mark.asyncio
+    async def test_should_keep_only_with_resume(self):
+        """has_resume=True оставляет только тех, у кого резюме есть"""
+        # given
+        repository, execute = _make_repository()
+
+        # when
+        await repository.get_participants(workspace_id=1, has_resume=True)
+
+        # then
+        sql = _sql_of(execute.await_args_list[-1].args)
+        assert "resume_id IS NOT NULL" in sql
+
+    @pytest.mark.asyncio
+    async def test_should_keep_only_without_resume(self):
+        """has_resume=False оставляет только тех, у кого резюме нет"""
+        # given
+        repository, execute = _make_repository()
+
+        # when
+        await repository.get_participants(workspace_id=1, has_resume=False)
+
+        # then
+        sql = _sql_of(execute.await_args_list[-1].args)
+        assert "resume_id IS NULL" in sql
+
+    @pytest.mark.asyncio
+    async def test_should_not_filter_when_omitted(self):
+        """None — фильтр выключен, в запросе нет условия на резюме"""
+        # given
+        repository, execute = _make_repository()
+
+        # when
+        await repository.get_participants(workspace_id=1)
+
+        # then
+        sql = _sql_of(execute.await_args_list[-1].args)
+        assert "resume_id IS NULL" not in sql
+        assert "resume_id IS NOT NULL" not in sql
+
+    @pytest.mark.asyncio
+    async def test_should_apply_to_count_query_too(self):
+        """Фильтр по резюме должен попасть и в count"""
+        # given
+        repository, execute = _make_repository()
+
+        # when
+        await repository.get_participants(workspace_id=1, has_resume=False)
+
+        # then
+        count_sql = _sql_of(execute.await_args_list[0].args)
+        assert "resume_id IS NULL" in count_sql
