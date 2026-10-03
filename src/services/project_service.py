@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
+from sqlalchemy.sql.elements import ColumnElement
 
 from src.core.exceptions import NotFoundError, PermissionError, ValidationError
 from src.model.notification import NotificationType
@@ -77,19 +78,54 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
             if not (self.is_draft(p) and p.author_id != viewer_id and p.workspace_id not in editor_workspace_ids)
         ]
 
-    async def _editor_workspace_ids(self, user_id: int, workspace_ids: set[int]) -> set[int]:
+    @staticmethod
+    def draft_criterion() -> ColumnElement[bool]:
+        """SQL-эквивалент :meth:`is_draft` — проект скрыт от участников.
+
+        Нужен, чтобы отфильтровать черновики до пагинации: иначе страница
+        приходит уже обрезанной по limit, а total считается по ней же.
+        """
+        has_stages = Project.project_type_id.in_(select(ProjectStage.project_type_id))
+        hidden_stage = Project.current_stage_id.in_(
+            select(ProjectStage.id).where(ProjectStage.visible_to_participants.is_(False))
+        )
+        return and_(has_stages, or_(Project.current_stage_id.is_(None), hidden_stage))
+
+    async def _visible_projects_criterion(
+        self, viewer_id: int | None, workspace_ids: set[int] | None
+    ) -> ColumnElement[bool] | None:
+        """Критерий видимости проектов для выборки с пагинацией.
+
+        ``workspace_ids=None`` — проекты всех пространств (тогда проверяем роль
+        во всех пространствах, где пользователь состоит).
+        """
+        if viewer_id is None:
+            return None
+
+        visible = or_(
+            ~self.draft_criterion(),
+            Project.author_id == viewer_id,
+        )
+        editor_workspace_ids = await self._editor_workspace_ids(viewer_id, workspace_ids)
+        if editor_workspace_ids:
+            visible = or_(visible, Project.workspace_id.in_(editor_workspace_ids))
+        return visible
+
+    async def _editor_workspace_ids(self, user_id: int, workspace_ids: set[int] | None) -> set[int]:
         """ID пространств, в которых пользователь имеет роль admin/teacher (видит черновики)."""
-        if not workspace_ids:
+        if workspace_ids is not None and not workspace_ids:
             return set()
-        result = await self._project_repository.uow.session.execute(
+        stmt = (
             select(WorkSpaceParticipation.workspace_id)
             .join(Role, Role.id == WorkSpaceParticipation.role_id)
             .where(
                 WorkSpaceParticipation.participant_id == user_id,
-                WorkSpaceParticipation.workspace_id.in_(workspace_ids),
                 Role.name.in_(("admin", "teacher")),
             )
         )
+        if workspace_ids is not None:
+            stmt = stmt.where(WorkSpaceParticipation.workspace_id.in_(workspace_ids))
+        result = await self._project_repository.uow.session.execute(stmt)
         return set(result.scalars().all())
 
     async def is_workspace_editor(self, user_id: int, workspace_id: int | None) -> bool:
@@ -411,25 +447,39 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         return result
 
     async def get_projects_by_workspace(
-        self, workspace_id: int, page: int = 1, limit: int = 10, viewer_id: int | None = None
+        self, workspace_id: int, page: int = 1, limit: int = 10, viewer_id: int | None = None, **filters
     ) -> tuple[list[Project], int]:
-        skip = (page - 1) * limit
-        projects = await self._project_repository.get_projects_by_workspace(workspace_id, skip=skip, limit=limit)
-        if viewer_id is None:
-            return projects, len(projects)
-        projects = await self._visible_projects(projects, viewer_id)
-        return projects, len(projects)
+        return await self._projects_page(workspace_id, page, limit, viewer_id, filters)
 
     async def get_projects_paginated(
-        self, page: int = 1, limit: int = 10, viewer_id: int | None = None
+        self, page: int = 1, limit: int = 10, viewer_id: int | None = None, **filters
     ) -> tuple[list[Project], int]:
         """Получить проекты с пагинацией (черновики скрыты от не-авторов)"""
-        skip = (page - 1) * limit
-        projects = await self._project_repository.get_projects_with_details(skip=skip, limit=limit)
-        if viewer_id is None:
-            return projects, len(projects)
-        projects = await self._visible_projects(projects, viewer_id)
-        return projects, len(projects)
+        return await self._projects_page(None, page, limit, viewer_id, filters)
+
+    async def _projects_page(
+        self,
+        workspace_id: int | None,
+        page: int,
+        limit: int,
+        viewer_id: int | None,
+        filters: dict[str, Any],
+    ) -> tuple[list[Project], int]:
+        """Страница проектов вместе с общим числом видимых проектов."""
+        visible = await self._visible_projects_criterion(
+            viewer_id, {workspace_id} if workspace_id is not None else None
+        )
+        return await self._project_repository.get_projects_page(
+            workspace_id=workspace_id,
+            skip=(page - 1) * limit,
+            limit=limit,
+            visible=visible,
+            **filters,
+        )
+
+    async def get_project_filter_facets(self, workspace_id: int) -> dict[str, list[Any]]:
+        """Справочники для фильтров списка проектов пространства."""
+        return await self._project_repository.get_project_filter_facets(workspace_id)
 
     async def search_projects_by_text(self, query: str, limit: int = 10, viewer_id: int | None = None) -> list[Project]:
         """Поиск проектов по тексту (черновики скрыты от не-авторов)"""

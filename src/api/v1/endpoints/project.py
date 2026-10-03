@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -21,6 +22,7 @@ from src.schema.project import (
     MyProjectListResponse,
     MyResponseListResponse,
     ProjectCreate,
+    ProjectFilterFacetsResponse,
     ProjectFull,
     ProjectListResponse,
     ProjectUpdate,
@@ -63,6 +65,17 @@ async def fetch_projects_by_ids(
     """Получить проекты по списку ID"""
     project_ids = [int(x.strip()) for x in ids.split(",") if x.strip()]
     return await project_service.get_projects_by_ids(project_ids, current_user.id)
+
+
+@project_router.get("/filters", response_model=ProjectFilterFacetsResponse)
+async def fetch_project_filters(
+    workspace_id: int = Query(..., description="ID пространства"),
+    project_service: ProjectService = Depends(get_project_service),
+    current_user: User = Depends(get_current_user),
+) -> ProjectFilterFacetsResponse:
+    """Справочники для фильтров списка проектов пространства"""
+    facets = await project_service.get_project_filter_facets(workspace_id)
+    return ProjectFilterFacetsResponse(**facets)
 
 
 @project_router.get("/{project_id}", response_model=ProjectFull)
@@ -120,15 +133,32 @@ async def fetch_projects(
     page: int = Query(1, ge=1, description="Номер страницы"),
     limit: int = Query(10, ge=1, le=100, description="Количество проектов на странице"),
     workspace_id: int | None = Query(None, description="ID пространства для фильтрации"),
+    search: str | None = Query(None, description="Поиск по названию/теме/описанию"),
+    statuses: list[str] | None = Query(None, description="Фильтр по названиям статусов (ИЛИ)"),
+    tags: list[str] | None = Query(None, description="Фильтр по тегам"),
+    member_ids: list[int] | None = Query(None, description="Фильтр по участникам проектов (ИЛИ)"),
+    date_from: date | None = Query(None, description="Дедлайн не раньше даты (YYYY-MM-DD)"),
+    date_to: date | None = Query(None, description="Дедлайн не позже даты (YYYY-MM-DD)"),
     project_service: ProjectService = Depends(get_project_service),
     current_user: User = Depends(get_current_user),
 ) -> ProjectListResponse:
-    """Получить список проектов с пагинацией"""
+    """Получить список проектов с пагинацией и фильтрацией"""
+
+    filters: dict[str, Any] = {
+        "search": search,
+        "statuses": statuses or None,
+        "tags": tags or None,
+        "member_ids": member_ids or None,
+        "date_from": date_from,
+        "date_to": date_to,
+    }
 
     if workspace_id is not None:
-        projects, total = await project_service.get_projects_by_workspace(workspace_id, page, limit, current_user.id)
+        projects, total = await project_service.get_projects_by_workspace(
+            workspace_id, page, limit, current_user.id, **filters
+        )
     else:
-        projects, total = await project_service.get_projects_paginated(page, limit, current_user.id)
+        projects, total = await project_service.get_projects_paginated(page, limit, current_user.id, **filters)
 
     projects_list = [project_service.to_project_list_item(project) for project in projects]
 

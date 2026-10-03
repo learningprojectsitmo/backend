@@ -31,6 +31,10 @@ class TestProjectService:
         mock_session = AsyncMock()
         mock_uow.session = mock_session
         mock_repo.uow = mock_uow
+        # По умолчанию пользователь не редактор ни в одном пространстве
+        editor_result = Mock()
+        editor_result.scalars.return_value.all.return_value = []
+        mock_session.execute = AsyncMock(return_value=editor_result)
         return mock_repo
 
     @staticmethod
@@ -263,8 +267,7 @@ class TestProjectService:
             Project(id=2, name="P2", author_id=1, participants=[], status=None),
         ]
 
-        mock_repository.get_projects_with_details.return_value = mock_projects
-        mock_repository.count.return_value = 2
+        mock_repository.get_projects_page.return_value = (mock_projects, EXPECTED_PROJECTS_COUNT)
 
         project_service = ProjectService(mock_repository)
 
@@ -274,7 +277,55 @@ class TestProjectService:
         # then
         assert len(projects) == EXPECTED_PROJECTS_COUNT
         assert total == EXPECTED_PROJECTS_COUNT
-        mock_repository.get_projects_with_details.assert_called_once_with(skip=0, limit=10)
+        _, kwargs = mock_repository.get_projects_page.call_args
+        assert kwargs["workspace_id"] is None
+        assert kwargs["skip"] == 0
+        assert kwargs["limit"] == 10
+
+    @pytest.mark.asyncio
+    async def test_should_return_total_from_count_instead_of_page_length(self):
+        # given — на первой странице 10 проектов, а всего их 25
+        mock_repository = self._setup_mock_repo()
+        page = [Project(id=i, name=f"P{i}", author_id=1) for i in range(10)]
+        mock_repository.get_projects_page.return_value = (page, 25)
+
+        project_service = ProjectService(mock_repository)
+
+        # when
+        _, total = await project_service.get_projects_paginated(page=2, limit=10, viewer_id=1)
+
+        # then
+        assert total == 25
+        _, kwargs = mock_repository.get_projects_page.call_args
+        assert kwargs["skip"] == 10
+
+    @pytest.mark.asyncio
+    async def test_should_pass_filters_to_repository(self):
+        # given
+        mock_repository = self._setup_mock_repo()
+        mock_repository.get_projects_page.return_value = ([], 0)
+
+        project_service = ProjectService(mock_repository)
+
+        # when
+        await project_service.get_projects_by_workspace(
+            workspace_id=1,
+            page=1,
+            limit=10,
+            viewer_id=1,
+            search="мед",
+            statuses=["planned"],
+            tags=["ml"],
+            member_ids=[3],
+        )
+
+        # then
+        _, kwargs = mock_repository.get_projects_page.call_args
+        assert kwargs["workspace_id"] == 1
+        assert kwargs["search"] == "мед"
+        assert kwargs["statuses"] == ["planned"]
+        assert kwargs["tags"] == ["ml"]
+        assert kwargs["member_ids"] == [3]
 
     @pytest.mark.asyncio
     async def test_should_hide_stage_one_draft_from_participant(self):
@@ -371,81 +422,49 @@ class TestProjectService:
         assert result.items == []
         assert result.total == 0
 
+    @staticmethod
+    def _criteria_sql(call_args) -> str:
+        visible = call_args.kwargs["visible"]
+        if visible is None:
+            return ""
+        return str(visible.compile(compile_kwargs={"literal_binds": True}))
+
     @pytest.mark.asyncio
     async def test_should_filter_drafts_in_paginated_list(self):
-        # given
+        # given — черновики отсекаются в SQL, до пагинации
         mock_repository = self._setup_mock_repo()
-        project_type = self._make_type_with_stages()
-        draft = Project(id=1, name="Draft", author_id=5, current_stage_id=11, project_type=project_type)
-        published = Project(id=2, name="Published", author_id=6, current_stage_id=12, project_type=project_type)
-        mock_repository.get_projects_with_details.return_value = [draft, published]
+        mock_repository.get_projects_page.return_value = ([], 0)
 
         project_service = ProjectService(mock_repository)
 
         # when
-        projects, total = await project_service.get_projects_paginated(page=1, limit=10, viewer_id=1)
+        _, total = await project_service.get_projects_paginated(page=1, limit=10, viewer_id=1)
 
         # then
-        assert [p.id for p in projects] == [2]
-        assert total == 1
-
-    @pytest.mark.asyncio
-    async def test_should_filter_drafts_in_workspace_list(self):
-        # given
-        mock_repository = self._setup_mock_repo()
-        project_type = self._make_type_with_stages()
-        draft = Project(id=1, name="Draft", author_id=5, current_stage_id=11, project_type=project_type)
-        mock_repository.get_projects_by_workspace.return_value = [draft]
-
-        project_service = ProjectService(mock_repository)
-
-        # when
-        projects, total = await project_service.get_projects_by_workspace(workspace_id=1, page=1, limit=10, viewer_id=1)
-
-        # then
-        assert projects == []
+        sql = self._criteria_sql(mock_repository.get_projects_page.call_args)
+        assert "NOT (project.project_type_id IN" in sql
+        assert "project.author_id = 1" in sql
         assert total == 0
 
     @pytest.mark.asyncio
-    async def test_should_show_draft_to_workspace_admin_in_list(self):
+    async def test_should_not_filter_anything_for_anonymous_viewer(self):
         # given
         mock_repository = self._setup_mock_repo()
-        draft = Project(
-            id=1,
-            name="Draft",
-            author_id=5,
-            workspace_id=1,
-            current_stage_id=11,
-            project_type=self._make_type_with_stages(),
-        )
-        mock_repository.get_projects_by_workspace.return_value = [draft]
-
-        editor_query_result = Mock()
-        editor_query_result.scalars.return_value.all.return_value = [1]
-        mock_repository.uow.session.execute.return_value = editor_query_result
+        mock_repository.get_projects_page.return_value = ([], 0)
 
         project_service = ProjectService(mock_repository)
 
         # when
-        projects, total = await project_service.get_projects_by_workspace(workspace_id=1, page=1, limit=10, viewer_id=1)
+        await project_service.get_projects_by_workspace(workspace_id=1, page=1, limit=10, viewer_id=None)
 
         # then
-        assert [p.id for p in projects] == [1]
-        assert total == 1
+        assert self._criteria_sql(mock_repository.get_projects_page.call_args) == ""
 
     @pytest.mark.asyncio
-    async def test_should_show_draft_to_workspace_teacher_in_list(self):
-        # given
+    async def test_should_show_draft_to_workspace_admin_in_list(self):
+        # given — редактор пространства видит черновики
         mock_repository = self._setup_mock_repo()
-        draft = Project(
-            id=1,
-            name="Draft",
-            author_id=5,
-            workspace_id=1,
-            current_stage_id=11,
-            project_type=self._make_type_with_stages(),
-        )
-        mock_repository.get_projects_by_workspace.return_value = [draft]
+        mock_repository.get_projects_page.return_value = ([], 0)
 
         editor_query_result = Mock()
         editor_query_result.scalars.return_value.all.return_value = [1]
@@ -454,25 +473,17 @@ class TestProjectService:
         project_service = ProjectService(mock_repository)
 
         # when
-        projects, total = await project_service.get_projects_by_workspace(workspace_id=1, page=1, limit=10, viewer_id=1)
+        await project_service.get_projects_by_workspace(workspace_id=1, page=1, limit=10, viewer_id=1)
 
         # then
-        assert [p.id for p in projects] == [1]
-        assert total == 1
+        sql = self._criteria_sql(mock_repository.get_projects_page.call_args)
+        assert "project.workspace_id IN (1)" in sql
 
     @pytest.mark.asyncio
     async def test_should_hide_draft_from_non_editor_in_workspace_list(self):
-        # given
+        # given — участник без роли admin/teacher
         mock_repository = self._setup_mock_repo()
-        draft = Project(
-            id=1,
-            name="Draft",
-            author_id=5,
-            workspace_id=1,
-            current_stage_id=11,
-            project_type=self._make_type_with_stages(),
-        )
-        mock_repository.get_projects_by_workspace.return_value = [draft]
+        mock_repository.get_projects_page.return_value = ([], 0)
 
         editor_query_result = Mock()
         editor_query_result.scalars.return_value.all.return_value = []
@@ -481,11 +492,31 @@ class TestProjectService:
         project_service = ProjectService(mock_repository)
 
         # when
-        projects, total = await project_service.get_projects_by_workspace(workspace_id=1, page=1, limit=10, viewer_id=1)
+        await project_service.get_projects_by_workspace(workspace_id=1, page=1, limit=10, viewer_id=1)
 
         # then
-        assert projects == []
-        assert total == 0
+        sql = self._criteria_sql(mock_repository.get_projects_page.call_args)
+        assert "project.workspace_id IN" not in sql
+        assert "project.author_id = 1" in sql
+
+    @pytest.mark.asyncio
+    async def test_should_check_editor_role_in_all_workspaces_for_global_list(self):
+        # given — список по всем пространствам
+        mock_repository = self._setup_mock_repo()
+        mock_repository.get_projects_page.return_value = ([], 0)
+
+        editor_query_result = Mock()
+        editor_query_result.scalars.return_value.all.return_value = [1, 7]
+        mock_repository.uow.session.execute.return_value = editor_query_result
+
+        project_service = ProjectService(mock_repository)
+
+        # when
+        await project_service.get_projects_paginated(page=1, limit=10, viewer_id=1)
+
+        # then
+        sql = self._criteria_sql(mock_repository.get_projects_page.call_args)
+        assert "project.workspace_id IN (1, 7)" in sql
 
     @pytest.mark.asyncio
     async def test_is_workspace_editor_should_return_true_for_admin_role(self):

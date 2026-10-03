@@ -1,22 +1,37 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
+from typing import Any
 
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import Date, cast, func, or_, select, update
 from sqlalchemy.orm import selectinload
+from sqlalchemy.sql.elements import ColumnElement
 
 from src.core.uow import IUnitOfWork
 from src.model.project import (
     Project,
     ProjectParticipation,
+    ProjectStatus,
     ProjectType,
     ProjectVacancy,
     Response,
     StageTransition,
     Tag,
+    project_tag,
 )
+from src.model.user import User
 from src.repository.base_repository import BaseRepository
 from src.schema.project import ProjectCreate, ProjectUpdate
+
+# Опции, без которых список проектов не отрендерится: карточка и таблица читают
+# статус, теги, участников и текущий этап.
+PROJECT_LIST_LOADERS: tuple[Any, ...] = (
+    selectinload(Project.project_type).selectinload(ProjectType.stages),
+    selectinload(Project.current_stage),
+    selectinload(Project.participants).selectinload(ProjectParticipation.participant),
+    selectinload(Project.tags),
+    selectinload(Project.status),
+)
 
 
 class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
@@ -147,22 +162,97 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         )
         return result.scalar() or 0
 
-    async def get_projects_by_workspace(self, workspace_id: int, skip: int = 0, limit: int = 100) -> list[Project]:
-        query = (
-            select(Project)
-            .where(Project.workspace_id == workspace_id)
-            .options(
-                selectinload(Project.project_type).selectinload(ProjectType.stages),
-                selectinload(Project.current_stage),
-                selectinload(Project.participants).selectinload(ProjectParticipation.participant),
-                selectinload(Project.tags),
-                selectinload(Project.status),
-            )
-            .offset(skip)
-            .limit(limit)
-        )
+    async def get_projects_page(
+        self,
+        workspace_id: int | None = None,
+        skip: int = 0,
+        limit: int = 10,
+        search: str | None = None,
+        statuses: list[str] | None = None,
+        tags: list[str] | None = None,
+        member_ids: list[int] | None = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
+        visible: ColumnElement[bool] | None = None,
+    ) -> tuple[list[Project], int]:
+        """Страница проектов с фильтрами и настоящим total.
+
+        ``visible`` — критерий видимости (черновики). Он применяется в SQL, а не
+        к уже выбранной странице: иначе total отражал бы длину обрезанной
+        выборки, и пагинация всегда показывала бы одну страницу.
+        """
+        base = select(Project)
+
+        if workspace_id is not None:
+            base = base.where(Project.workspace_id == workspace_id)
+        if search and search.strip():
+            term = f"%{search.strip()}%"
+            base = base.where(or_(Project.name.ilike(term), Project.theme.ilike(term), Project.description.ilike(term)))
+        if statuses:
+            base = base.where(Project.status_id.in_(select(ProjectStatus.id).where(ProjectStatus.name.in_(statuses))))
+        if tags:
+            base = base.where(Project.tags.any(Tag.name.in_(tags)))
+        if member_ids:
+            base = base.where(Project.participants.any(ProjectParticipation.participant_id.in_(member_ids)))
+        if date_from or date_to:
+            base = base.where(Project.deadline.is_not(None))
+            if date_from:
+                base = base.where(cast(Project.deadline, Date) >= date_from)
+            if date_to:
+                base = base.where(cast(Project.deadline, Date) <= date_to)
+        if visible is not None:
+            base = base.where(visible)
+
+        # count считаем по той же выборке, что и страница, иначе total разойдётся с items
+        total = await self.uow.session.scalar(select(func.count()).select_from(base.subquery())) or 0
+
+        query = base.options(*PROJECT_LIST_LOADERS).order_by(Project.id.desc()).offset(skip).limit(limit)
         result = await self.uow.session.execute(query)
-        return list(result.scalars().all())
+        return list(result.scalars().all()), int(total)
+
+    async def get_project_filter_facets(self, workspace_id: int) -> dict[str, list[Any]]:
+        """Справочники для фильтров списка проектов пространства.
+
+        Нужны отдельно от страницы списка: варианты фильтра должны быть
+        одинаковыми на всех страницах, а не зависеть от того, что попало
+        в текущий ответ.
+        """
+        project_ids = select(Project.id).where(Project.workspace_id == workspace_id)
+
+        statuses_result = await self.uow.session.execute(
+            select(ProjectStatus.name)
+            .join(Project, Project.status_id == ProjectStatus.id)
+            .where(Project.workspace_id == workspace_id, ProjectStatus.name != "draft")
+            .distinct()
+            .order_by(ProjectStatus.name)
+        )
+        tags_result = await self.uow.session.execute(
+            select(Tag.name)
+            .join(project_tag, project_tag.c.tag_id == Tag.id)
+            .where(project_tag.c.project_id.in_(project_ids))
+            .distinct()
+        )
+        members_result = await self.uow.session.execute(
+            select(User.id, User.first_name, User.last_name)
+            .join(ProjectParticipation, ProjectParticipation.participant_id == User.id)
+            .where(ProjectParticipation.project_id.in_(project_ids))
+            .distinct()
+        )
+        projects_result = await self.uow.session.execute(
+            select(Project.id, Project.name).where(Project.workspace_id == workspace_id).order_by(Project.name)
+        )
+
+        members: list[dict[str, Any]] = []
+        for user_id, first_name, last_name in members_result.all():
+            full_name = " ".join(part for part in (first_name, last_name) if part).strip()
+            members.append({"id": user_id, "full_name": full_name or "Unknown"})
+
+        return {
+            "statuses": list(statuses_result.scalars().all()),
+            "tags": sorted(str(name) for name in tags_result.scalars().all()),
+            "members": members,
+            "projects": [{"id": row[0], "name": row[1]} for row in projects_result.all()],
+        }
 
     async def update_deadline_by_workspace(self, workspace_id: int, deadline: datetime | None) -> None:
         """Обновить дедлайн всех проектов пространства (ретроактивно)."""
@@ -179,22 +269,6 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
             select(func.count()).select_from(Project).where(Project.workspace_id == workspace_id)
         )
         return result.scalar()
-
-    async def get_projects_with_details(self, skip: int = 0, limit: int = 100) -> list[Project]:
-        query = (
-            select(Project)
-            .options(
-                selectinload(Project.project_type).selectinload(ProjectType.stages),
-                selectinload(Project.current_stage),
-                selectinload(Project.participants).selectinload(ProjectParticipation.participant),
-                selectinload(Project.tags),
-                selectinload(Project.status),
-            )
-            .offset(skip)
-            .limit(limit)
-        )
-        result = await self.uow.session.execute(query)
-        return list(result.scalars().all())
 
     async def search_by_text(self, query: str, limit: int = 100) -> list[Project]:
         """Поиск проектов по названию, теме и описанию"""

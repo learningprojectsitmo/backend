@@ -470,6 +470,33 @@ class ProjectListResponse(BaseModel):
     total_pages: int
 
 
+class ProjectFilterMember(BaseModel):
+    """Участник проектов пространства — вариант фильтра «Участники»"""
+
+    id: int
+    full_name: str
+
+
+class ProjectFilterOption(BaseModel):
+    """Проект пространства — вариант фильтра по проектам"""
+
+    id: int
+    name: str
+
+
+class ProjectFilterFacetsResponse(BaseModel):
+    """Справочники для фильтров списка проектов пространства
+
+    Отдельный ответ, а не поля в :class:`ProjectListResponse`: набор вариантов
+    не должен зависеть от того, какая страница проектов сейчас открыта.
+    """
+
+    statuses: list[str]
+    tags: list[str]
+    members: list[ProjectFilterMember]
+    projects: list[ProjectFilterOption]
+
+
 class MyResponseItem(BaseModel):
     """Схема отклика текущего пользователя"""
 
