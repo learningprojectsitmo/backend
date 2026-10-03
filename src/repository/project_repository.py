@@ -11,7 +11,7 @@ from src.core.uow import IUnitOfWork
 from src.model.project import (
     Project,
     ProjectParticipation,
-    ProjectStatus,
+    ProjectStage,
     ProjectType,
     ProjectVacancy,
     Response,
@@ -168,7 +168,7 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         skip: int = 0,
         limit: int = 10,
         search: str | None = None,
-        statuses: list[str] | None = None,
+        stages: list[str] | None = None,
         tags: list[str] | None = None,
         member_ids: list[int] | None = None,
         date_from: date | None = None,
@@ -188,8 +188,12 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         if search and search.strip():
             term = f"%{search.strip()}%"
             base = base.where(or_(Project.name.ilike(term), Project.theme.ilike(term), Project.description.ilike(term)))
-        if statuses:
-            base = base.where(Project.status_id.in_(select(ProjectStatus.id).where(ProjectStatus.name.in_(statuses))))
+        if stages:
+            # Фильтр по названию этапа, а не по id: у одного типа проекта «Создание тз»
+            # — это stage 3, у другого — stage 11, а в списке это один и тот же этап.
+            base = base.where(
+                Project.current_stage_id.in_(select(ProjectStage.id).where(ProjectStage.name.in_(stages)))
+            )
         if tags:
             base = base.where(Project.tags.any(Tag.name.in_(tags)))
         if member_ids:
@@ -219,13 +223,6 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         """
         project_ids = select(Project.id).where(Project.workspace_id == workspace_id)
 
-        statuses_result = await self.uow.session.execute(
-            select(ProjectStatus.name)
-            .join(Project, Project.status_id == ProjectStatus.id)
-            .where(Project.workspace_id == workspace_id, ProjectStatus.name != "draft")
-            .distinct()
-            .order_by(ProjectStatus.name)
-        )
         tags_result = await self.uow.session.execute(
             select(Tag.name)
             .join(project_tag, project_tag.c.tag_id == Tag.id)
@@ -247,8 +244,19 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
             full_name = " ".join(part for part in (first_name, last_name) if part).strip()
             members.append({"id": user_id, "full_name": full_name or "Unknown"})
 
+        # Названия этапов, встречающиеся в проектах пространства. Порядок — по
+        # минимальному «order» среди типов, где этап есть: у каждого типа своя
+        # нумерация, а показывать надо единый список.
+        stage_order = ProjectStage.__table__.c.order
+        stages_result = await self.uow.session.execute(
+            select(ProjectStage.name, func.min(stage_order))
+            .join(Project, Project.current_stage_id == ProjectStage.id)
+            .where(Project.workspace_id == workspace_id)
+            .group_by(ProjectStage.name)
+        )
+
         return {
-            "statuses": list(statuses_result.scalars().all()),
+            "stages": [name for name, _ in sorted(stages_result.all(), key=lambda row: (row[1], row[0]))],
             "tags": sorted(str(name) for name in tags_result.scalars().all()),
             "members": members,
             "projects": [{"id": row[0], "name": row[1]} for row in projects_result.all()],

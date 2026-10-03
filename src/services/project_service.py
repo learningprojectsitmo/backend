@@ -565,17 +565,36 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
             return
         raise ValidationError("Project type is required to create a project in this workspace")
 
+    async def _get_space_settings(self, workspace_id: int | None) -> SpaceSettings | None:
+        """Настройки пространства или ``None``, если пространства/настроек нет."""
+        if not workspace_id:
+            return None
+        space_settings = await self._project_repository.uow.session.execute(
+            select(SpaceSettings).where(SpaceSettings.space_id == workspace_id)
+        )
+        return space_settings.scalar_one_or_none()
+
     async def _workspace_allows_multi_participation(self, workspace_id: int | None) -> bool:
         """Разрешено ли в пространстве участие в нескольких проектах одновременно."""
         if not workspace_id:
             return True
-        space_settings = await self._project_repository.uow.session.execute(
-            select(SpaceSettings).where(SpaceSettings.space_id == workspace_id)
-        )
-        settings = space_settings.scalar_one_or_none()
+        settings = await self._get_space_settings(workspace_id)
         if not settings:
             return True
         return settings.allow_multi_project_participation
+
+    async def _workspace_allows_multi_project_creation(self, workspace_id: int | None) -> bool:
+        """Разрешено ли в пространстве создавать несколько проектов одному автору."""
+        if not workspace_id:
+            return True
+        settings = await self._get_space_settings(workspace_id)
+        if not settings:
+            return False
+        return settings.allow_multi_project_creation
+
+    async def workspace_allows_multi_project_creation(self, workspace_id: int | None) -> bool:
+        """Публичная обёртка: разрешено ли создание нескольких проектов в пространстве."""
+        return await self._workspace_allows_multi_project_creation(workspace_id)
 
     async def workspace_allows_multi_participation(self, workspace_id: int | None) -> bool:
         """Публичная обёртка: разрешено ли участие в нескольких проектах в пространстве."""
@@ -634,8 +653,9 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
 
     async def create_project(self, project_data: ProjectCreate, author_id: int) -> Project:
         """Создать новый проект"""
-        if not project_data.author_id:
-            project_data.author_id = author_id
+        # Автор всегда тот, кто делает запрос: иначе можно было бы создать проект
+        # от имени другого пользователя (и обойти лимит «один проект на автора»).
+        project_data.author_id = author_id
 
         # Только управляющие роли пространства (manager/admin/teacher) могут создавать проекты
         if project_data.workspace_id:
@@ -653,16 +673,19 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
                     "Only a project manager (role in 'manager'/'admin'/'teacher') can create a project in this workspace"
                 )
 
-            existing_count = await self._project_repository.uow.session.execute(
-                select(func.count())
-                .select_from(Project)
-                .where(
-                    Project.workspace_id == project_data.workspace_id,
-                    Project.author_id == author_id,
+            if not await self._workspace_allows_multi_project_creation(project_data.workspace_id):
+                existing_count = await self._project_repository.uow.session.execute(
+                    select(func.count())
+                    .select_from(Project)
+                    .where(
+                        Project.workspace_id == project_data.workspace_id,
+                        Project.author_id == author_id,
+                    )
                 )
-            )
-            if existing_count.scalar_one() > 0:
-                raise PermissionError("Вы уже создали проект в этом пространстве. Можно создать только один проект.")
+                if existing_count.scalar_one() > 0:
+                    raise PermissionError(
+                        "Вы уже создали проект в этом пространстве. Можно создать только один проект."
+                    )
 
             # Если в настройках пространства включено требование типа проекта — блокируем создание без типа
             await self._raise_if_project_type_required(project_data.workspace_id, project_data.project_type_id)

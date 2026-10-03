@@ -491,7 +491,9 @@ class ProjectFilterFacetsResponse(BaseModel):
     не должен зависеть от того, какая страница проектов сейчас открыта.
     """
 
-    statuses: list[str]
+    #: Названия этапов, а не статусов: у всех проектов статус «draft», а реальный
+    #: жизненный цикл проекта задаётся его текущим этапом.
+    stages: list[str]
     tags: list[str]
     members: list[ProjectFilterMember]
     projects: list[ProjectFilterOption]

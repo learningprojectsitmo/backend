@@ -134,7 +134,7 @@ async def fetch_projects(
     limit: int = Query(10, ge=1, le=100, description="Количество проектов на странице"),
     workspace_id: int | None = Query(None, description="ID пространства для фильтрации"),
     search: str | None = Query(None, description="Поиск по названию/теме/описанию"),
-    statuses: list[str] | None = Query(None, description="Фильтр по названиям статусов (ИЛИ)"),
+    stages: list[str] | None = Query(None, description="Фильтр по названиям этапов (ИЛИ)"),
     tags: list[str] | None = Query(None, description="Фильтр по тегам"),
     member_ids: list[int] | None = Query(None, description="Фильтр по участникам проектов (ИЛИ)"),
     date_from: date | None = Query(None, description="Дедлайн не раньше даты (YYYY-MM-DD)"),
@@ -146,7 +146,7 @@ async def fetch_projects(
 
     filters: dict[str, Any] = {
         "search": search,
-        "statuses": statuses or None,
+        "stages": stages or None,
         "tags": tags or None,
         "member_ids": member_ids or None,
         "date_from": date_from,

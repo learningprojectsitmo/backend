@@ -93,41 +93,67 @@ class TestProjectService:
             await project_service.create_project(project_data, author_id=1)
         mock_repository.create.assert_not_called()
 
+    @staticmethod
+    def _workspace_create_side_effects(
+        *,
+        workspace_role_name: str = "manager",
+        settings: SpaceSettings | None = None,
+        existing_projects: int | None = None,
+    ) -> list[Mock]:
+        """Порядок ``session.execute`` в :meth:`ProjectService.create_project` при заданном workspace_id.
+
+        1) участие в пространстве и его роль, 2) настройки пространства — можно ли
+        создавать несколько проектов, 3) [необязательно] число проектов автора,
+        4) настройка «требовать тип проекта», 5) дедлайн пространства,
+        6) статус draft, 7) первый этап типа проекта, 8) все этапы типа проекта.
+        """
+        participation_result = Mock()
+        participation_result.first.return_value = (object(), Role(id=4, name=workspace_role_name))
+
+        settings_result = Mock()
+        settings_result.scalar_one_or_none.return_value = settings
+
+        results = [participation_result, settings_result]
+        if settings is None or not settings.allow_multi_project_creation:
+            count_result = Mock()
+            count_result.scalar_one.return_value = existing_projects or 0
+            results.append(count_result)
+        results += [settings_result, settings_result]
+
+        draft_result = Mock()
+        draft_result.scalar_one_or_none.return_value = AsyncMock(id=99, name="draft")
+        first_stage_result = Mock()
+        first_stage_result.scalar_one_or_none.return_value = ProjectStage(
+            id=11, name="Initial", order=0, project_type_id=1
+        )
+        all_stages_result = Mock()
+        all_stages_result.scalars.return_value.all.return_value = []
+        results += [draft_result, first_stage_result, all_stages_result]
+        return results
+
     @pytest.mark.parametrize("workspace_role_name", ["manager", "admin", "teacher"])
     @pytest.mark.asyncio
     async def test_should_allow_create_project_in_workspace_for_managing_roles(self, workspace_role_name):
         # given
         mock_repository = self._setup_mock_repo()
-        workspace_role = Role(id=4, name=workspace_role_name)
         mock_project = Project(id=1, name="Test Project", author_id=1, workspace_id=5)
         mock_repository.create.return_value = mock_project
         mock_repository.get_or_create_tags = AsyncMock(return_value=[])
 
         mock_uow = Mock()
         mock_session = Mock()
-        mock_result = Mock()
-        mock_result.first.return_value = (object(), workspace_role)
-        count_result = Mock()
-        count_result.scalar_one.return_value = 0
-        settings_result = Mock()
-        settings_result.scalar_one_or_none.return_value = None
-        draft_query_result = Mock()
-        draft_query_result.scalar_one_or_none.return_value = AsyncMock(id=99, name="draft")
-        ws_sync_result = Mock()
-        ws_sync_result.scalar_one_or_none.return_value = None
-        require_type_result = Mock()
-        require_type_result.scalar_one_or_none.return_value = SpaceSettings(
-            id=1, space_id=5, settings_type_id=1, require_project_type_on_create=False
-        )
         mock_session.execute = AsyncMock(
-            side_effect=[
-                mock_result,
-                count_result,
-                require_type_result,
-                settings_result,
-                draft_query_result,
-                ws_sync_result,
-            ]
+            side_effect=self._workspace_create_side_effects(
+                workspace_role_name=workspace_role_name,
+                settings=SpaceSettings(
+                    id=1,
+                    space_id=5,
+                    settings_type_id=1,
+                    require_project_type_on_create=False,
+                    allow_multi_project_creation=False,
+                ),
+                existing_projects=0,
+            )
         )
         mock_session.refresh = AsyncMock()
         mock_session.flush = AsyncMock()
@@ -146,19 +172,17 @@ class TestProjectService:
 
     @pytest.mark.asyncio
     async def test_should_block_manager_from_creating_second_project_in_workspace(self):
+        """По умолчанию (настройка выключена) автор может создать только один проект"""
         # given
         mock_repository = self._setup_mock_repo()
-        manager_role = Role(id=4, name="manager")
         mock_repository.create.return_value = Project(id=1, name="Test", author_id=1, workspace_id=5)
         mock_repository.get_or_create_tags = AsyncMock(return_value=[])
 
         mock_uow = Mock()
         mock_session = Mock()
-        mock_result = Mock()
-        mock_result.first.return_value = (object(), manager_role)
-        count_result = Mock()
-        count_result.scalar_one.return_value = 1
-        mock_session.execute = AsyncMock(side_effect=[mock_result, count_result])
+        mock_session.execute = AsyncMock(
+            side_effect=self._workspace_create_side_effects(settings=None, existing_projects=1)
+        )
         mock_session.refresh = AsyncMock()
         mock_session.flush = AsyncMock()
         mock_session.add = Mock()
@@ -171,27 +195,84 @@ class TestProjectService:
         # when / then
         with pytest.raises(PermissionError):
             await project_service.create_project(project_data, author_id=1)
+        mock_repository.create.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_should_allow_second_project_when_multi_creation_enabled(self):
+        """С включённой настройкой создаётся несколько проектов — счётчик не проверяется"""
+        # given
+        mock_repository = self._setup_mock_repo()
+        mock_project = Project(id=2, name="Second", author_id=1, workspace_id=5)
+        mock_repository.create.return_value = mock_project
+        mock_repository.get_or_create_tags = AsyncMock(return_value=[])
+
+        mock_uow = Mock()
+        mock_session = Mock()
+        mock_session.execute = AsyncMock(
+            side_effect=self._workspace_create_side_effects(
+                settings=SpaceSettings(
+                    id=1,
+                    space_id=5,
+                    settings_type_id=1,
+                    require_project_type_on_create=False,
+                    allow_multi_project_creation=True,
+                ),
+                existing_projects=7,
+            )
+        )
+        mock_session.refresh = AsyncMock()
+        mock_session.flush = AsyncMock()
+        mock_session.add = Mock()
+        mock_uow.session = mock_session
+        mock_repository.uow = mock_uow
+
+        project_service = ProjectService(mock_repository)
+        project_data = ProjectCreate(name="Second", author_id=1, workspace_id=5)
+
+        # when
+        result = await project_service.create_project(project_data, author_id=1)
+
+        # then
+        assert result == mock_project
+
+    @pytest.mark.asyncio
+    async def test_should_ignore_author_id_from_request(self):
+        """author_id в теле запроса игнорируется: автором становится текущий пользователь"""
+        # given
+        mock_repository = self._setup_mock_repo()
+        mock_repository.create.return_value = Project(id=1, name="Test", author_id=1)
+        mock_repository.get_or_create_tags = AsyncMock(return_value=[])
+
+        draft_query_result = Mock()
+        draft_query_result.scalar_one_or_none.return_value = AsyncMock(id=99, name="draft")
+        mock_repository.uow.session.execute = AsyncMock(return_value=draft_query_result)
+
+        project_service = ProjectService(mock_repository)
+        project_data = ProjectCreate(name="Test", author_id=999)
+
+        # when
+        await project_service.create_project(project_data, author_id=1)
+
+        # then
+        payload = mock_repository.create.call_args[0][0]
+        assert payload["author_id"] == 1
 
     @pytest.mark.asyncio
     async def test_should_block_create_project_without_type_when_settings_require_it(self):
         """Настройка «требовать тип проекта» блокирует создание без типа в пространстве"""
         # given
         mock_repository = self._setup_mock_repo()
-        manager_role = Role(id=4, name="manager")
         mock_repository.create.return_value = Project(id=1, name="Test", author_id=1, workspace_id=5)
         mock_repository.get_or_create_tags = AsyncMock(return_value=[])
 
         mock_uow = Mock()
         mock_session = Mock()
-        mock_result = Mock()
-        mock_result.first.return_value = (object(), manager_role)
-        count_result = Mock()
-        count_result.scalar_one.return_value = 0
-        require_type_result = Mock()
-        require_type_result.scalar_one_or_none.return_value = SpaceSettings(
-            id=1, space_id=5, settings_type_id=1, require_project_type_on_create=True
+        mock_session.execute = AsyncMock(
+            side_effect=self._workspace_create_side_effects(
+                settings=SpaceSettings(id=1, space_id=5, settings_type_id=1, require_project_type_on_create=True),
+                existing_projects=0,
+            )
         )
-        mock_session.execute = AsyncMock(side_effect=[mock_result, count_result, require_type_result])
         mock_session.refresh = AsyncMock()
         mock_session.flush = AsyncMock()
         mock_session.add = Mock()
@@ -210,19 +291,14 @@ class TestProjectService:
         """По умолчанию (нет строки настроек) создание без типа в пространстве запрещено"""
         # given
         mock_repository = self._setup_mock_repo()
-        manager_role = Role(id=4, name="manager")
         mock_repository.create.return_value = Project(id=1, name="Test", author_id=1, workspace_id=5)
         mock_repository.get_or_create_tags = AsyncMock(return_value=[])
 
         mock_uow = Mock()
         mock_session = Mock()
-        mock_result = Mock()
-        mock_result.first.return_value = (object(), manager_role)
-        count_result = Mock()
-        count_result.scalar_one.return_value = 0
-        require_type_result = Mock()
-        require_type_result.scalar_one_or_none.return_value = None
-        mock_session.execute = AsyncMock(side_effect=[mock_result, count_result, require_type_result])
+        mock_session.execute = AsyncMock(
+            side_effect=self._workspace_create_side_effects(settings=None, existing_projects=0)
+        )
         mock_session.refresh = AsyncMock()
         mock_session.flush = AsyncMock()
         mock_session.add = Mock()
@@ -235,6 +311,15 @@ class TestProjectService:
         # when / then
         with pytest.raises(ValidationError):
             await project_service.create_project(project_data, author_id=1)
+
+    @pytest.mark.asyncio
+    async def test_should_allow_multi_project_creation_without_workspace(self):
+        """Без пространства ограничения на число проектов нет"""
+        # given
+        project_service = ProjectService(self._setup_mock_repo())
+
+        # when / then
+        assert await project_service.workspace_allows_multi_project_creation(None) is True
 
     @pytest.mark.asyncio
     async def test_should_update_project_with_valid_data(self):
@@ -314,7 +399,7 @@ class TestProjectService:
             limit=10,
             viewer_id=1,
             search="мед",
-            statuses=["planned"],
+            stages=["Создание тз"],
             tags=["ml"],
             member_ids=[3],
         )
@@ -323,7 +408,7 @@ class TestProjectService:
         _, kwargs = mock_repository.get_projects_page.call_args
         assert kwargs["workspace_id"] == 1
         assert kwargs["search"] == "мед"
-        assert kwargs["statuses"] == ["planned"]
+        assert kwargs["stages"] == ["Создание тз"]
         assert kwargs["tags"] == ["ml"]
         assert kwargs["member_ids"] == [3]
 
