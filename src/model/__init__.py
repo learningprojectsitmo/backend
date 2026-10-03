@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from src.model.app_setting import AppSetting
 from src.model.audit import AuditLog
 from src.model.auth import NewUser, PasswordReset, Session
 from src.model.education import Education
@@ -25,6 +26,7 @@ from src.model.workspace import WorkSpace, WorkSpaceCategories, WorkSpacePartici
 from src.model.workspace_invitation import WorkspaceInvitation
 
 __all__ = [
+    "AppSetting",
     "AuditLog",
     "Column",
     "Education",

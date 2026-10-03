@@ -917,6 +917,65 @@ class TestRichTextRendering:
         assert result.items[0].description == ("Оставил комментарий к техническому заданию: Нужно уточнить сроки")
 
 
+class TestAppSettingDescriptions:
+    """Формулировки действий над глобальными настройками"""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("action", "old_values", "new_values", "expected"),
+        [
+            (
+                "INSERT",
+                None,
+                {"key": "new_year_decorations_enabled", "value": True},
+                "Включил настройку «Новогодние украшения»",
+            ),
+            (
+                "UPDATE",
+                {"key": "new_year_decorations_enabled", "value": False},
+                {"key": "new_year_decorations_enabled", "value": True},
+                "Включил настройку «Новогодние украшения»",
+            ),
+            (
+                "UPDATE",
+                {"key": "new_year_decorations_enabled", "value": True},
+                {"key": "new_year_decorations_enabled", "value": False},
+                "Выключил настройку «Новогодние украшения»",
+            ),
+        ],
+    )
+    async def test_should_describe_toggle_by_meaning(self, action, old_values, new_values, expected):
+        # given
+        log = _make_log("app_setting", action, 1, datetime.now(UTC), old_values=old_values, new_values=new_values)
+        service = AuditService(_setup_mock_repo([log]))
+
+        # when
+        result = await service.get_activity(1)
+
+        # then
+        assert result.items[0].description == expected
+
+    @pytest.mark.asyncio
+    async def test_should_fall_back_to_key_when_setting_left_registry(self):
+        """Настройку удалили из кода — описание не должно падать или молчать"""
+        # given
+        log = _make_log(
+            "app_setting",
+            "UPDATE",
+            1,
+            datetime.now(UTC),
+            old_values={"key": "legacy_flag", "value": False},
+            new_values={"key": "legacy_flag", "value": True},
+        )
+        service = AuditService(_setup_mock_repo([log]))
+
+        # when
+        result = await service.get_activity(1)
+
+        # then
+        assert result.items[0].description == "Включил настройку «legacy_flag»"
+
+
 class TestFieldLabels:
     """Поля аудита не должны светиться сырыми именами колонок"""
 

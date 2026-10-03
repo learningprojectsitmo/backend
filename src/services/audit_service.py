@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, time, timedelta
 from typing import TYPE_CHECKING, Any
 
+from src.core.app_settings_registry import APP_SETTINGS_BY_KEY
 from src.core.audit_context import get_audit_context
 from src.repository.audit_repository import AuditRepository
 from src.schema.audit import ActivityActor, ActivityDay, ActivityItem, ActivityResponse, AuditLogResponse
@@ -96,6 +97,7 @@ DESCRIBERS = {
     "task": "_describe_task",
     "subtask": "_describe_subtask",
     "task_assignee": "_describe_task_assignees",
+    "app_setting": "_describe_app_setting",
 }
 
 
@@ -464,6 +466,27 @@ class AuditService:
             noun = "исполнителя" if len(user_ids) == 1 else "исполнителей"
             parts.append(f"{verb} {noun}{task_label}: {rendered}")
         return "; ".join(parts) or f"Обновил исполнителей{task_label}"
+
+    def _describe_app_setting(self, entry: _Entry) -> str:
+        """Глобальная настройка: важно не поле настройки, а действие с ней."""
+        key = entry.new.get("key") or entry.old.get("key") or "?"
+        title = APP_SETTINGS_BY_KEY[key].title if key in APP_SETTINGS_BY_KEY else key
+        label = f"«{title}»"
+
+        if entry.log.action == "INSERT":
+            value = entry.new.get("value")
+            return f"Включил настройку {label}" if value else f"Сохранил настройку {label} со значением {value!r}"
+
+        changed = entry.changed
+        if "value" in changed:
+            old_value, new_value = changed["value"]
+            if new_value:
+                return f"Включил настройку {label}"
+            if old_value:
+                return f"Выключил настройку {label}"
+            return f"Изменил настройку {label}: {old_value!r} → {new_value!r}"
+
+        return _with_diff(f"Изменил настройку {label}", entry.diff())
 
 
 def _actor(log, names: ActivityNames) -> ActivityActor | None:

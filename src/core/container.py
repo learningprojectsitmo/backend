@@ -5,6 +5,7 @@ from collections.abc import AsyncGenerator
 from fastapi import Depends
 
 from src.core.uow import IUnitOfWork, SqlAlchemyUoW
+from src.repository.app_setting_repository import AppSettingRepository
 from src.repository.audit_repository import AuditRepository
 from src.repository.education_repository import EducationRepository
 from src.repository.ideas_repository import IdeaCommentRepository, IdeaRepository, IdeaTagRepository
@@ -29,6 +30,7 @@ from src.repository.user_repository import NewUserRepository, UserPermissionRepo
 from src.repository.wiki_repository import WikiRepository
 from src.repository.workspace_repository import WorkSpaceRepository
 from src.services.admin_service import AdminService
+from src.services.app_setting_service import AppSettingService
 from src.services.audit_service import AuditService
 from src.services.auth_service import AuthService
 from src.services.education_service import EducationService
@@ -125,6 +127,10 @@ async def get_workspace_repository(uow: IUnitOfWork = Depends(get_uow)) -> WorkS
 
 async def get_space_settings_repository(uow: IUnitOfWork = Depends(get_uow)) -> SpaceSettingsRepository:
     return SpaceSettingsRepository(uow)
+
+
+async def get_app_setting_repository(uow: IUnitOfWork = Depends(get_uow)) -> AppSettingRepository:
+    return AppSettingRepository(uow)
 
 
 async def get_invitation_repository(uow: IUnitOfWork = Depends(get_uow)) -> InvitationRepository:
@@ -317,6 +323,12 @@ async def get_settings_service(
     project_repository: ProjectRepository = Depends(get_project_repository),
 ) -> SpaceSettingsService:
     return SpaceSettingsService(settings_repository, project_repository=project_repository)
+
+
+async def get_app_setting_service(
+    app_setting_repository: AppSettingRepository = Depends(get_app_setting_repository),
+) -> AppSettingService:
+    return AppSettingService(app_setting_repository)
 
 
 async def get_invitation_service(

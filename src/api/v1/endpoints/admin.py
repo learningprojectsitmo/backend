@@ -1,9 +1,15 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from src.core.container import get_admin_service, get_fixtures_service, get_session_service
-from src.core.dependencies import admin_required
+from src.core.app_settings_registry import InvalidSettingValueError, UnknownSettingError
+from src.core.container import (
+    get_admin_service,
+    get_app_setting_service,
+    get_fixtures_service,
+    get_session_service,
+)
+from src.core.dependencies import admin_required, setup_audit
 from src.model.user import User
 from src.schema.admin import (
     AdminAuditListResponse,
@@ -13,8 +19,10 @@ from src.schema.admin import (
     AdminSessionsResponse,
     AdminSessionStats,
 )
+from src.schema.app_setting import AppSettingPatch, AppSettingsAdminResponse
 from src.schema.session import SessionTerminateRequest, SessionTerminateResponse
 from src.services.admin_service import AdminService
+from src.services.app_setting_service import AppSettingService
 from src.services.fixtures_service import FIXTURE_USERS, FixtureService
 from src.services.session_service import SessionService
 
@@ -96,3 +104,32 @@ async def create_fixture_users(
     ]
 
     return AdminFixtureUsersResponse(created=created_items, already_existed=already_existed)
+
+
+@admin_router.get("/settings", response_model=AppSettingsAdminResponse)
+async def get_admin_app_settings(
+    app_setting_service: AppSettingService = Depends(get_app_setting_service),
+    _current_user: User = Depends(admin_required),
+) -> AppSettingsAdminResponse:
+    """Все глобальные настройки инстанса с текущими значениями"""
+    return AppSettingsAdminResponse(items=await app_setting_service.list_items())
+
+
+@admin_router.patch("/settings", response_model=AppSettingsAdminResponse)
+async def patch_admin_app_settings(
+    patch: AppSettingPatch,
+    app_setting_service: AppSettingService = Depends(get_app_setting_service),
+    current_user: User = Depends(admin_required),
+    _audit=Depends(setup_audit),
+) -> AppSettingsAdminResponse:
+    """Частично обновить глобальные настройки инстанса
+
+    Ключи и типы проверяются по реестру: неизвестный ключ или значение не того
+    типа отклоняются с 422, а не молча кладутся в таблицу.
+    """
+    try:
+        items = await app_setting_service.apply_patch(patch.model_dump(), user_id=current_user.id)
+    except (UnknownSettingError, InvalidSettingValueError) as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+    return AppSettingsAdminResponse(items=items)

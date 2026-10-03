@@ -1,15 +1,32 @@
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException
 
-from src.core.container import get_settings_service, get_workspace_service
+from src.core.container import get_app_setting_service, get_settings_service, get_workspace_service
 from src.core.dependencies import get_current_user, setup_audit
 from src.model.user import User
 from src.schema.settings import SpaceSettingsFull, SpaceSettingsUpdate
+from src.services.app_setting_service import AppSettingService
 from src.services.settings_service import SpaceSettingsService
 from src.services.workspace_service import WorkSpaceService
 
 settings_router = APIRouter(tags=["settings"])
+
+
+@settings_router.get("/settings/public", response_model=dict[str, Any])
+async def get_public_app_settings(
+    app_setting_service: AppSettingService = Depends(get_app_setting_service),
+) -> dict[str, Any]:
+    """Публичная выборка глобальных настроек инстанса.
+
+    Аутентификация не требуется намеренно: настройки отсюда читает в том числе
+    анонимный посетитель (декорация рисуется на лендинге и до входа). Поэтому
+    состав ключей ограничен тем, что в реестре помечено как public, — серверные
+    параметры в этот ответ попасть не могут.
+    """
+    return await app_setting_service.get_public_values()
 
 
 @settings_router.get("/workspaces/{workspace_id}/settings", response_model=SpaceSettingsFull)

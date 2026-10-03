@@ -10,6 +10,7 @@ from sqlalchemy.inspection import inspect as sqlalchemy_inspect
 
 from src.core.audit_context import get_audit_context
 from src.core.logging_config import get_logger
+from src.model.app_setting import AppSetting
 from src.model.audit import AuditLog
 from src.model.kanban_models import Column, Subtask, Task, TaskAssignee
 from src.model.project import (
@@ -429,6 +430,22 @@ def audit_wiki_page_update(mapper, connection, target: WikiPage) -> None:
 @event.listens_for(WikiPage, "before_delete")
 def audit_wiki_page_delete(mapper, connection, target: WikiPage) -> None:
     _audit_delete(mapper, connection, target, "wiki_page", _self_project_id)
+
+
+# ─── Глобальные настройки ──────────────────────────────────────────────────
+#
+# project_id здесь всегда None: настройка инстанса не принадлежит проекту, и
+# в ленте активности проекта ей не место.
+
+
+@event.listens_for(AppSetting, "after_insert")
+def audit_app_setting_insert(mapper, connection, target: AppSetting) -> None:
+    _audit_insert(mapper, connection, target, "app_setting")
+
+
+@event.listens_for(AppSetting, "before_update")
+def audit_app_setting_update(mapper, connection, target: AppSetting) -> None:
+    _audit_update(mapper, connection, target, "app_setting")
 
 
 def setup_audit_listeners() -> None:
