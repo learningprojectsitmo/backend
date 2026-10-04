@@ -238,6 +238,7 @@ def upgrade() -> None:
                 "invitation_received",
                 "invitation_accepted",
                 "invitation_rejected",
+                "invitation_cancelled",
                 "stage_approval_required",
                 "task_created",
                 "task_updated",

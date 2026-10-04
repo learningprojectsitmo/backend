@@ -629,6 +629,64 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
                 )
         return result
 
+    async def cancel_invitation(self, invitation_id: int, current_user_id: int) -> Response:
+        """Отозвать отправленное приглашение (автор проекта или админ пространства).
+
+        Строка не удаляется, а переводится в ``cancelled``: приглашение должно
+        остаться в истории проекта и в ленте активности, где об этом пишет
+        ``audit_service`` по факту смены статуса.
+        """
+        invitation = await self._project_repository.get_response_by_id(invitation_id)
+        if not invitation:
+            raise NotFoundError("Invitation not found")
+        if invitation.type != "invitation":
+            raise ValidationError("This is not an invitation")
+        if invitation.status != "pending":
+            raise ValidationError("Can only cancel pending invitations")
+        project = await self._project_repository.get_by_id(invitation.project_id)
+        if not project:
+            raise NotFoundError("Project not found")
+        if not await self._can_cancel_invitation(project, current_user_id):
+            raise PermissionError("Only project author or workspace admin can cancel invitations")
+        result = await self._project_repository.update_response_status(invitation_id, "cancelled")
+        if not result:
+            raise NotFoundError("Invitation not found")
+        if self._notification_service:
+            actor = await self._project_repository.uow.session.get(User, current_user_id)
+            actor_name = f"{actor.first_name} {actor.last_name or ''}".strip() if actor else "Руководитель"
+            await self._notification_service.create_notification(
+                user_id=invitation.respondent_id,
+                type=NotificationType.invitation_cancelled,
+                actor_name=actor_name,
+                actor_id=current_user_id,
+                project_id=invitation.project_id,
+                project_name=project.name,
+                vacancy_title=invitation.vacancy.title if invitation.vacancy else None,
+                invitation_id=invitation_id,
+            )
+        if self._mail_service:
+            invitee = await self._project_repository.uow.session.get(User, invitation.respondent_id)
+            if invitee and invitee.email:
+                await self._mail_service.send_invitation_cancelled_email(
+                    to=invitee.email,
+                    first_name=invitee.first_name or "Пользователь",
+                    project_name=project.name,
+                    project_id=project.id,
+                    vacancy_title=invitation.vacancy.title if invitation.vacancy else None,
+                )
+        return result
+
+    async def _can_cancel_invitation(self, project: Project, user_id: int) -> bool:
+        """Кто может отозвать приглашение: автор проекта либо admin/teacher пространства.
+
+        Приглашение отправляет только автор (``invite_to_project``), но отзыв
+        разрешён и редакторам пространства — тем же составу, что и удаление
+        участника из команды (``remove_participant``).
+        """
+        if await self._can_manage_team(project, user_id):
+            return True
+        return await self.is_workspace_editor(user_id, project.workspace_id)
+
     async def get_projects_by_workspace(
         self, workspace_id: int, page: int = 1, limit: int = 10, viewer_id: int | None = None, **filters
     ) -> tuple[list[Project], int]:

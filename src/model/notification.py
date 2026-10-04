@@ -21,6 +21,7 @@ class NotificationType(enum.StrEnum):
     invitation_received = "invitation_received"
     invitation_accepted = "invitation_accepted"
     invitation_rejected = "invitation_rejected"
+    invitation_cancelled = "invitation_cancelled"
     stage_approval_required = "stage_approval_required"
     task_created = "task_created"
     task_updated = "task_updated"

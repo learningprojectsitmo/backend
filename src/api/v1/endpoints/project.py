@@ -267,6 +267,17 @@ async def reject_invitation(
     return {"message": "Invitation rejected successfully"}
 
 
+@invitation_router.delete("/{invitation_id}")
+async def cancel_invitation(
+    invitation_id: int,
+    project_service: ProjectService = Depends(get_project_service),
+    current_user: User = Depends(permission_required("project:update")),
+) -> dict[str, str]:
+    """Отозвать приглашение (автор проекта или админ пространства)"""
+    await project_service.cancel_invitation(invitation_id, current_user.id)
+    return {"message": "Invitation cancelled successfully"}
+
+
 @project_router.post("/", response_model=ProjectFull)
 async def create_project(
     project_data: ProjectCreate,

@@ -266,6 +266,21 @@ class MailService:
         html = self._wrap(body, "Приглашение отклонено")
         return await self.send_html(to, f"Приглашение отклонено — {_BRAND}", html)
 
+    async def send_invitation_cancelled_email(
+        self, to: str, first_name: str, project_name: str, project_id: int, vacancy_title: str | None = None
+    ) -> bool:
+        """Приглашённому: руководитель проекта отозвал приглашение."""
+        role_line = f" на роль «{vacancy_title}»" if vacancy_title else ""
+        body = f"""
+                    <p style="margin:0 0 16px 0;font-size:16px;line-height:1.5;color:{_TEXT};">Здравствуйте, {first_name}!</p>
+                    <p style="margin:0 0 24px 0;font-size:16px;line-height:1.5;color:{_MUTED};">
+                        Приглашение в проект «{project_name}»{role_line} отозвано руководителем проекта.
+                    </p>
+        """
+        body += self._action_button(f"{settings.FRONTEND_URL}/app/project?id={project_id}", "Открыть проект")
+        html = self._wrap(body, "Приглашение отозвано")
+        return await self.send_html(to, f"Приглашение отозвано — {_BRAND}", html)
+
     #   === Канбан-доска ===
 
     _CHANGE_LABELS: ClassVar[dict[str, str]] = {

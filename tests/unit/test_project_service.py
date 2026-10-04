@@ -6,7 +6,8 @@ from unittest.mock import AsyncMock, Mock  # Добавили AsyncMock
 
 import pytest
 
-from src.core.exceptions import PermissionError, ValidationError
+from src.core.exceptions import NotFoundError, PermissionError, ValidationError
+from src.model.notification import NotificationType
 from src.model.project import Project, ProjectStage, ProjectType, Response
 from src.model.resume import Resume
 from src.model.settings import SpaceSettings
@@ -1768,3 +1769,133 @@ class TestRemoveParticipant:
         with pytest.raises(ValidationError, match="Cannot remove the project author"):
             await project_service.remove_participant(3, 1, current_user_id=999)
         mock_repository.remove_participant.assert_not_called()
+
+
+class TestCancelInvitation:
+    """Тесты для ProjectService.cancel_invitation (автор проекта либо админ пространства)"""
+
+    def _setup(self, *, author_id: int = 1, workspace_id: int = 7) -> tuple[Mock, AsyncMock, ProjectService]:
+        mock_repository = Mock(spec=ProjectRepository)
+        mock_uow = Mock()
+        mock_session = AsyncMock()
+        mock_uow.session = mock_session
+        mock_repository.uow = mock_uow
+        mock_repository.get_response_by_id = AsyncMock(
+            return_value=Response(id=5, respondent_id=2, project_id=3, type="invitation", status="pending")
+        )
+        mock_repository.get_by_id = AsyncMock(
+            return_value=Project(id=3, name="P", author_id=author_id, workspace_id=workspace_id)
+        )
+        mock_repository.update_response_status = AsyncMock(return_value=Response(id=5, type="invitation"))
+        mock_session.get = AsyncMock(
+            return_value=User(id=2, first_name="Анна", last_name="Петрова", email="anna@example.com")
+        )
+        mock_session.execute = AsyncMock(return_value=self._empty_result())
+        return mock_repository, mock_session, ProjectService(mock_repository)
+
+    @staticmethod
+    def _empty_result() -> Mock:
+        """Результат запроса без строк: нет ни глобальной роли, ни членства в пространстве."""
+        result = Mock()
+        result.scalar_one_or_none.return_value = None
+        result.first.return_value = None
+        return result
+
+    @staticmethod
+    def _role_result(role_name: str) -> Mock:
+        role_result = Mock()
+        role_result.scalar_one_or_none.return_value = role_name
+        return role_result
+
+    @staticmethod
+    def _workspace_editor_result() -> Mock:
+        editor_result = Mock()
+        editor_result.first.return_value = object()
+        return editor_result
+
+    @pytest.mark.asyncio
+    async def test_should_allow_author_to_cancel_invitation(self):
+        # given
+        mock_repository, _, project_service = self._setup(author_id=1)
+        notification_service = Mock()
+        notification_service.create_notification = AsyncMock()
+        mail_service = Mock()
+        mail_service.send_invitation_cancelled_email = AsyncMock(return_value=True)
+        project_service._notification_service = notification_service
+        project_service._mail_service = mail_service
+
+        # when
+        result = await project_service.cancel_invitation(5, current_user_id=1)
+
+        # then
+        assert result.id == 5
+        mock_repository.update_response_status.assert_awaited_once_with(5, "cancelled")
+        assert (
+            notification_service.create_notification.await_args.kwargs["type"] == NotificationType.invitation_cancelled
+        )
+        mail_service.send_invitation_cancelled_email.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_should_allow_workspace_teacher_to_cancel_invitation(self):
+        # given
+        mock_repository, mock_session, project_service = self._setup(author_id=1)
+        # первым запросом проверяется глобальная роль, вторым — роль в пространстве
+        mock_session.execute = AsyncMock(
+            side_effect=[self._role_result("teacher"), self._workspace_editor_result()],
+        )
+
+        # when
+        await project_service.cancel_invitation(5, current_user_id=99)
+
+        # then
+        mock_repository.update_response_status.assert_awaited_once_with(5, "cancelled")
+
+    @pytest.mark.asyncio
+    async def test_should_deny_stranger_to_cancel_invitation(self):
+        # given
+        mock_repository, mock_session, project_service = self._setup(author_id=1)
+        mock_session.execute = AsyncMock(
+            side_effect=[self._role_result("member"), self._empty_result()],
+        )
+
+        # when / then
+        with pytest.raises(PermissionError, match="Only project author or workspace admin can cancel invitations"):
+            await project_service.cancel_invitation(5, current_user_id=99)
+        mock_repository.update_response_status.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_should_not_cancel_non_pending_invitation(self):
+        # given
+        mock_repository, _, project_service = self._setup()
+        mock_repository.get_response_by_id = AsyncMock(
+            return_value=Response(id=5, respondent_id=2, project_id=3, type="invitation", status="accepted")
+        )
+
+        # when / then
+        with pytest.raises(ValidationError, match="Can only cancel pending invitations"):
+            await project_service.cancel_invitation(5, current_user_id=1)
+        mock_repository.update_response_status.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_should_not_cancel_response(self):
+        # given
+        mock_repository, _, project_service = self._setup()
+        mock_repository.get_response_by_id = AsyncMock(
+            return_value=Response(id=5, respondent_id=2, project_id=3, type="response", status="pending")
+        )
+
+        # when / then
+        with pytest.raises(ValidationError, match="This is not an invitation"):
+            await project_service.cancel_invitation(5, current_user_id=1)
+        mock_repository.update_response_status.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_should_raise_not_found_for_missing_invitation(self):
+        # given
+        mock_repository, _, project_service = self._setup()
+        mock_repository.get_response_by_id = AsyncMock(return_value=None)
+
+        # when / then
+        with pytest.raises(NotFoundError, match="Invitation not found"):
+            await project_service.cancel_invitation(5, current_user_id=1)
+        mock_repository.update_response_status.assert_not_called()

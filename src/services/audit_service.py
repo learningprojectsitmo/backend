@@ -376,6 +376,10 @@ class AuditService:
             base = f"Отклонил {noun} в {context}"
         elif status == "withdrawn":
             base = f"Отозвал {noun} в {context}"
+        elif status == "cancelled":
+            # Отзыв приглашения делает руководитель проекта, а не приглашённый,
+            # поэтому формулировка «отозвал» остаётся за его решением.
+            base = f"Отозвал приглашение в {context}"
         else:
             base = f"Обновил {noun} в {context}"
         return _with_diff(base, entry.diff())
