@@ -551,6 +551,48 @@ class MyInvitationListResponse(BaseModel):
     total: int
 
 
+class ResponseListItem(BaseModel):
+    """Отклик или приглашение в общем списке по проектам.
+
+    Плоская строка с контекстом проекта: группировку по проектам делает клиент,
+    поэтому ``project_id``/``project_name`` идут рядом с самой записью.
+    Поля повторяют :class:`ResponseItem`, но отдаются с производным статусом
+    «уже в другой команде» — как в карточке проекта.
+    """
+
+    id: int
+    project_id: int
+    project_name: str = ""
+    workspace_id: int | None = None
+    workspace_name: str | None = None
+    user_id: int
+    name: str = ""
+    respondent_email: str | None = None
+    inviter_name: str | None = None
+    vacancy_id: int | None = None
+    role: str = ""
+    resume_url: str = ""
+    response_date: str = ""
+    type: str = "response"
+    status: str = "pending"
+    allow_multi_project_participation: bool = True
+    busy_in_other_project: bool = False
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ResponseListResponse(BaseModel):
+    """Страница общего списка откликов и приглашений"""
+
+    items: list[ResponseListItem]
+    total: int
+    page: int
+    limit: int
+    total_pages: int
+
+
 class MyProjectItem(BaseModel):
     """Схема проекта для страницы профиля"""
 

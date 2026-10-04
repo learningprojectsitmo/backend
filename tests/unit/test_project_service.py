@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, Mock  # Добавили AsyncMock
 
@@ -9,7 +10,8 @@ from src.core.exceptions import PermissionError, ValidationError
 from src.model.project import Project, ProjectStage, ProjectType, Response
 from src.model.resume import Resume
 from src.model.settings import SpaceSettings
-from src.model.user import Role
+from src.model.user import Role, User
+from src.model.workspace import WorkSpace
 from src.repository.project_repository import ProjectRepository
 from src.repository.resume_repository import ResumeRepository
 from src.schema.project import ProjectCreate, ProjectUpdate
@@ -1456,6 +1458,244 @@ class TestMultiProjectRestriction:
 
         # then
         mock_repository.create_response.assert_awaited_once()
+
+
+class TestListAllResponses:
+    """Тесты для ProjectService.list_all_responses (общий список откликов)"""
+
+    @staticmethod
+    def _make_row(
+        *,
+        response_id: int,
+        project_id: int,
+        workspace_id: int | None,
+        type_: str = "response",
+        status: str = "pending",
+    ) -> Response:
+        created = datetime(2026, 1, 1)
+        row = Response(
+            id=response_id,
+            respondent_id=42,
+            project_id=project_id,
+            type=type_,
+            status=status,
+            created_at=created,
+            updated_at=created,
+        )
+        workspace = None
+        if workspace_id is not None:
+            workspace = WorkSpace(id=workspace_id, name=f"Space {workspace_id}", author_id=1, status_id=1)
+        row.project = Project(
+            id=project_id, name=f"Project {project_id}", author_id=1, workspace_id=workspace_id, workspace=workspace
+        )
+        row.respondent = User(id=42, first_name="Анна", last_name="Петрова", email="anna@example.com")
+        return row
+
+    def _setup(
+        self,
+        *,
+        role_name: str | None,
+        editor_workspace_ids: list[int],
+        rows: list[Response],
+        allow_multi: bool = True,
+        total: int | None = None,
+    ) -> tuple[AsyncMock, ProjectService, Mock]:
+        mock_repository = Mock(spec=ProjectRepository)
+        mock_uow = Mock()
+        mock_session = AsyncMock()
+        mock_uow.session = mock_session
+        mock_repository.uow = mock_uow
+
+        editor_result = Mock()
+        editor_result.scalars.return_value.all.return_value = editor_workspace_ids
+
+        rows_result = Mock()
+        rows_result.scalars.return_value.all.return_value = rows
+
+        flags_result = Mock()
+        flags_result.all.return_value = [(ws, allow_multi) for ws in {r.project.workspace_id for r in rows}]
+
+        busy_result = Mock()
+        busy_result.scalars.return_value.all.return_value = []
+
+        # Ответы подбираются по тексту запроса, а не по порядку вызовов: у
+        # глобального админа критерий видимости возвращается сразу, и запрос
+        # за id пространств-редакторов не выполняется вовсе. Привязка к
+        # позиции `[0]` ломалась вслед за любым изменением числа запросов.
+        async def _execute(stmt: object) -> Mock:
+            sql = str(stmt).lower()
+            if "workspace_participation.workspace_id" in sql:
+                return editor_result
+            if "space_settings" in sql:
+                return flags_result
+            if "project_participation.participant_id" in sql:
+                return busy_result
+            return rows_result
+
+        mock_session.scalar = AsyncMock(return_value=total if total is not None else len(rows))
+        mock_session.execute = AsyncMock(side_effect=_execute)
+
+        viewer = User(id=7, first_name="Пётр", last_name="Преподаватель", email="t@example.com")
+        viewer.role = Role(id=2, name=role_name) if role_name else None
+        return mock_session, ProjectService(mock_repository), viewer
+
+    @staticmethod
+    def _page_query(mock_session: AsyncMock) -> str:
+        """SQL запроса выборки откликов (не одного из вспомогательных).
+
+        `literal_binds` — чтобы условия читались как `response.type = 'invitation'`,
+        а не как `:type_1`: проверять фильтры по месту.parameters куда менее читаемо.
+        """
+        for call in mock_session.execute.await_args_list:
+            stmt = call.args[0]
+            if "from response" not in str(stmt).lower():
+                continue
+            return str(stmt.compile(compile_kwargs={"literal_binds": True}))
+        raise AssertionError("запрос выборки откликов не выполнялся")
+
+    @pytest.mark.asyncio
+    async def test_admin_should_see_all_projects_without_scope(self):
+        # given
+        row = self._make_row(response_id=1, project_id=3, workspace_id=7)
+        mock_session, service, viewer = self._setup(role_name="admin", editor_workspace_ids=[], rows=[row])
+
+        # when
+        result = await service.list_all_responses(viewer, page=1, limit=20)
+
+        # then
+        assert result.total == 1
+        assert result.total_pages == 1
+        assert result.items[0].project_name == "Project 3"
+        assert result.items[0].workspace_name == "Space 7"
+        assert result.items[0].respondent_email == "anna@example.com"
+        # Админ не ограничен: критерий видимости не добавляется к выборке
+        page_query = self._page_query(mock_session)
+        assert "project.author_id" not in page_query
+
+    @pytest.mark.asyncio
+    async def test_sentinel_all_should_not_narrow_the_query(self):
+        # given
+        row = self._make_row(response_id=1, project_id=3, workspace_id=7)
+        mock_session, service, viewer = self._setup(role_name="admin", editor_workspace_ids=[], rows=[row])
+
+        # when
+        # «Все» на фронтенде отправляется как "all"; в БД таких значений нет,
+        # поэтому условие вида Response.type == "all" вернуло бы ноль строк.
+        await service.list_all_responses(viewer, page=1, limit=20, type_filter="all", status="all")
+
+        # then
+        # У admin scope тоже пустой, поэтому в запросе не должно быть WHERE вообще.
+        count_query = str(mock_session.scalar.await_args_list[0].args[0])
+        assert "WHERE" not in count_query.upper()
+
+    @pytest.mark.asyncio
+    async def test_teacher_should_be_scoped_to_own_and_editor_projects(self):
+        # given
+        row = self._make_row(response_id=1, project_id=3, workspace_id=7)
+        mock_session, service, viewer = self._setup(role_name="teacher", editor_workspace_ids=[7, 9], rows=[row])
+
+        # when
+        result = await service.list_all_responses(viewer, page=1, limit=20)
+
+        # then
+        page_query = self._page_query(mock_session)
+        assert "project.author_id = 7" in page_query
+        # Порядок внутри IN не фиксирован: id пространств приходят из set,
+        # поэтому сравниваем по составу, а не по строке целиком.
+        in_list = re.search(r"project\.workspace_id IN \(([^)]*)\)", page_query)
+        assert in_list, page_query
+        assert {int(part) for part in in_list.group(1).split(",")} == {7, 9}
+        assert result.items[0].id == 1
+
+    @pytest.mark.asyncio
+    async def test_teacher_without_editor_workspaces_should_see_only_own_projects(self):
+        # given
+        row = self._make_row(response_id=1, project_id=3, workspace_id=7)
+        mock_session, service, viewer = self._setup(role_name="teacher", editor_workspace_ids=[], rows=[row])
+
+        # when
+        result = await service.list_all_responses(viewer, page=1, limit=20)
+
+        # then
+        page_query = self._page_query(mock_session)
+        assert "project.author_id = 7" in page_query
+        assert "workspace_id IN" not in page_query
+        assert result.items[0].name == "Анна Петрова"
+
+    @pytest.mark.asyncio
+    async def test_filters_should_be_applied_before_pagination(self):
+        # given
+        row = self._make_row(response_id=1, project_id=3, workspace_id=7, type_="invitation", status="accepted")
+        mock_session, service, viewer = self._setup(role_name="admin", editor_workspace_ids=[], rows=[row], total=41)
+
+        # when
+        result = await service.list_all_responses(
+            viewer,
+            page=3,
+            limit=10,
+            type_filter="invitation",
+            status="accepted",
+            workspace_id=7,
+            project_id=3,
+            search="anna",
+        )
+
+        # then
+        assert result.total == 41
+        assert result.total_pages == 5
+        assert result.page == 3
+        assert result.limit == 10
+        page_query = self._page_query(mock_session)
+        assert "response.type = 'invitation'" in page_query
+        assert "response.status = 'accepted'" in page_query
+        assert "project.workspace_id = 7" in page_query
+        assert "response.project_id = 3" in page_query
+        # ilike рендерится как lower(...) LIKE lower(...), а не оператором ILIKE.
+        assert 'lower("user".first_name) LIKE lower(' in page_query
+        assert "OFFSET" in page_query
+        assert "ORDER BY response.created_at DESC" in page_query
+
+    @pytest.mark.asyncio
+    async def test_should_mark_busy_respondent_when_workspace_forbids_multi_participation(self):
+        # given
+        row = self._make_row(response_id=1, project_id=3, workspace_id=7, status="pending")
+        mock_session, service, viewer = self._setup(
+            role_name="admin", editor_workspace_ids=[], rows=[row], allow_multi=False
+        )
+        mock_session.execute = AsyncMock(
+            side_effect=[
+                self._rows_result(rows=[row]),
+                self._flags_result([(7, False)]),
+                self._busy_result([42]),
+            ]
+        )
+        mock_session.scalar = AsyncMock(return_value=1)
+
+        # when
+        result = await service.list_all_responses(viewer, page=1, limit=20)
+
+        # then
+        assert result.items[0].status == "in_team"
+        assert result.items[0].busy_in_other_project is True
+        assert result.items[0].allow_multi_project_participation is False
+
+    @staticmethod
+    def _rows_result(*, rows: list[Response]) -> Mock:
+        result = Mock()
+        result.scalars.return_value.all.return_value = rows
+        return result
+
+    @staticmethod
+    def _flags_result(rows: list[tuple[int, bool]]) -> Mock:
+        result = Mock()
+        result.all.return_value = rows
+        return result
+
+    @staticmethod
+    def _busy_result(participant_ids: list[int]) -> Mock:
+        result = Mock()
+        result.scalars.return_value.all.return_value = participant_ids
+        return result
 
 
 class TestRemoveParticipant:

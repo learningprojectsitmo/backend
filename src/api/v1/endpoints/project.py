@@ -26,11 +26,12 @@ from src.schema.project import (
     ProjectFull,
     ProjectListResponse,
     ProjectUpdate,
+    ResponseListResponse,
 )
 from src.services.audit_service import ACTIVITY_ITEMS_LIMIT, AuditService
 from src.services.auth_service import AuthService
 from src.services.kanban_service import KanbanService
-from src.services.project_service import ProjectService
+from src.services.project_service import RESPONSE_LIST_ROLES, ProjectService
 
 project_router = APIRouter(prefix="/projects", tags=["project"], dependencies=[Depends(setup_audit)])
 
@@ -189,6 +190,37 @@ async def fetch_my_invitations(
 ) -> MyInvitationListResponse:
     """Получить приглашения текущего пользователя"""
     return await project_service.get_my_invitations(current_user.id)
+
+
+@response_router.get("/", response_model=ResponseListResponse)
+async def fetch_all_responses(
+    page: int = Query(1, ge=1, description="Номер страницы"),
+    limit: int = Query(20, ge=1, le=100, description="Количество записей на странице"),
+    type: str | None = Query(None, description="Фильтр по типу: response или invitation"),
+    status: str | None = Query(None, description="Фильтр по статусу записи"),
+    workspace_id: int | None = Query(None, description="Фильтр по пространству"),
+    project_id: int | None = Query(None, description="Фильтр по проекту"),
+    search: str | None = Query(None, description="Поиск по имени или почте респондента"),
+    project_service: ProjectService = Depends(get_project_service),
+    current_user: User = Depends(get_current_user),
+) -> ResponseListResponse:
+    """Общий список откликов и приглашений по проектам пользователя.
+
+    Только admin/teacher: менеджеру пространства чужие отклики не нужны, он
+    ими не управляет. Область видимости проектов проверяет сервис.
+    """
+    if not current_user.role or current_user.role.name not in RESPONSE_LIST_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed to view responses of all projects")
+    return await project_service.list_all_responses(
+        current_user,
+        page=page,
+        limit=limit,
+        type_filter=type,
+        status=status,
+        workspace_id=workspace_id,
+        project_id=project_id,
+        search=search,
+    )
 
 
 @response_router.patch("/{response_id}/withdraw")

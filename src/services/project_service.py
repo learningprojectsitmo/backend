@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import and_, func, or_, select
+from sqlalchemy.orm import selectinload
 from sqlalchemy.sql.elements import ColumnElement
 
 from src.core.exceptions import NotFoundError, PermissionError, ValidationError
@@ -24,6 +25,9 @@ from src.schema.project import (
     ProjectListItem,
     ProjectStatusItem,
     ProjectUpdate,
+    ResponseListItem,
+    ResponseListResponse,
+    resolve_busy_status,
     resolve_status_fields,
 )
 from src.services.base_service import BaseService
@@ -37,6 +41,17 @@ if TYPE_CHECKING:
 
 # Роли в пространстве, которым разрешено создавать проекты (совпадает с stage_service.MANAGE_ROLES).
 PROJECT_CREATE_ROLES: frozenset[str] = frozenset({"teacher", "admin", "manager"})
+
+#: Глобальные роли, которым доступен общий список откликов и приглашений.
+#: Менеджер пространства отклики чужих проектов не видит: он ими не управляет.
+RESPONSE_LIST_ROLES: frozenset[str] = frozenset({"admin", "teacher"})
+
+
+def _user_full_name(user: User | None) -> str:
+    """Отображаемое имя пользователя; пустая строка вместо ``None``."""
+    if not user:
+        return ""
+    return f"{user.first_name or ''} {user.last_name or ''}".strip()
 
 
 class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
@@ -277,6 +292,174 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
             for inv in invitations
         ]
         return MyInvitationListResponse(items=items, total=len(items))
+
+    async def list_all_responses(
+        self,
+        viewer: User,
+        *,
+        page: int = 1,
+        limit: int = 20,
+        type_filter: str | None = None,
+        status: str | None = None,
+        workspace_id: int | None = None,
+        project_id: int | None = None,
+        search: str | None = None,
+    ) -> ResponseListResponse:
+        """Отклики и приглашения по всем проектам, доступным пользователю.
+
+        Область видимости задаёт :meth:`_responses_scope_criterion`:
+        глобальный админ видит всё, преподаватель — проекты, которые он создал,
+        и проекты пространств, где у него роль admin/teacher. Фильтры применяются
+        в SQL, а не к выбранной странице, иначе ``total`` отражал бы длину
+        обрезанной выборки и пагинация всегда показывала бы одну страницу.
+        """
+        scope = await self._responses_scope_criterion(viewer)
+
+        base = select(Response).join(Project, Project.id == Response.project_id)
+        if scope is not None:
+            base = base.where(scope)
+        # "all" — сентинел фронтенда («фильтр не выбран»), а не значение из БД:
+        # в response.type лежат только "response"/"invitation". Проверка на
+        # непустоту ниже иначе превратила бы «Все» в пустую выдачу.
+        if type_filter and type_filter != "all":
+            base = base.where(Response.type == type_filter)
+        if status and status != "all":
+            base = base.where(Response.status == status)
+        if workspace_id is not None:
+            base = base.where(Project.workspace_id == workspace_id)
+        if project_id is not None:
+            base = base.where(Response.project_id == project_id)
+        if search and search.strip():
+            term = f"%{search.strip()}%"
+            base = base.where(
+                Response.respondent_id.in_(
+                    select(User.id).where(
+                        or_(User.first_name.ilike(term), User.last_name.ilike(term), User.email.ilike(term))
+                    )
+                )
+            )
+
+        session = self._project_repository.uow.session
+        total = int(await session.scalar(select(func.count()).select_from(base.subquery())) or 0)
+
+        result = await session.execute(
+            base.options(
+                selectinload(Response.respondent),
+                selectinload(Response.inviter),
+                selectinload(Response.vacancy),
+                selectinload(Response.project).selectinload(Project.workspace),
+            )
+            .order_by(Response.created_at.desc(), Response.id.desc())
+            .offset((page - 1) * limit)
+            .limit(limit)
+        )
+        rows = list(result.scalars().all())
+
+        return ResponseListResponse(
+            items=await self._to_response_list_items(rows),
+            total=total,
+            page=page,
+            limit=limit,
+            total_pages=(total + limit - 1) // limit if total > 0 else 0,
+        )
+
+    async def _responses_scope_criterion(self, viewer: User) -> ColumnElement[bool] | None:
+        """Критерий видимости проектов для глобального списка откликов.
+
+        ``None`` — видно всё (глобальный админ). Иначе — свои проекты плюс
+        проекты пространств, где пользователь admin/teacher: это тот же состав
+        редакторов, которым видны черновики проектов.
+        """
+        if viewer.role and viewer.role.name == "admin":
+            return None
+        editor_workspace_ids = await self._editor_workspace_ids(viewer.id, None)
+        if not editor_workspace_ids:
+            return Project.author_id == viewer.id
+        return or_(Project.author_id == viewer.id, Project.workspace_id.in_(editor_workspace_ids))
+
+    async def _to_response_list_items(self, rows: list[Response]) -> list[ResponseListItem]:
+        """Ответы и приглашения страницы в схемы общего списка."""
+        if not rows:
+            return []
+
+        workspace_ids = {row.project.workspace_id for row in rows if row.project}
+        flags = await self._resolve_allow_multi_participation_batch(workspace_ids)
+        # Занятость считается только там, где пространство запрещает несколько
+        # команд: в режиме с множественными командами «уже в другой команде»
+        # для человека в двух проектах — норма, а не блокировка.
+        busy_by_project = await self._busy_respondents_by_project(
+            [
+                (row.project_id, row.project.workspace_id if row.project else None)
+                for row in rows
+                if not flags.get(row.project.workspace_id if row.project else None, True)
+            ]
+        )
+
+        items: list[ResponseListItem] = []
+        for row in rows:
+            project = row.project
+            respondent = row.respondent
+            workspace_id = project.workspace_id if project else None
+            allow_multi = flags.get(workspace_id, True)
+            items.append(
+                ResponseListItem(
+                    id=row.id,
+                    project_id=row.project_id,
+                    project_name=project.name if project else "",
+                    workspace_id=workspace_id,
+                    workspace_name=project.workspace.name if project and project.workspace else None,
+                    user_id=row.respondent_id,
+                    name=_user_full_name(respondent),
+                    respondent_email=respondent.email if respondent else None,
+                    inviter_name=_user_full_name(row.inviter) if row.inviter_id else None,
+                    vacancy_id=row.vacancy_id,
+                    role=row.vacancy.title if row.vacancy else "",
+                    resume_url=build_resume_url(row.resume_id, workspace_id=workspace_id),
+                    response_date=str(row.created_at.date()) if row.created_at else "",
+                    type=row.type,
+                    allow_multi_project_participation=allow_multi,
+                    **resolve_busy_status(
+                        row.status,
+                        row.respondent_id,
+                        busy_by_project.get(row.project_id),
+                        allow_multi,
+                    ),
+                    created_at=row.created_at,
+                    updated_at=row.updated_at,
+                )
+            )
+        return items
+
+    async def _busy_respondents_by_project(self, scopes: list[tuple[int, int | None]]) -> dict[int, set[int]]:
+        """Занятые респонденты по проекту: участники ДРУГИХ проектов пространства.
+
+        Один запрос на пространство, а не на проект: страница общего списка
+        пересекает много проектов, и поштучный подсчёт дал бы до ``limit``
+        одинаковых запросов. Пустое пространство (``None``) пропускаем —
+        сравнивать не с чем, и проектов без пространства в выборке не бывает.
+        """
+        project_ids_by_workspace: dict[int, set[int]] = {}
+        for project_id, workspace_id in scopes:
+            if workspace_id:
+                project_ids_by_workspace.setdefault(workspace_id, set()).add(project_id)
+        if not project_ids_by_workspace:
+            return {}
+
+        busy: dict[int, set[int]] = {}
+        for workspace_id, project_ids in project_ids_by_workspace.items():
+            result = await self._project_repository.uow.session.execute(
+                select(ProjectParticipation.participant_id)
+                .join(Project, Project.id == ProjectParticipation.project_id)
+                .where(
+                    Project.workspace_id == workspace_id,
+                    Project.id.notin_(project_ids),
+                )
+                .distinct()
+            )
+            participants = set(result.scalars().all())
+            for project_id in project_ids:
+                busy[project_id] = participants
+        return busy
 
     async def get_projects_by_ids(self, project_ids: list[int], viewer_id: int) -> MyProjectListResponse:
         """Получить проекты по списку ID (черновики — только для автора)"""
