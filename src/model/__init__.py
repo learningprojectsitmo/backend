@@ -10,6 +10,7 @@ from src.model.language import Language
 from src.model.notification import Notification, NotificationType
 from src.model.portfolio import Portfolio
 from src.model.project import Project, ProjectParticipation, ProjectStatus, ProjectVacancy, Response, Tag
+from src.model.push import PushOutbox, PushOutboxStatus, PushPlatform, PushSubscription
 from src.model.resume import (
     Resume,
     ResumeEducation,
@@ -45,6 +46,10 @@ __all__ = [
     "ProjectParticipation",
     "ProjectStatus",
     "ProjectVacancy",
+    "PushOutbox",
+    "PushOutboxStatus",
+    "PushPlatform",
+    "PushSubscription",
     "Response",
     "Resume",
     "ResumeEducation",

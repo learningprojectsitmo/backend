@@ -16,6 +16,7 @@ from src.core.logging_config import get_logger, setup_logging
 from src.core.metrics import setup_metrics
 from src.core.middleware.logging_middleware import setup_logging_middleware
 from src.core.sentry import setup_sentry
+from src.services.push_worker import build_worker
 
 # Инициализация Sentry/GlitchTip до создания приложения
 setup_sentry()
@@ -54,10 +55,21 @@ async def lifespan(_app: FastAPI):
     # Базовые справочные данные + пользователь-администратор
     await seed_fixtures_on_startup()
 
+    # Воркер доставки push. Запускается после сидинга, чтобы первая же
+    # рассылка не ловила ещё не засеянные таблицы. Отсутствие ключа Firebase —
+    # не повод не поднимать приложение, поэтому build_worker возвращает None.
+    push_worker = build_worker()
+    if push_worker:
+        push_worker.start()
+
     logger.info("API startup completed successfully")
     yield
 
     logger.info("API shutdown initiated")
+    # Гасим воркер до остановки приложения: иначе он может остаться в
+    # середине сетевого вызова к FCM и зависнуть на event loop.
+    if push_worker:
+        await push_worker.stop()
 
 
 app = FastAPI(

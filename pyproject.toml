@@ -25,6 +25,9 @@ dependencies = [
     "loguru>=0.7.3",
     "asyncpg>=0.31.0",
     "anyio>=4.11.0",
+    # httpx уехал в runtime-зависимости: push-воркер ходит в FCM HTTP v1
+    # синхронно-асинхронным клиентом, и в dev-экстра он был бы недоступен.
+    "httpx>=0.25.0",
     "greenlet>=3.2.4",
     "aiosmtplib>=3.0.2",
     "sentry-sdk[fastapi]>=2.68.1",

@@ -17,6 +17,7 @@ from src.repository.password_reset_repository import PasswordResetRepository
 from src.repository.permission_repository import PermissionRepository
 from src.repository.portfolio_repository import PortfolioRepository
 from src.repository.project_repository import ProjectRepository
+from src.repository.push_repository import PushOutboxRepository
 from src.repository.resume_repository import ResumeRepository
 from src.repository.role_repository import RolePermissionRepository, RoleRepository
 from src.repository.session_repository import SessionRepository
@@ -45,6 +46,7 @@ from src.services.permission_service import PermissionService
 from src.services.portfolio_service import PortfolioService
 from src.services.profile_service import ProfileService
 from src.services.project_service import ProjectService
+from src.services.push_subscription_service import PushSubscriptionService
 from src.services.resume_service import ResumeService
 from src.services.role_service import RoleService
 from src.services.search_service import SearchService
@@ -199,10 +201,21 @@ async def get_resume_service(
     )
 
 
+async def get_push_repository(uow: IUnitOfWork = Depends(get_uow)) -> PushOutboxRepository:
+    return PushOutboxRepository(uow)
+
+
 async def get_notification_service(
     notification_repository: NotificationRepository = Depends(get_notification_repository),
+    push_repository: PushOutboxRepository = Depends(get_push_repository),
 ) -> NotificationService:
-    return NotificationService(notification_repository)
+    return NotificationService(notification_repository, push_repository)
+
+
+async def get_push_subscription_service(
+    push_repository: PushOutboxRepository = Depends(get_push_repository),
+) -> PushSubscriptionService:
+    return PushSubscriptionService(push_repository)
 
 
 def get_mail_service() -> MailService:

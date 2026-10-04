@@ -21,6 +21,7 @@ The schema can be edited on google drive:
 - [Logging system](logging_system.md)
 - [Docker](docker.md)
 - [Database design](database_schema.md)
+- [Push (FCM): что сделано и что осталось](push_fcm_plan.md)
 
 # Ideas and notes for future
 Are stored in a separate directory `wiki/for-future`

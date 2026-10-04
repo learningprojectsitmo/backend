@@ -1,0 +1,1584 @@
+<mxfile>
+  <diagram name="Карта навигации" id="mob-map">
+    <mxGraphModel dx="2947" dy="296" grid="1" gridSize="10" guides="1" tooltips="0" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1780" pageHeight="758" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="m1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#1a1a1a;fontSize=13;fontSize=20;fontStyle=1;" value="&lt;b&gt;Карта навигации мобильного приложения&lt;/b&gt;" vertex="1">
+          <mxGeometry height="34" width="1700" x="40" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="m2" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#666666;fontSize=13;fontSize=13;align=left;" value="Flutter · 4 вкладки + push-маршруты · сплошная линия = основной путь, пунктир = возврат" vertex="1">
+          <mxGeometry height="24" width="1700" x="40" y="78" as="geometry" />
+        </mxCell>
+        <mxCell id="m3" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#1a1a1a;fontSize=13;fontSize=15;fontStyle=1;align=left;" value="&lt;b&gt;1. Гейт авторизации&lt;/b&gt;" vertex="1">
+          <mxGeometry height="26" width="1700" x="40" y="118" as="geometry" />
+        </mxCell>
+        <mxCell id="m4" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontColor=#1a1a1a;fontSize=13;verticalAlign=middle;" value="&lt;b&gt;Splash&lt;/b&gt;&lt;div style=&quot;font-size:11px;color:#666&quot;&gt;чтение токена из Keychain&lt;/div&gt;" vertex="1">
+          <mxGeometry height="56" width="190" x="310" y="150" as="geometry" />
+        </mxCell>
+        <mxCell id="m5" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontColor=#1a1a1a;fontSize=13;verticalAlign=middle;" value="&lt;b&gt;Вход&lt;/b&gt;&lt;div style=&quot;font-size:11px;color:#666&quot;&gt;POST /auth/login&lt;/div&gt;" vertex="1">
+          <mxGeometry height="56" width="190" x="590" y="86" as="geometry" />
+        </mxCell>
+        <mxCell id="m6" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontColor=#1a1a1a;fontSize=13;verticalAlign=middle;" value="&lt;b&gt;App Shell&lt;/b&gt;&lt;div style=&quot;font-size:11px;color:#666&quot;&gt;StatefulShellRoute.indexedStack&lt;/div&gt;" vertex="1">
+          <mxGeometry height="56" width="240" x="900" y="150" as="geometry" />
+        </mxCell>
+        <mxCell id="m7" edge="1" parent="1" source="m4" target="m5" value="нет токена">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint as="sourcePoint" />
+            <mxPoint as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="m8" edge="1" parent="1" source="m5" target="m6" value="успех">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint as="sourcePoint" />
+            <mxPoint as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="m9" edge="1" parent="1" source="m4" target="m6" value="есть токен">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint as="sourcePoint" />
+            <mxPoint as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="m10" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#1a1a1a;fontSize=13;fontSize=15;fontStyle=1;align=left;" value="&lt;b&gt;2. Нижний навигатор (табы сохраняют стек при переключении)&lt;/b&gt;" vertex="1">
+          <mxGeometry height="26" width="1700" x="40" y="224" as="geometry" />
+        </mxCell>
+        <mxCell id="m11" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontColor=#1a1a1a;fontSize=13;verticalAlign=middle;" value="&lt;b&gt;Лента&lt;br&gt;проектов&lt;/b&gt;&lt;div style=&quot;font-size:11px;color:#666&quot;&gt;/app/home&lt;/div&gt;" vertex="1">
+          <mxGeometry height="64" width="210" x="40" y="256" as="geometry" />
+        </mxCell>
+        <mxCell id="m12" edge="1" parent="1" source="m6" target="m11" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint as="sourcePoint" />
+            <mxPoint as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="m13" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontColor=#1a1a1a;fontSize=13;verticalAlign=middle;" value="&lt;b&gt;Мои&lt;br&gt;проекты&lt;/b&gt;&lt;div style=&quot;font-size:11px;color:#666&quot;&gt;/app/projects&lt;/div&gt;" vertex="1">
+          <mxGeometry height="64" width="210" x="1160" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="m14" edge="1" parent="1" source="m6" target="m13" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint as="sourcePoint" />
+            <mxPoint as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="m15" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontColor=#1a1a1a;fontSize=13;verticalAlign=middle;" value="&lt;b&gt;Резюме&lt;/b&gt;&lt;div style=&quot;font-size:11px;color:#666&quot;&gt;/app/resume&lt;/div&gt;" vertex="1">
+          <mxGeometry height="64" width="210" x="500" y="256" as="geometry" />
+        </mxCell>
+        <mxCell id="m16" edge="1" parent="1" source="m6" target="m15" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint as="sourcePoint" />
+            <mxPoint as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="m17" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontColor=#1a1a1a;fontSize=13;verticalAlign=middle;" value="&lt;b&gt;Профиль&lt;/b&gt;&lt;div style=&quot;font-size:11px;color:#666&quot;&gt;/app/profile&lt;/div&gt;" vertex="1">
+          <mxGeometry height="64" width="210" x="1500" y="86" as="geometry" />
+        </mxCell>
+        <mxCell id="m18" edge="1" parent="1" source="m6" target="m17" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint as="sourcePoint" />
+            <mxPoint as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="m19" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#1a1a1a;fontSize=13;fontSize=15;fontStyle=1;align=left;" value="&lt;b&gt;3. Внетабовые маршруты (открываются из app bar, пуша или deep link)&lt;/b&gt;" vertex="1">
+          <mxGeometry height="26" width="1700" x="40" y="338" as="geometry" />
+        </mxCell>
+        <mxCell id="m20" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=10;verticalAlign=middle;" value="&lt;b&gt;Уведомления&lt;/b&gt;&lt;div style=&quot;font-size:11px;color:#666&quot;&gt;/app/notifications&lt;/div&gt;" vertex="1">
+          <mxGeometry height="60" width="410" x="40" y="370" as="geometry" />
+        </mxCell>
+        <mxCell id="m21" edge="1" parent="1" source="m6" target="m20" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint as="sourcePoint" />
+            <mxPoint as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="m22" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=10;verticalAlign=middle;" value="&lt;b&gt;Поиск&lt;/b&gt;&lt;div style=&quot;font-size:11px;color:#666&quot;&gt;/app/search&lt;/div&gt;" vertex="1">
+          <mxGeometry height="60" width="410" x="470" y="370" as="geometry" />
+        </mxCell>
+        <mxCell id="m23" edge="1" parent="1" source="m6" target="m22" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint as="sourcePoint" />
+            <mxPoint as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="m24" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=10;verticalAlign=middle;" value="&lt;b&gt;Отклики&lt;/b&gt;&lt;div style=&quot;font-size:11px;color:#666&quot;&gt;/app/applications&lt;/div&gt;" vertex="1">
+          <mxGeometry height="60" width="410" x="1370" y="510" as="geometry" />
+        </mxCell>
+        <mxCell id="m25" edge="1" parent="1" source="m6" target="m24" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint as="sourcePoint" />
+            <mxPoint as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="m26" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=10;verticalAlign=middle;" value="&lt;b&gt;Приглашения&lt;/b&gt;&lt;div style=&quot;font-size:11px;color:#666&quot;&gt;/app/invitations&lt;/div&gt;" vertex="1">
+          <mxGeometry height="60" width="410" x="1350" y="206" as="geometry" />
+        </mxCell>
+        <mxCell id="m27" edge="1" parent="1" source="m6" target="m26" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint as="sourcePoint" />
+            <mxPoint as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="m28" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d0cece;strokeColor=#9673a6;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=10;verticalAlign=middle;" value="&lt;b&gt;Сессии&lt;/b&gt;&lt;div style=&quot;font-size:11px;color:#666&quot;&gt;/app/sessions&lt;/div&gt;" vertex="1">
+          <mxGeometry height="60" width="410" x="40" y="442" as="geometry" />
+        </mxCell>
+        <mxCell id="m29" edge="1" parent="1" source="m6" target="m28" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint as="sourcePoint" />
+            <mxPoint as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="m30" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=10;verticalAlign=middle;" value="&lt;b&gt;Карточка проекта&lt;/b&gt;&lt;div style=&quot;font-size:11px;color:#666&quot;&gt;/app/projects/:id&lt;/div&gt;" vertex="1">
+          <mxGeometry height="60" width="410" x="460" y="445" as="geometry" />
+        </mxCell>
+        <mxCell id="m31" edge="1" parent="1" source="m6" target="m30" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint as="sourcePoint" />
+            <mxPoint as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="m32" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=10;verticalAlign=middle;" value="&lt;b&gt;Резюме&lt;/b&gt;&lt;div style=&quot;font-size:11px;color:#666&quot;&gt;/app/resume/:id&lt;/div&gt;" vertex="1">
+          <mxGeometry height="60" width="410" x="930" y="430" as="geometry" />
+        </mxCell>
+        <mxCell id="m33" edge="1" parent="1" source="m6" target="m32" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint as="sourcePoint" />
+            <mxPoint as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="m34" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=10;verticalAlign=middle;" value="&lt;b&gt;Публичный профиль&lt;/b&gt;&lt;div style=&quot;font-size:11px;color:#666&quot;&gt;/app/profile/:userId&lt;/div&gt;" vertex="1">
+          <mxGeometry height="60" width="410" x="1350" y="300" as="geometry" />
+        </mxCell>
+        <mxCell id="m35" edge="1" parent="1" source="m6" target="m34" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint as="sourcePoint" />
+            <mxPoint as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="m36" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#1a1a1a;fontSize=13;fontSize=15;fontStyle=1;align=left;" value="&lt;b&gt;4. Типы переходов и правила&lt;/b&gt;" vertex="1">
+          <mxGeometry height="26" width="1700" x="40" y="520" as="geometry" />
+        </mxCell>
+        <mxCell id="m37" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#cccccc;fontColor=#1a1a1a;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;push&lt;/b&gt;" vertex="1">
+          <mxGeometry height="30" width="150" x="40" y="552" as="geometry" />
+        </mxCell>
+        <mxCell id="m38" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="Стековый переход вверх: детализация объекта. Возврат кнопкой «назад»." vertex="1">
+          <mxGeometry height="30" width="1545" x="195" y="552" as="geometry" />
+        </mxCell>
+        <mxCell id="m39" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#cccccc;fontColor=#1a1a1a;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;tab&lt;/b&gt;" vertex="1">
+          <mxGeometry height="30" width="150" x="40" y="586" as="geometry" />
+        </mxCell>
+        <mxCell id="m40" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="Переключение вкладки сохраняет позицию скролла и стек своей ветки." vertex="1">
+          <mxGeometry height="30" width="1545" x="195" y="586" as="geometry" />
+        </mxCell>
+        <mxCell id="m41" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#cccccc;fontColor=#1a1a1a;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;modal&lt;/b&gt;" vertex="1">
+          <mxGeometry height="30" width="150" x="40" y="620" as="geometry" />
+        </mxCell>
+        <mxCell id="m42" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="Bottom sheet / full-screen dialog: отклик, подтверждения, выбор вакансии." vertex="1">
+          <mxGeometry height="30" width="1545" x="195" y="620" as="geometry" />
+        </mxCell>
+        <mxCell id="m43" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#cccccc;fontColor=#1a1a1a;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;root replace&lt;/b&gt;" vertex="1">
+          <mxGeometry height="30" width="150" x="40" y="654" as="geometry" />
+        </mxCell>
+        <mxCell id="m44" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="После логина навигация делает replace на /app/home — назад не возвращает на /login." vertex="1">
+          <mxGeometry height="30" width="1545" x="195" y="654" as="geometry" />
+        </mxCell>
+        <mxCell id="m45" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#cccccc;fontColor=#1a1a1a;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;deep link&lt;/b&gt;" vertex="1">
+          <mxGeometry height="30" width="150" x="40" y="688" as="geometry" />
+        </mxCell>
+        <mxCell id="m46" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="itmo://project/12 → прямой переход в /app/projects/12, минуя табы." vertex="1">
+          <mxGeometry height="30" width="1545" x="195" y="688" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="Auth: экраны" id="mob-auth">
+    <mxGraphModel dx="3854" dy="388" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1810" pageHeight="754" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="m1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#1a1a1a;fontSize=13;fontSize=20;fontStyle=1;" value="&lt;b&gt;Авторизация и вход&lt;/b&gt;" vertex="1">
+          <mxGeometry height="34" width="1700" x="40" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="m2" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#666666;fontSize=13;fontSize=13;align=left;" value="7 экранов · guest-ветка · после успеха — replace на /app/home" vertex="1">
+          <mxGeometry height="24" width="1700" x="40" y="78" as="geometry" />
+        </mxCell>
+        <mxCell id="m3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontColor=#1a1a1a;fontSize=13;verticalAlign=middle;" value="&lt;b&gt;Splash&lt;/b&gt;" vertex="1">
+          <mxGeometry height="50" width="230" x="40" y="118" as="geometry" />
+        </mxCell>
+        <mxCell id="m4" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontColor=#1a1a1a;fontSize=13;verticalAlign=middle;" value="&lt;b&gt;Вход&lt;/b&gt;" vertex="1">
+          <mxGeometry height="50" width="230" x="790" y="300" as="geometry" />
+        </mxCell>
+        <mxCell id="m5" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontColor=#1a1a1a;fontSize=13;verticalAlign=middle;" value="&lt;b&gt;Имя&lt;/b&gt;" vertex="1">
+          <mxGeometry height="50" width="230" x="1070" y="32" as="geometry" />
+        </mxCell>
+        <mxCell id="m6" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontColor=#1a1a1a;fontSize=13;verticalAlign=middle;" value="&lt;b&gt;Контакты&lt;/b&gt;" vertex="1">
+          <mxGeometry height="50" width="230" x="1250" y="230" as="geometry" />
+        </mxCell>
+        <mxCell id="m7" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontColor=#1a1a1a;fontSize=13;verticalAlign=middle;" value="&lt;b&gt;Код&lt;/b&gt;" vertex="1">
+          <mxGeometry height="50" width="230" x="900" y="168" as="geometry" />
+        </mxCell>
+        <mxCell id="m8" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontColor=#1a1a1a;fontSize=13;verticalAlign=middle;" value="&lt;b&gt;Email&lt;/b&gt;" vertex="1">
+          <mxGeometry height="50" width="230" x="1480" y="310" as="geometry" />
+        </mxCell>
+        <mxCell id="m9" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontColor=#1a1a1a;fontSize=13;verticalAlign=middle;" value="&lt;b&gt;Пароль&lt;/b&gt;" vertex="1">
+          <mxGeometry height="50" width="230" x="1480" y="100" as="geometry" />
+        </mxCell>
+        <mxCell id="m10" edge="1" parent="1" source="m3" target="m4" value="нет токена">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint as="sourcePoint" />
+            <mxPoint as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="m11" edge="1" parent="1" source="m4" target="m6" value="регистрация">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint as="sourcePoint" />
+            <mxPoint as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="m12" edge="1" parent="1" source="m6" target="m7" value="далее">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint as="sourcePoint" />
+            <mxPoint as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="m13" edge="1" parent="1" source="m7" target="m4" value="верно">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint as="sourcePoint" />
+            <mxPoint as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="m14" edge="1" parent="1" source="m4" target="m8" value="забыли пароль">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint as="sourcePoint" />
+            <mxPoint as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="m15" edge="1" parent="1" source="m8" target="m9" value="письмо">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint as="sourcePoint" />
+            <mxPoint as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="m16" edge="1" parent="1" source="m9" target="m3" value="готово">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint as="sourcePoint" />
+            <mxPoint as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="m17" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#1a1a1a;fontSize=13;fontSize=15;fontStyle=1;align=left;" value="&lt;b&gt;Экраны и эндпоинты&lt;/b&gt;" vertex="1">
+          <mxGeometry height="26" width="1700" x="20" y="377" as="geometry" />
+        </mxCell>
+        <mxCell id="m18" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eeeeee;strokeColor=#999999;fontColor=#111111;fontSize=13;fontSize=12;align=left;spacingLeft=8;" value="&lt;b&gt;Экран&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="250" x="20" y="420" as="geometry" />
+        </mxCell>
+        <mxCell id="m19" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eeeeee;strokeColor=#999999;fontColor=#111111;fontSize=13;fontSize=12;align=left;spacingLeft=8;" value="&lt;b&gt;Что на экране&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="700" x="270" y="420" as="geometry" />
+        </mxCell>
+        <mxCell id="m20" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eeeeee;strokeColor=#999999;fontColor=#111111;fontSize=13;fontSize=12;align=left;spacingLeft=8;" value="&lt;b&gt;API бэкенда&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="750" x="970" y="420" as="geometry" />
+        </mxCell>
+        <mxCell id="m21" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;Splash&lt;/b&gt;&lt;div style=&quot;font-size:10px;color:#888&quot;&gt;splash&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="250" x="20" y="450" as="geometry" />
+        </mxCell>
+        <mxCell id="m22" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Логотип, спиннер, восстановление сессии из secure-storage" vertex="1">
+          <mxGeometry height="40" width="700" x="270" y="450" as="geometry" />
+        </mxCell>
+        <mxCell id="m23" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f0f0f0;strokeColor=#6c8ebf;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="&lt;div style=&quot;font-size:11px;color:#555&quot;&gt;—&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="750" x="970" y="450" as="geometry" />
+        </mxCell>
+        <mxCell id="m24" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;Вход&lt;/b&gt;&lt;div style=&quot;font-size:10px;color:#888&quot;&gt;login&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="250" x="20" y="492" as="geometry" />
+        </mxCell>
+        <mxCell id="m25" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Email + пароль, «забыли пароль», ссылка на регистрацию" vertex="1">
+          <mxGeometry height="40" width="700" x="270" y="492" as="geometry" />
+        </mxCell>
+        <mxCell id="m26" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7f7f7;strokeColor=#6c8ebf;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="&lt;div style=&quot;font-size:11px;color:#555&quot;&gt;POST /auth/login&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="750" x="970" y="492" as="geometry" />
+        </mxCell>
+        <mxCell id="m27" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;Регистрация: имя&lt;/b&gt;&lt;div style=&quot;font-size:10px;color:#888&quot;&gt;reg_name&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="250" x="20" y="534" as="geometry" />
+        </mxCell>
+        <mxCell id="m28" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Имя, фамилия, отчество,username" vertex="1">
+          <mxGeometry height="40" width="700" x="270" y="534" as="geometry" />
+        </mxCell>
+        <mxCell id="m29" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7f7f7;strokeColor=#6c8ebf;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="&lt;div style=&quot;font-size:11px;color:#555&quot;&gt;POST /signup/request&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="750" x="970" y="534" as="geometry" />
+        </mxCell>
+        <mxCell id="m30" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;Регистрация: контакты&lt;/b&gt;&lt;div style=&quot;font-size:10px;color:#888&quot;&gt;reg_contacts&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="250" x="20" y="576" as="geometry" />
+        </mxCell>
+        <mxCell id="m31" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Email, телефон, согласие на обработку" vertex="1">
+          <mxGeometry height="40" width="700" x="270" y="576" as="geometry" />
+        </mxCell>
+        <mxCell id="m32" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f0f0f0;strokeColor=#6c8ebf;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="&lt;div style=&quot;font-size:11px;color:#555&quot;&gt;—&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="750" x="970" y="576" as="geometry" />
+        </mxCell>
+        <mxCell id="m33" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;Регистрация: код&lt;/b&gt;&lt;div style=&quot;font-size:10px;color:#888&quot;&gt;reg_confirm&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="250" x="20" y="618" as="geometry" />
+        </mxCell>
+        <mxCell id="m34" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="6-значный код, таймер ресенда, кнопка «Другой код»" vertex="1">
+          <mxGeometry height="40" width="700" x="270" y="618" as="geometry" />
+        </mxCell>
+        <mxCell id="m35" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7f7f7;strokeColor=#6c8ebf;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="&lt;div style=&quot;font-size:11px;color:#555&quot;&gt;POST /signup/{id}/verify, /resend-code&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="750" x="970" y="618" as="geometry" />
+        </mxCell>
+        <mxCell id="m36" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;Сброс: email&lt;/b&gt;&lt;div style=&quot;font-size:10px;color:#888&quot;&gt;reset_email&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="250" x="20" y="660" as="geometry" />
+        </mxCell>
+        <mxCell id="m37" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Ввод email, отправка письма со ссылкой" vertex="1">
+          <mxGeometry height="40" width="700" x="270" y="660" as="geometry" />
+        </mxCell>
+        <mxCell id="m38" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7f7f7;strokeColor=#6c8ebf;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="&lt;div style=&quot;font-size:11px;color:#555&quot;&gt;POST /auth/password-reset/request&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="750" x="970" y="660" as="geometry" />
+        </mxCell>
+        <mxCell id="m39" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;Сброс: пароль&lt;/b&gt;&lt;div style=&quot;font-size:10px;color:#888&quot;&gt;reset_pass&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="250" x="20" y="702" as="geometry" />
+        </mxCell>
+        <mxCell id="m40" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Новый пароль + подтверждение, проверка токена" vertex="1">
+          <mxGeometry height="40" width="700" x="270" y="702" as="geometry" />
+        </mxCell>
+        <mxCell id="m41" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7f7f7;strokeColor=#6c8ebf;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="&lt;div style=&quot;font-size:11px;color:#555&quot;&gt;GET /auth/password-reset/validate, POST …/confirm&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="750" x="970" y="702" as="geometry" />
+        </mxCell>
+        <mxCell id="m42" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#1a1a1a;fontSize=13;fontSize=15;fontStyle=1;align=left;" value="&lt;b&gt;Особенности реализации&lt;/b&gt;" vertex="1">
+          <mxGeometry height="26" width="1700" x="20" y="764" as="geometry" />
+        </mxCell>
+        <mxCell id="m43" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="• Токены: access хранится в памяти, refresh — в flutter_secure_storage (Keychain на iOS, EncryptedSharedPreferences на Android)." vertex="1">
+          <mxGeometry height="28" width="1700" x="20" y="796" as="geometry" />
+        </mxCell>
+        <mxCell id="m44" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="• Ротация refresh с детектом replay (token_family) работает и на мобильном, но при reuse нужно чистить хранилище и слать на логин." vertex="1">
+          <mxGeometry height="28" width="1700" x="20" y="826" as="geometry" />
+        </mxCell>
+        <mxCell id="m45" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="• Оффлайн: при недоступном /auth/me приложение пускает в гостевой режим — только лента проектов и поиск." vertex="1">
+          <mxGeometry height="28" width="1700" x="20" y="856" as="geometry" />
+        </mxCell>
+        <mxCell id="m46" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="• Код подтверждения: 60-секундный таймер ресенда, поле ввода на 6 ячеек с автофокусом." vertex="1">
+          <mxGeometry height="28" width="1700" x="20" y="886" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="Профиль" id="mob-profile">
+    <mxGraphModel dx="3854" dy="388" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1780" pageHeight="932" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="m1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#1a1a1a;fontSize=13;fontSize=20;fontStyle=1;" value="&lt;b&gt;Профиль&lt;/b&gt;" vertex="1">
+          <mxGeometry height="34" width="1700" x="40" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="m2" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#666666;fontSize=13;fontSize=13;align=left;" value="Мой профиль · редактирование · образование · языки · портфолио · публичный профиль" vertex="1">
+          <mxGeometry height="24" width="1700" x="40" y="78" as="geometry" />
+        </mxCell>
+        <mxCell id="m3" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#1a1a1a;fontSize=13;fontSize=15;fontStyle=1;align=left;" value="&lt;b&gt;Экраны&lt;/b&gt;" vertex="1">
+          <mxGeometry height="26" width="1700" x="40" y="118" as="geometry" />
+        </mxCell>
+        <mxCell id="m4" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eeeeee;strokeColor=#999999;fontColor=#111111;fontSize=13;fontSize=12;align=left;spacingLeft=8;" value="&lt;b&gt;Экран&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="250" x="40" y="150" as="geometry" />
+        </mxCell>
+        <mxCell id="m5" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eeeeee;strokeColor=#999999;fontColor=#111111;fontSize=13;fontSize=12;align=left;spacingLeft=8;" value="&lt;b&gt;Что на экране&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="700" x="290" y="150" as="geometry" />
+        </mxCell>
+        <mxCell id="m6" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eeeeee;strokeColor=#999999;fontColor=#111111;fontSize=13;fontSize=12;align=left;spacingLeft=8;" value="&lt;b&gt;API бэкенда&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="750" x="990" y="150" as="geometry" />
+        </mxCell>
+        <mxCell id="m7" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b85450;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;Мой профиль&lt;/b&gt;&lt;div style=&quot;font-size:10px;color:#888&quot;&gt;u_me&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="250" x="40" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="m8" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b85450;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Аватар, ФИО, контакты, счётчики, кнопка «Редактировать»" vertex="1">
+          <mxGeometry height="40" width="700" x="290" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="m9" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7f7f7;strokeColor=#b85450;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="&lt;div style=&quot;font-size:11px;color:#555&quot;&gt;GET /profile/, /auth/me&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="750" x="990" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="m10" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b85450;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;Редактирование&lt;/b&gt;&lt;div style=&quot;font-size:10px;color:#888&quot;&gt;u_edit&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="250" x="40" y="222" as="geometry" />
+        </mxCell>
+        <mxCell id="m11" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b85450;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="ФИО, email, телефон, Telegram, VK, bio" vertex="1">
+          <mxGeometry height="40" width="700" x="290" y="222" as="geometry" />
+        </mxCell>
+        <mxCell id="m12" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7f7f7;strokeColor=#b85450;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="&lt;div style=&quot;font-size:11px;color:#555&quot;&gt;PUT /users/{id}&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="750" x="990" y="222" as="geometry" />
+        </mxCell>
+        <mxCell id="m13" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b85450;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;Образование&lt;/b&gt;&lt;div style=&quot;font-size:10px;color:#888&quot;&gt;u_edu&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="250" x="40" y="264" as="geometry" />
+        </mxCell>
+        <mxCell id="m14" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b85450;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="CRUD списка образований" vertex="1">
+          <mxGeometry height="40" width="700" x="290" y="264" as="geometry" />
+        </mxCell>
+        <mxCell id="m15" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7f7f7;strokeColor=#b85450;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="&lt;div style=&quot;font-size:11px;color:#555&quot;&gt;POST /profile/education, PUT /profile/education/{id}, DELETE&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="750" x="990" y="264" as="geometry" />
+        </mxCell>
+        <mxCell id="m16" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b85450;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;Языки&lt;/b&gt;&lt;div style=&quot;font-size:10px;color:#888&quot;&gt;u_lang&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="250" x="40" y="306" as="geometry" />
+        </mxCell>
+        <mxCell id="m17" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b85450;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="CRUD списка языков профиля" vertex="1">
+          <mxGeometry height="40" width="700" x="290" y="306" as="geometry" />
+        </mxCell>
+        <mxCell id="m18" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7f7f7;strokeColor=#b85450;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="&lt;div style=&quot;font-size:11px;color:#555&quot;&gt;POST /profile/languages, PUT /profile/languages/{id}, DELETE&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="750" x="990" y="306" as="geometry" />
+        </mxCell>
+        <mxCell id="m19" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b85450;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;Портфолио&lt;/b&gt;&lt;div style=&quot;font-size:10px;color:#888&quot;&gt;u_portfolio&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="250" x="40" y="348" as="geometry" />
+        </mxCell>
+        <mxCell id="m20" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b85450;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="CRUD работ: название, описание, ссылка, файл" vertex="1">
+          <mxGeometry height="40" width="700" x="290" y="348" as="geometry" />
+        </mxCell>
+        <mxCell id="m21" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7f7f7;strokeColor=#b85450;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="&lt;div style=&quot;font-size:11px;color:#555&quot;&gt;GET /profile/portfolio, POST /profile/portfolio, PUT/DELETE {id}&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="750" x="990" y="348" as="geometry" />
+        </mxCell>
+        <mxCell id="m22" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b85450;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;Публичный профиль&lt;/b&gt;&lt;div style=&quot;font-size:10px;color:#888&quot;&gt;u_public&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="250" x="40" y="390" as="geometry" />
+        </mxCell>
+        <mxCell id="m23" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b85450;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Профиль другого участника + его активность" vertex="1">
+          <mxGeometry height="40" width="700" x="290" y="390" as="geometry" />
+        </mxCell>
+        <mxCell id="m24" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7f7f7;strokeColor=#b85450;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="&lt;div style=&quot;font-size:11px;color:#555&quot;&gt;GET /profile/{user_id}, GET /profile/{user_id}/activity&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="750" x="990" y="390" as="geometry" />
+        </mxCell>
+        <mxCell id="m25" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b85450;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;Моя активность&lt;/b&gt;&lt;div style=&quot;font-size:10px;color:#888&quot;&gt;u_activity&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="250" x="40" y="432" as="geometry" />
+        </mxCell>
+        <mxCell id="m26" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b85450;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Лента событий audit-log по своим сущностям" vertex="1">
+          <mxGeometry height="40" width="700" x="290" y="432" as="geometry" />
+        </mxCell>
+        <mxCell id="m27" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7f7f7;strokeColor=#b85450;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="&lt;div style=&quot;font-size:11px;color:#555&quot;&gt;GET /profile/activity&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="750" x="990" y="432" as="geometry" />
+        </mxCell>
+        <mxCell id="m28" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b85450;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;Активные сессии&lt;/b&gt;&lt;div style=&quot;font-size:10px;color:#888&quot;&gt;u_sessions&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="250" x="40" y="474" as="geometry" />
+        </mxCell>
+        <mxCell id="m29" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b85450;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Список устройств, завершить одну / все" vertex="1">
+          <mxGeometry height="40" width="700" x="290" y="474" as="geometry" />
+        </mxCell>
+        <mxCell id="m30" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7f7f7;strokeColor=#b85450;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="&lt;div style=&quot;font-size:11px;color:#555&quot;&gt;GET /auth/sessions, DELETE /auth/sessions/{id}&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="750" x="990" y="474" as="geometry" />
+        </mxCell>
+        <mxCell id="m31" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#1a1a1a;fontSize=13;fontSize=15;fontStyle=1;align=left;" value="&lt;b&gt;Состав экрана «Мой профиль»&lt;/b&gt;" vertex="1">
+          <mxGeometry height="26" width="1700" x="40" y="536" as="geometry" />
+        </mxCell>
+        <mxCell id="m32" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontColor=#1a1a1a;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;Шапка&lt;/b&gt;" vertex="1">
+          <mxGeometry height="30" width="150" x="40" y="568" as="geometry" />
+        </mxCell>
+        <mxCell id="m33" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="Аватар (загрузка с сервера + fallback на инициалы), ФИО, username, кнопка «Редактировать»" vertex="1">
+          <mxGeometry height="30" width="1545" x="195" y="568" as="geometry" />
+        </mxCell>
+        <mxCell id="m34" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontColor=#1a1a1a;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;Контакты&lt;/b&gt;" vertex="1">
+          <mxGeometry height="30" width="150" x="40" y="602" as="geometry" />
+        </mxCell>
+        <mxCell id="m35" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="Email, телефон, Telegram, VK — тап копирует в буфер, ссылка открывает приложение" vertex="1">
+          <mxGeometry height="30" width="1545" x="195" y="602" as="geometry" />
+        </mxCell>
+        <mxCell id="m36" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontColor=#1a1a1a;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;Счётчики&lt;/b&gt;" vertex="1">
+          <mxGeometry height="30" width="150" x="40" y="636" as="geometry" />
+        </mxCell>
+        <mxCell id="m37" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="Проектов · резюме · откликов · портфолио-работ — из /auth/me и счётчиков списков" vertex="1">
+          <mxGeometry height="30" width="1545" x="195" y="636" as="geometry" />
+        </mxCell>
+        <mxCell id="m38" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontColor=#1a1a1a;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;Блоки&lt;/b&gt;" vertex="1">
+          <mxGeometry height="30" width="150" x="40" y="670" as="geometry" />
+        </mxCell>
+        <mxCell id="m39" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="Образование · Языки · Портфолио · Активность — каждый со своей кнопкой «все»" vertex="1">
+          <mxGeometry height="30" width="1545" x="195" y="670" as="geometry" />
+        </mxCell>
+        <mxCell id="m40" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontColor=#1a1a1a;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;Служебное&lt;/b&gt;" vertex="1">
+          <mxGeometry height="30" width="150" x="40" y="704" as="geometry" />
+        </mxCell>
+        <mxCell id="m41" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="Активные сессии · Выход из всех устройств · Уведомления" vertex="1">
+          <mxGeometry height="30" width="1545" x="195" y="704" as="geometry" />
+        </mxCell>
+        <mxCell id="m42" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#1a1a1a;fontSize=13;fontSize=15;fontStyle=1;align=left;" value="&lt;b&gt;Правила доступа&lt;/b&gt;" vertex="1">
+          <mxGeometry height="26" width="1700" x="40" y="768" as="geometry" />
+        </mxCell>
+        <mxCell id="m43" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#cccccc;fontColor=#1a1a1a;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;Свой профиль&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="150" x="40" y="800" as="geometry" />
+        </mxCell>
+        <mxCell id="m44" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="/profile/ — всегда свой; /profile/{userId} — чужой, только чтение" vertex="1">
+          <mxGeometry height="28" width="1545" x="195" y="800" as="geometry" />
+        </mxCell>
+        <mxCell id="m45" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#cccccc;fontColor=#1a1a1a;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;Редактирование&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="150" x="40" y="832" as="geometry" />
+        </mxCell>
+        <mxCell id="m46" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="доступно только владельцу; остальным кнопка не показывается вообще" vertex="1">
+          <mxGeometry height="28" width="1545" x="195" y="832" as="geometry" />
+        </mxCell>
+        <mxCell id="m47" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#cccccc;fontColor=#1a1a1a;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;Активность&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="150" x="40" y="864" as="geometry" />
+        </mxCell>
+        <mxCell id="m48" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="у чужого профиля — последние публичные события, у своего — полный audit-log" vertex="1">
+          <mxGeometry height="28" width="1545" x="195" y="864" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="Резюме" id="mob-resume">
+    <mxGraphModel dx="3854" dy="388" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1780" pageHeight="956" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="m1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#1a1a1a;fontSize=13;fontSize=20;fontStyle=1;" value="&lt;b&gt;Резюме&lt;/b&gt;" vertex="1">
+          <mxGeometry height="34" width="1700" x="40" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="m2" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#666666;fontSize=13;fontSize=13;align=left;" value="Список · детальный просмотр · 6 редактируемых секций · каждое действие — отдельная подстраница" vertex="1">
+          <mxGeometry height="24" width="1700" x="40" y="78" as="geometry" />
+        </mxCell>
+        <mxCell id="m3" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#1a1a1a;fontSize=13;fontSize=15;fontStyle=1;align=left;" value="&lt;b&gt;Экраны&lt;/b&gt;" vertex="1">
+          <mxGeometry height="26" width="1700" x="40" y="118" as="geometry" />
+        </mxCell>
+        <mxCell id="m4" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eeeeee;strokeColor=#999999;fontColor=#111111;fontSize=13;fontSize=12;align=left;spacingLeft=8;" value="&lt;b&gt;Экран&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="250" x="40" y="150" as="geometry" />
+        </mxCell>
+        <mxCell id="m5" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eeeeee;strokeColor=#999999;fontColor=#111111;fontSize=13;fontSize=12;align=left;spacingLeft=8;" value="&lt;b&gt;Что на экране&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="700" x="290" y="150" as="geometry" />
+        </mxCell>
+        <mxCell id="m6" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eeeeee;strokeColor=#999999;fontColor=#111111;fontSize=13;fontSize=12;align=left;spacingLeft=8;" value="&lt;b&gt;API бэкенда&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="750" x="990" y="150" as="geometry" />
+        </mxCell>
+        <mxCell id="m7" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;Мои резюме&lt;/b&gt;&lt;div style=&quot;font-size:10px;color:#888&quot;&gt;r_list&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="250" x="40" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="m8" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Карточки резюме, переключение, создать новое" vertex="1">
+          <mxGeometry height="40" width="700" x="290" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="m9" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7f7f7;strokeColor=#d6b656;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="&lt;div style=&quot;font-size:11px;color:#555&quot;&gt;GET /resumes/, /resumes/me&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="750" x="990" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="m10" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;Резюме&lt;/b&gt;&lt;div style=&quot;font-size:10px;color:#888&quot;&gt;r_detail&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="250" x="40" y="222" as="geometry" />
+        </mxCell>
+        <mxCell id="m11" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Все 6 секций одним скроллом, кнопка «Редактировать»" vertex="1">
+          <mxGeometry height="40" width="700" x="290" y="222" as="geometry" />
+        </mxCell>
+        <mxCell id="m12" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7f7f7;strokeColor=#d6b656;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="&lt;div style=&quot;font-size:11px;color:#555&quot;&gt;GET /resumes/{id}/detail&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="750" x="990" y="222" as="geometry" />
+        </mxCell>
+        <mxCell id="m13" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;Раздел: основное&lt;/b&gt;&lt;div style=&quot;font-size:10px;color:#888&quot;&gt;r_main&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="250" x="40" y="264" as="geometry" />
+        </mxCell>
+        <mxCell id="m14" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Заголовок, описание, контакты, видимость" vertex="1">
+          <mxGeometry height="40" width="700" x="290" y="264" as="geometry" />
+        </mxCell>
+        <mxCell id="m15" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7f7f7;strokeColor=#d6b656;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="&lt;div style=&quot;font-size:11px;color:#555&quot;&gt;PUT /resumes/{id}&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="750" x="990" y="264" as="geometry" />
+        </mxCell>
+        <mxCell id="m16" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;Раздел: ссылки&lt;/b&gt;&lt;div style=&quot;font-size:10px;color:#888&quot;&gt;r_links&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="250" x="40" y="306" as="geometry" />
+        </mxCell>
+        <mxCell id="m17" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="GitHub / Telegram / VK / сайт, add-edit-delete" vertex="1">
+          <mxGeometry height="40" width="700" x="290" y="306" as="geometry" />
+        </mxCell>
+        <mxCell id="m18" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7f7f7;strokeColor=#d6b656;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="&lt;div style=&quot;font-size:11px;color:#555&quot;&gt;POST /resumes/{id}/links, PUT /resumes/links/{lid}, DELETE&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="750" x="990" y="306" as="geometry" />
+        </mxCell>
+        <mxCell id="m19" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;Раздел: образование&lt;/b&gt;&lt;div style=&quot;font-size:10px;color:#888&quot;&gt;r_edu&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="250" x="40" y="348" as="geometry" />
+        </mxCell>
+        <mxCell id="m20" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Вузы, направление, годы, форма обучения" vertex="1">
+          <mxGeometry height="40" width="700" x="290" y="348" as="geometry" />
+        </mxCell>
+        <mxCell id="m21" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7f7f7;strokeColor=#d6b656;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="&lt;div style=&quot;font-size:11px;color:#555&quot;&gt;POST /resumes/{id}/educations, PUT /resumes/educations/{eid}, DELETE&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="750" x="990" y="348" as="geometry" />
+        </mxCell>
+        <mxCell id="m22" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;Раздел: языки&lt;/b&gt;&lt;div style=&quot;font-size:10px;color:#888&quot;&gt;r_lang&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="250" x="40" y="390" as="geometry" />
+        </mxCell>
+        <mxCell id="m23" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Язык + уровень (A1…C2)" vertex="1">
+          <mxGeometry height="40" width="700" x="290" y="390" as="geometry" />
+        </mxCell>
+        <mxCell id="m24" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7f7f7;strokeColor=#d6b656;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="&lt;div style=&quot;font-size:11px;color:#555&quot;&gt;POST /resumes/{id}/languages, PUT /resumes/languages/{lid}, DELETE&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="750" x="990" y="390" as="geometry" />
+        </mxCell>
+        <mxCell id="m25" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;Раздел: опыт&lt;/b&gt;&lt;div style=&quot;font-size:10px;color:#888&quot;&gt;r_exp&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="250" x="40" y="432" as="geometry" />
+        </mxCell>
+        <mxCell id="m26" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Места работы/проекты, роль, период, описание" vertex="1">
+          <mxGeometry height="40" width="700" x="290" y="432" as="geometry" />
+        </mxCell>
+        <mxCell id="m27" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7f7f7;strokeColor=#d6b656;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="&lt;div style=&quot;font-size:11px;color:#555&quot;&gt;POST /resumes/{id}/experiences, PUT /resumes/experiences/{eid}, DELETE&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="750" x="990" y="432" as="geometry" />
+        </mxCell>
+        <mxCell id="m28" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;Раздел: навыки&lt;/b&gt;&lt;div style=&quot;font-size:10px;color:#888&quot;&gt;r_skills&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="250" x="40" y="474" as="geometry" />
+        </mxCell>
+        <mxCell id="m29" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Список навыков, группы hard/soft" vertex="1">
+          <mxGeometry height="40" width="700" x="290" y="474" as="geometry" />
+        </mxCell>
+        <mxCell id="m30" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7f7f7;strokeColor=#d6b656;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="&lt;div style=&quot;font-size:11px;color:#555&quot;&gt;POST /resumes/{id}/skills, PUT /resumes/skills/{sid}, DELETE&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="750" x="990" y="474" as="geometry" />
+        </mxCell>
+        <mxCell id="m31" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;Раздел: интересы&lt;/b&gt;&lt;div style=&quot;font-size:10px;color:#888&quot;&gt;r_interests&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="250" x="40" y="516" as="geometry" />
+        </mxCell>
+        <mxCell id="m32" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Интересы для подбора проектов" vertex="1">
+          <mxGeometry height="40" width="700" x="290" y="516" as="geometry" />
+        </mxCell>
+        <mxCell id="m33" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7f7f7;strokeColor=#d6b656;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="&lt;div style=&quot;font-size:11px;color:#555&quot;&gt;POST /resumes/{id}/interests, PUT /resumes/interests/{iid}, DELETE&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="750" x="990" y="516" as="geometry" />
+        </mxCell>
+        <mxCell id="m34" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#1a1a1a;fontSize=13;fontSize=15;fontStyle=1;align=left;" value="&lt;b&gt;Навигация по секциям&lt;/b&gt;" vertex="1">
+          <mxGeometry height="26" width="1700" x="40" y="578" as="geometry" />
+        </mxCell>
+        <mxCell id="m35" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontColor=#1a1a1a;fontSize=13;verticalAlign=middle;" value="&lt;b&gt;Резюме&lt;/b&gt;&lt;div style=&quot;font-size:11px;color:#666&quot;&gt;/app/resume/:id — один скролл&lt;/div&gt;" vertex="1">
+          <mxGeometry height="54" width="220" x="40" y="610" as="geometry" />
+        </mxCell>
+        <mxCell id="m36" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontColor=#1a1a1a;fontSize=13;verticalAlign=middle;" value="&lt;b&gt;Основное&lt;/b&gt;&lt;div style=&quot;font-size:11px;color:#666&quot;&gt;/app/resume/:id/edit/main&lt;/div&gt;" vertex="1">
+          <mxGeometry height="54" width="340" x="300" y="610" as="geometry" />
+        </mxCell>
+        <mxCell id="m37" edge="1" parent="1" source="m35" target="m36" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint as="sourcePoint" />
+            <mxPoint as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="m38" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontColor=#1a1a1a;fontSize=13;verticalAlign=middle;" value="&lt;b&gt;Ссылки&lt;/b&gt;&lt;div style=&quot;font-size:11px;color:#666&quot;&gt;/app/resume/:id/edit/links&lt;/div&gt;" vertex="1">
+          <mxGeometry height="54" width="340" x="660" y="610" as="geometry" />
+        </mxCell>
+        <mxCell id="m39" edge="1" parent="1" source="m35" target="m38" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint as="sourcePoint" />
+            <mxPoint as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="m40" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontColor=#1a1a1a;fontSize=13;verticalAlign=middle;" value="&lt;b&gt;Образование&lt;/b&gt;&lt;div style=&quot;font-size:11px;color:#666&quot;&gt;/app/resume/:id/edit/educations&lt;/div&gt;" vertex="1">
+          <mxGeometry height="54" width="340" x="1020" y="610" as="geometry" />
+        </mxCell>
+        <mxCell id="m41" edge="1" parent="1" source="m35" target="m40" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint as="sourcePoint" />
+            <mxPoint as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="m42" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontColor=#1a1a1a;fontSize=13;verticalAlign=middle;" value="&lt;b&gt;Языки&lt;/b&gt;&lt;div style=&quot;font-size:11px;color:#666&quot;&gt;/app/resume/:id/edit/languages&lt;/div&gt;" vertex="1">
+          <mxGeometry height="54" width="340" x="1380" y="610" as="geometry" />
+        </mxCell>
+        <mxCell id="m43" edge="1" parent="1" source="m35" target="m42" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint as="sourcePoint" />
+            <mxPoint as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="m44" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontColor=#1a1a1a;fontSize=13;verticalAlign=middle;" value="&lt;b&gt;Опыт&lt;/b&gt;&lt;div style=&quot;font-size:11px;color:#666&quot;&gt;/app/resume/:id/edit/experiences&lt;/div&gt;" vertex="1">
+          <mxGeometry height="54" width="340" x="300" y="676" as="geometry" />
+        </mxCell>
+        <mxCell id="m45" edge="1" parent="1" source="m35" target="m44" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint as="sourcePoint" />
+            <mxPoint as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="m46" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontColor=#1a1a1a;fontSize=13;verticalAlign=middle;" value="&lt;b&gt;Навыки&lt;/b&gt;&lt;div style=&quot;font-size:11px;color:#666&quot;&gt;/app/resume/:id/edit/skills&lt;/div&gt;" vertex="1">
+          <mxGeometry height="54" width="340" x="660" y="676" as="geometry" />
+        </mxCell>
+        <mxCell id="m47" edge="1" parent="1" source="m35" target="m46" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint as="sourcePoint" />
+            <mxPoint as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="m48" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontColor=#1a1a1a;fontSize=13;verticalAlign=middle;" value="&lt;b&gt;Интересы&lt;/b&gt;&lt;div style=&quot;font-size:11px;color:#666&quot;&gt;/app/resume/:id/edit/interests&lt;/div&gt;" vertex="1">
+          <mxGeometry height="54" width="340" x="1020" y="676" as="geometry" />
+        </mxCell>
+        <mxCell id="m49" edge="1" parent="1" source="m35" target="m48" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint as="sourcePoint" />
+            <mxPoint as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="m50" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#1a1a1a;fontSize=13;fontSize=15;fontStyle=1;align=left;" value="&lt;b&gt;Правила редактора&lt;/b&gt;" vertex="1">
+          <mxGeometry height="26" width="1700" x="40" y="760" as="geometry" />
+        </mxCell>
+        <mxCell id="m51" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#cccccc;fontColor=#1a1a1a;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;Автосохранение&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="160" x="40" y="792" as="geometry" />
+        </mxCell>
+        <mxCell id="m52" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="черновик в Drift, отправка в /resumes/{id} по кнопке «Сохранить» — чтобы не жечь лимит запросов" vertex="1">
+          <mxGeometry height="28" width="1535" x="205" y="792" as="geometry" />
+        </mxCell>
+        <mxCell id="m53" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#cccccc;fontColor=#1a1a1a;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;Секции-списки&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="160" x="40" y="824" as="geometry" />
+        </mxCell>
+        <mxCell id="m54" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="ссылки / образование / языки / опыт / навыки / интересы — CRUD-коллекции, отдельные подэкраны" vertex="1">
+          <mxGeometry height="28" width="1535" x="205" y="824" as="geometry" />
+        </mxCell>
+        <mxCell id="m55" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#cccccc;fontColor=#1a1a1a;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;Загрузка файла&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="160" x="40" y="856" as="geometry" />
+        </mxCell>
+        <mxCell id="m56" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="в веб-версии PDF-парсинга нет, в мобильном тоже не обещаем — только текст и ссылки" vertex="1">
+          <mxGeometry height="28" width="1535" x="205" y="856" as="geometry" />
+        </mxCell>
+        <mxCell id="m57" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#cccccc;fontColor=#1a1a1a;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;Видимость&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="160" x="40" y="888" as="geometry" />
+        </mxCell>
+        <mxCell id="m58" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="поле is_visible из схемы расходится с моделью — показываем явный переключатель, а не дефолт" vertex="1">
+          <mxGeometry height="28" width="1535" x="205" y="888" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="Проекты" id="mob-projects">
+    <mxGraphModel dx="10020" dy="1008" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1780" pageHeight="981" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="m1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#1a1a1a;fontSize=13;fontSize=20;fontStyle=1;" value="&lt;b&gt;Проекты&lt;/b&gt;" vertex="1">
+          <mxGeometry height="34" width="1700" x="40" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="m2" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#666666;fontSize=13;fontSize=13;align=left;" value="Лента с фасетами · карточка · этапы · отклик · свои проекты, отклики и приглашения" vertex="1">
+          <mxGeometry height="24" width="1700" x="40" y="78" as="geometry" />
+        </mxCell>
+        <mxCell id="m3" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#1a1a1a;fontSize=13;fontSize=15;fontStyle=1;align=left;" value="&lt;b&gt;Экраны&lt;/b&gt;" vertex="1">
+          <mxGeometry height="26" width="1700" x="40" y="118" as="geometry" />
+        </mxCell>
+        <mxCell id="m4" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eeeeee;strokeColor=#999999;fontColor=#111111;fontSize=13;fontSize=12;align=left;spacingLeft=8;" value="&lt;b&gt;Экран&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="250" x="40" y="150" as="geometry" />
+        </mxCell>
+        <mxCell id="m5" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eeeeee;strokeColor=#999999;fontColor=#111111;fontSize=13;fontSize=12;align=left;spacingLeft=8;" value="&lt;b&gt;Что на экране&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="700" x="290" y="150" as="geometry" />
+        </mxCell>
+        <mxCell id="m6" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eeeeee;strokeColor=#999999;fontColor=#111111;fontSize=13;fontSize=12;align=left;spacingLeft=8;" value="&lt;b&gt;API бэкенда&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="750" x="990" y="150" as="geometry" />
+        </mxCell>
+        <mxCell id="m7" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;Лента проектов&lt;/b&gt;&lt;div style=&quot;font-size:10px;color:#888&quot;&gt;p_feed&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="250" x="40" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="m8" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Карточки, pull-to-refresh, бесконечная лента, пагинация" vertex="1">
+          <mxGeometry height="40" width="700" x="290" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="m9" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7f7f7;strokeColor=#6c8ebf;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="&lt;div style=&quot;font-size:11px;color:#555&quot;&gt;GET /projects/&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="750" x="990" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="m10" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;Фильтры&lt;/b&gt;&lt;div style=&quot;font-size:10px;color:#888&quot;&gt;p_filters&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="250" x="40" y="222" as="geometry" />
+        </mxCell>
+        <mxCell id="m11" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Фасеты: тип, статус, навыки, интерес, сортировка" vertex="1">
+          <mxGeometry height="40" width="700" x="290" y="222" as="geometry" />
+        </mxCell>
+        <mxCell id="m12" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7f7f7;strokeColor=#6c8ebf;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="&lt;div style=&quot;font-size:11px;color:#555&quot;&gt;GET /projects/filters&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="750" x="990" y="222" as="geometry" />
+        </mxCell>
+        <mxCell id="m13" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;Карточка проекта&lt;/b&gt;&lt;div style=&quot;font-size:10px;color:#888&quot;&gt;p_detail&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="250" x="40" y="264" as="geometry" />
+        </mxCell>
+        <mxCell id="m14" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Описание, роли, вакансии, участники, кнопки apply/invite" vertex="1">
+          <mxGeometry height="40" width="700" x="290" y="264" as="geometry" />
+        </mxCell>
+        <mxCell id="m15" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7f7f7;strokeColor=#6c8ebf;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="&lt;div style=&quot;font-size:11px;color:#555&quot;&gt;GET /projects/{id}&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="750" x="990" y="264" as="geometry" />
+        </mxCell>
+        <mxCell id="m16" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;Этапы проекта&lt;/b&gt;&lt;div style=&quot;font-size:10px;color:#888&quot;&gt;p_stages&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="250" x="40" y="306" as="geometry" />
+        </mxCell>
+        <mxCell id="m17" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Таймлайн этапов, прогресс, ТЗ-гейт, approve/reject" vertex="1">
+          <mxGeometry height="40" width="700" x="290" y="306" as="geometry" />
+        </mxCell>
+        <mxCell id="m18" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7f7f7;strokeColor=#6c8ebf;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="&lt;div style=&quot;font-size:11px;color:#555&quot;&gt;GET /projects/{id}&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="750" x="990" y="306" as="geometry" />
+        </mxCell>
+        <mxCell id="m19" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;Отклик на проект&lt;/b&gt;&lt;div style=&quot;font-size:10px;color:#888&quot;&gt;p_apply&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="250" x="40" y="348" as="geometry" />
+        </mxCell>
+        <mxCell id="m20" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Выбор роли/вакансии, сопроводительное письмо" vertex="1">
+          <mxGeometry height="40" width="700" x="290" y="348" as="geometry" />
+        </mxCell>
+        <mxCell id="m21" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7f7f7;strokeColor=#6c8ebf;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="&lt;div style=&quot;font-size:11px;color:#555&quot;&gt;POST /projects/{id}/apply&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="750" x="990" y="348" as="geometry" />
+        </mxCell>
+        <mxCell id="m22" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;Мои проекты&lt;/b&gt;&lt;div style=&quot;font-size:10px;color:#888&quot;&gt;p_my&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="250" x="40" y="390" as="geometry" />
+        </mxCell>
+        <mxCell id="m23" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Созданные / участвую, счётчики по статусам" vertex="1">
+          <mxGeometry height="40" width="700" x="290" y="390" as="geometry" />
+        </mxCell>
+        <mxCell id="m24" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7f7f7;strokeColor=#6c8ebf;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="&lt;div style=&quot;font-size:11px;color:#555&quot;&gt;GET /projects/created, /projects/my&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="750" x="990" y="390" as="geometry" />
+        </mxCell>
+        <mxCell id="m25" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;Мои отклики&lt;/b&gt;&lt;div style=&quot;font-size:10px;color:#888&quot;&gt;p_apply_list&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="250" x="40" y="432" as="geometry" />
+        </mxCell>
+        <mxCell id="m26" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Список заявок, withdraw/confirm-join, статус" vertex="1">
+          <mxGeometry height="40" width="700" x="290" y="432" as="geometry" />
+        </mxCell>
+        <mxCell id="m27" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7f7f7;strokeColor=#6c8ebf;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="&lt;div style=&quot;font-size:11px;color:#555&quot;&gt;GET /responses/my, PATCH …/withdraw, …/confirm-join&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="750" x="990" y="432" as="geometry" />
+        </mxCell>
+        <mxCell id="m28" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;Приглашения&lt;/b&gt;&lt;div style=&quot;font-size:10px;color:#888&quot;&gt;p_invites&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="250" x="40" y="474" as="geometry" />
+        </mxCell>
+        <mxCell id="m29" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Входящие инвайты в проекты, accept/reject" vertex="1">
+          <mxGeometry height="40" width="700" x="290" y="474" as="geometry" />
+        </mxCell>
+        <mxCell id="m30" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7f7f7;strokeColor=#6c8ebf;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="&lt;div style=&quot;font-size:11px;color:#555&quot;&gt;GET /invitations/my, PATCH …/accept, …/reject&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="750" x="990" y="474" as="geometry" />
+        </mxCell>
+        <mxCell id="m31" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#1a1a1a;fontSize=13;fontSize=15;fontStyle=1;align=left;" value="&lt;b&gt;Состояния карточки проекта (одна из главных механик)&lt;/b&gt;" vertex="1">
+          <mxGeometry height="26" width="1700" x="40" y="536" as="geometry" />
+        </mxCell>
+        <mxCell id="m32" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontColor=#1a1a1a;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;Не участник&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="180" x="40" y="568" as="geometry" />
+        </mxCell>
+        <mxCell id="m33" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="синяя кнопка «Откликнуться» · выбор роли из списка вакансий · сопроводительное письмо" vertex="1">
+          <mxGeometry height="28" width="1515" x="225" y="568" as="geometry" />
+        </mxCell>
+        <mxCell id="m34" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;fontColor=#1a1a1a;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;Отклик отправлен&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="180" x="40" y="600" as="geometry" />
+        </mxCell>
+        <mxCell id="m35" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="серая кнопка «Отклик отправлен», доступно «Отозвать»" vertex="1">
+          <mxGeometry height="28" width="1515" x="225" y="600" as="geometry" />
+        </mxCell>
+        <mxCell id="m36" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontColor=#1a1a1a;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;Принят&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="180" x="40" y="632" as="geometry" />
+        </mxCell>
+        <mxCell id="m37" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="зелёная кнопка «Подтвердить участие», далее — вкладка «Мои проекты»" vertex="1">
+          <mxGeometry height="28" width="1515" x="225" y="632" as="geometry" />
+        </mxCell>
+        <mxCell id="m38" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontColor=#1a1a1a;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;В команде&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="180" x="40" y="664" as="geometry" />
+        </mxCell>
+        <mxCell id="m39" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="кнопок отклика нет, вместо них «Этапы проекта» и «Участники»" vertex="1">
+          <mxGeometry height="28" width="1515" x="225" y="664" as="geometry" />
+        </mxCell>
+        <mxCell id="m40" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontColor=#1a1a1a;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;Отклик отклонён&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="180" x="40" y="696" as="geometry" />
+        </mxCell>
+        <mxCell id="m41" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="красный баннер с причиной, кнопка «Откликнуться снова» доступна" vertex="1">
+          <mxGeometry height="28" width="1515" x="225" y="696" as="geometry" />
+        </mxCell>
+        <mxCell id="m42" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#1a1a1a;fontSize=13;fontSize=15;fontStyle=1;align=left;" value="&lt;b&gt;Что уходит за рамки мобильного&lt;/b&gt;" vertex="1">
+          <mxGeometry height="26" width="1700" x="40" y="753" as="geometry" />
+        </mxCell>
+        <mxCell id="m43" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontColor=#1a1a1a;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;Канбан и этапы в мобильном&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="300" x="40" y="785" as="geometry" />
+        </mxCell>
+        <mxCell id="m44" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="Board тяжёлый для телефона — только просмотр этапов, без drag&amp;amp;drop" vertex="1">
+          <mxGeometry height="28" width="1395" x="345" y="785" as="geometry" />
+        </mxCell>
+        <mxCell id="m45" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontColor=#1a1a1a;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;Система оценивания&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="300" x="40" y="817" as="geometry" />
+        </mxCell>
+        <mxCell id="m46" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="Её нет и в вебе — мобильный клиент ждёт API" vertex="1">
+          <mxGeometry height="28" width="1395" x="345" y="817" as="geometry" />
+        </mxCell>
+        <mxCell id="m47" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontColor=#1a1a1a;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;Админка&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="300" x="40" y="849" as="geometry" />
+        </mxCell>
+        <mxCell id="m48" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="Управление пользователями/ролями остаётся только в вебе" vertex="1">
+          <mxGeometry height="28" width="1395" x="345" y="849" as="geometry" />
+        </mxCell>
+        <mxCell id="m49" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontColor=#1a1a1a;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;Пространства и wiki&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="300" x="40" y="881" as="geometry" />
+        </mxCell>
+        <mxCell id="m50" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="Показываем ссылку «Открыть в браузере»" vertex="1">
+          <mxGeometry height="28" width="1395" x="345" y="881" as="geometry" />
+        </mxCell>
+        <mxCell id="m51" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontColor=#1a1a1a;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;Конкурс проектов / идеи&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="300" x="40" y="913" as="geometry" />
+        </mxCell>
+        <mxCell id="m52" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="Голосование можно добавить после появления API привязки к проекту" vertex="1">
+          <mxGeometry height="28" width="1395" x="345" y="913" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="Уведомления" id="mob-notif">
+    <mxGraphModel dx="7157" dy="720" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1780" pageHeight="786" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="m1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#1a1a1a;fontSize=13;fontSize=20;fontStyle=1;" value="&lt;b&gt;Уведомления&lt;/b&gt;" vertex="1">
+          <mxGeometry height="34" width="1700" x="40" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="m2" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#666666;fontSize=13;fontSize=13;align=left;" value="Лента · настройки · запрос push-разрешения · deep-link в сущность" vertex="1">
+          <mxGeometry height="24" width="1700" x="40" y="78" as="geometry" />
+        </mxCell>
+        <mxCell id="m3" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#1a1a1a;fontSize=13;fontSize=15;fontStyle=1;align=left;" value="&lt;b&gt;Экраны&lt;/b&gt;" vertex="1">
+          <mxGeometry height="26" width="1700" x="40" y="118" as="geometry" />
+        </mxCell>
+        <mxCell id="m4" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eeeeee;strokeColor=#999999;fontColor=#111111;fontSize=13;fontSize=12;align=left;spacingLeft=8;" value="&lt;b&gt;Экран&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="250" x="40" y="150" as="geometry" />
+        </mxCell>
+        <mxCell id="m5" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eeeeee;strokeColor=#999999;fontColor=#111111;fontSize=13;fontSize=12;align=left;spacingLeft=8;" value="&lt;b&gt;Что на экране&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="700" x="290" y="150" as="geometry" />
+        </mxCell>
+        <mxCell id="m6" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eeeeee;strokeColor=#999999;fontColor=#111111;fontSize=13;fontSize=12;align=left;spacingLeft=8;" value="&lt;b&gt;API бэкенда&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="750" x="990" y="150" as="geometry" />
+        </mxCell>
+        <mxCell id="m7" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b85450;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;Лента уведомлений&lt;/b&gt;&lt;div style=&quot;font-size:10px;color:#888&quot;&gt;n_feed&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="250" x="40" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="m8" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b85450;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Группировка по дню, badge непрочитанных, mark-as-read при тапе" vertex="1">
+          <mxGeometry height="40" width="700" x="290" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="m9" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7f7f7;strokeColor=#b85450;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="&lt;div style=&quot;font-size:11px;color:#555&quot;&gt;GET /notifications/my&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="750" x="990" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="m10" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b85450;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;Настройки уведомлений&lt;/b&gt;&lt;div style=&quot;font-size:10px;color:#888&quot;&gt;n_settings&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="250" x="40" y="222" as="geometry" />
+        </mxCell>
+        <mxCell id="m11" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b85450;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Тумблеры по 15 типам событий + «только важные»" vertex="1">
+          <mxGeometry height="40" width="700" x="290" y="222" as="geometry" />
+        </mxCell>
+        <mxCell id="m12" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f0f0f0;strokeColor=#b85450;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="&lt;div style=&quot;font-size:11px;color:#555&quot;&gt;—&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="750" x="990" y="222" as="geometry" />
+        </mxCell>
+        <mxCell id="m13" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b85450;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;Push-разрешение&lt;/b&gt;&lt;div style=&quot;font-size:10px;color:#888&quot;&gt;n_push&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="250" x="40" y="264" as="geometry" />
+        </mxCell>
+        <mxCell id="m14" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b85450;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Онбординг запроса FCM-токена, отказ = объяснение" vertex="1">
+          <mxGeometry height="40" width="700" x="290" y="264" as="geometry" />
+        </mxCell>
+        <mxCell id="m15" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7f7f7;strokeColor=#b85450;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="&lt;div style=&quot;font-size:11px;color:#555&quot;&gt;POST /users/ (push_token)&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="750" x="990" y="264" as="geometry" />
+        </mxCell>
+        <mxCell id="m16" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#1a1a1a;fontSize=13;fontSize=15;fontStyle=1;align=left;" value="&lt;b&gt;Доставка&lt;/b&gt;" vertex="1">
+          <mxGeometry height="26" width="1700" x="40" y="326" as="geometry" />
+        </mxCell>
+        <mxCell id="m17" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontColor=#1a1a1a;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;Бэкенд&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="200" x="40" y="358" as="geometry" />
+        </mxCell>
+        <mxCell id="m18" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="Сервис уведомлений пишет в БД и шлёт SMTP. FCM-отправки пока нет — её надо добавить на сервере." vertex="1">
+          <mxGeometry height="28" width="1495" x="245" y="358" as="geometry" />
+        </mxCell>
+        <mxCell id="m19" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontColor=#1a1a1a;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;Токен&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="200" x="40" y="390" as="geometry" />
+        </mxCell>
+        <mxCell id="m20" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="При первом запуске приложение просит разрешение и пишет Notification.push_token в профиль пользователя." vertex="1">
+          <mxGeometry height="28" width="1495" x="245" y="390" as="geometry" />
+        </mxCell>
+        <mxCell id="m21" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontColor=#1a1a1a;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;Пока нет FCM&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="200" x="40" y="422" as="geometry" />
+        </mxCell>
+        <mxCell id="m22" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="Работает polling: приложение дёргает /notifications/my раз в 30 секунд, пока открыто." vertex="1">
+          <mxGeometry height="28" width="1495" x="245" y="422" as="geometry" />
+        </mxCell>
+        <mxCell id="m23" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontColor=#1a1a1a;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;С FCM&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="200" x="40" y="454" as="geometry" />
+        </mxCell>
+        <mxCell id="m24" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="Сообщение приходит в фоне, по tap открывает нужный экран: отклик → проект, приглашение → отклики." vertex="1">
+          <mxGeometry height="28" width="1495" x="245" y="454" as="geometry" />
+        </mxCell>
+        <mxCell id="m25" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontColor=#1a1a1a;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;Badge&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="200" x="40" y="486" as="geometry" />
+        </mxCell>
+        <mxCell id="m26" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="Счётчик непрочитанных на иконке приложения и на табе; обнуляется при открытии ленты." vertex="1">
+          <mxGeometry height="28" width="1495" x="245" y="486" as="geometry" />
+        </mxCell>
+        <mxCell id="m27" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#1a1a1a;fontSize=13;fontSize=15;fontStyle=1;align=left;" value="&lt;b&gt;Типы уведомлений (15, из кода бэкенда)&lt;/b&gt;" vertex="1">
+          <mxGeometry height="26" width="1700" x="40" y="548" as="geometry" />
+        </mxCell>
+        <mxCell id="m28" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="• Отклик на проект · приглашение в проект · подтверждение участника" vertex="1">
+          <mxGeometry height="26" width="1700" x="40" y="580" as="geometry" />
+        </mxCell>
+        <mxCell id="m29" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="• Отклик принят · отклик отклонён · заявка отозвана" vertex="1">
+          <mxGeometry height="26" width="1700" x="40" y="608" as="geometry" />
+        </mxCell>
+        <mxCell id="m30" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="• Этап назначен · этап пройден · этап отклонён" vertex="1">
+          <mxGeometry height="26" width="1700" x="40" y="636" as="geometry" />
+        </mxCell>
+        <mxCell id="m31" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="• ТЗ отправлено на проверку · ТЗ принято · ТЗ отклонено" vertex="1">
+          <mxGeometry height="26" width="1700" x="40" y="664" as="geometry" />
+        </mxCell>
+        <mxCell id="m32" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="• Проект переведён в работу · проект готов к защите" vertex="1">
+          <mxGeometry height="26" width="1700" x="40" y="692" as="geometry" />
+        </mxCell>
+        <mxCell id="m33" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="• Сессия завершена · смена прав · сброс пароля" vertex="1">
+          <mxGeometry height="26" width="1700" x="40" y="720" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="go_router: дерево маршрутов" id="mob-routes">
+    <mxGraphModel dx="12525" dy="1260" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1780" pageHeight="1266" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="m1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#1a1a1a;fontSize=13;fontSize=20;fontStyle=1;" value="&lt;b&gt;Дерево маршрутов go_router&lt;/b&gt;" vertex="1">
+          <mxGeometry height="34" width="1700" x="40" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="m2" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#666666;fontSize=13;fontSize=13;align=left;" value="Полный список путей, тип навигатора и guard на каждом маршруте" vertex="1">
+          <mxGeometry height="24" width="1700" x="40" y="78" as="geometry" />
+        </mxCell>
+        <mxCell id="m3" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eeeeee;strokeColor=#999999;fontColor=#111111;fontSize=13;fontSize=12;align=left;spacingLeft=8;" value="&lt;b&gt;Путь&lt;/b&gt;" vertex="1">
+          <mxGeometry height="26" width="420" x="40" y="118" as="geometry" />
+        </mxCell>
+        <mxCell id="m4" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eeeeee;strokeColor=#999999;fontColor=#111111;fontSize=13;fontSize=12;align=left;spacingLeft=8;" value="&lt;b&gt;Тип навигатора&lt;/b&gt;" vertex="1">
+          <mxGeometry height="26" width="190" x="465" y="118" as="geometry" />
+        </mxCell>
+        <mxCell id="m5" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eeeeee;strokeColor=#999999;fontColor=#111111;fontSize=13;fontSize=12;align=left;spacingLeft=8;" value="&lt;b&gt;Guard&lt;/b&gt;" vertex="1">
+          <mxGeometry height="26" width="190" x="660" y="118" as="geometry" />
+        </mxCell>
+        <mxCell id="m6" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eeeeee;strokeColor=#999999;fontColor=#111111;fontSize=13;fontSize=12;align=left;spacingLeft=8;" value="&lt;b&gt;Экран&lt;/b&gt;" vertex="1">
+          <mxGeometry height="26" width="885" x="855" y="118" as="geometry" />
+        </mxCell>
+        <mxCell id="m7" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;/&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="420" x="40" y="146" as="geometry" />
+        </mxCell>
+        <mxCell id="m8" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d0cece;strokeColor=#9673a6;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="redirect" vertex="1">
+          <mxGeometry height="28" width="190" x="465" y="146" as="geometry" />
+        </mxCell>
+        <mxCell id="m9" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="-" vertex="1">
+          <mxGeometry height="28" width="190" x="660" y="146" as="geometry" />
+        </mxCell>
+        <mxCell id="m10" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="по isLoggedIn → /splash или /app" vertex="1">
+          <mxGeometry height="28" width="885" x="855" y="146" as="geometry" />
+        </mxCell>
+        <mxCell id="m11" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;/splash&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="420" x="40" y="176" as="geometry" />
+        </mxCell>
+        <mxCell id="m12" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="screen" vertex="1">
+          <mxGeometry height="28" width="190" x="465" y="176" as="geometry" />
+        </mxCell>
+        <mxCell id="m13" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="session" vertex="1">
+          <mxGeometry height="28" width="190" x="660" y="176" as="geometry" />
+        </mxCell>
+        <mxCell id="m14" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Splash" vertex="1">
+          <mxGeometry height="28" width="885" x="855" y="176" as="geometry" />
+        </mxCell>
+        <mxCell id="m15" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;/login&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="420" x="40" y="206" as="geometry" />
+        </mxCell>
+        <mxCell id="m16" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="screen" vertex="1">
+          <mxGeometry height="28" width="190" x="465" y="206" as="geometry" />
+        </mxCell>
+        <mxCell id="m17" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="guest" vertex="1">
+          <mxGeometry height="28" width="190" x="660" y="206" as="geometry" />
+        </mxCell>
+        <mxCell id="m18" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Вход" vertex="1">
+          <mxGeometry height="28" width="885" x="855" y="206" as="geometry" />
+        </mxCell>
+        <mxCell id="m19" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;/register&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="420" x="40" y="236" as="geometry" />
+        </mxCell>
+        <mxCell id="m20" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eeeeee;strokeColor=#999999;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="group" vertex="1">
+          <mxGeometry height="28" width="190" x="465" y="236" as="geometry" />
+        </mxCell>
+        <mxCell id="m21" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="guest" vertex="1">
+          <mxGeometry height="28" width="190" x="660" y="236" as="geometry" />
+        </mxCell>
+        <mxCell id="m22" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="3 шага регистрации" vertex="1">
+          <mxGeometry height="28" width="885" x="855" y="236" as="geometry" />
+        </mxCell>
+        <mxCell id="m23" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="/name" vertex="1">
+          <mxGeometry height="28" width="420" x="40" y="266" as="geometry" />
+        </mxCell>
+        <mxCell id="m24" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="screen" vertex="1">
+          <mxGeometry height="28" width="190" x="465" y="266" as="geometry" />
+        </mxCell>
+        <mxCell id="m25" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="guest" vertex="1">
+          <mxGeometry height="28" width="190" x="660" y="266" as="geometry" />
+        </mxCell>
+        <mxCell id="m26" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Регистрация: имя" vertex="1">
+          <mxGeometry height="28" width="885" x="855" y="266" as="geometry" />
+        </mxCell>
+        <mxCell id="m27" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="/contacts" vertex="1">
+          <mxGeometry height="28" width="420" x="40" y="296" as="geometry" />
+        </mxCell>
+        <mxCell id="m28" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="screen" vertex="1">
+          <mxGeometry height="28" width="190" x="465" y="296" as="geometry" />
+        </mxCell>
+        <mxCell id="m29" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="guest" vertex="1">
+          <mxGeometry height="28" width="190" x="660" y="296" as="geometry" />
+        </mxCell>
+        <mxCell id="m30" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Регистрация: контакты" vertex="1">
+          <mxGeometry height="28" width="885" x="855" y="296" as="geometry" />
+        </mxCell>
+        <mxCell id="m31" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="/confirm" vertex="1">
+          <mxGeometry height="28" width="420" x="40" y="326" as="geometry" />
+        </mxCell>
+        <mxCell id="m32" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="screen" vertex="1">
+          <mxGeometry height="28" width="190" x="465" y="326" as="geometry" />
+        </mxCell>
+        <mxCell id="m33" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="guest" vertex="1">
+          <mxGeometry height="28" width="190" x="660" y="326" as="geometry" />
+        </mxCell>
+        <mxCell id="m34" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Регистрация: код" vertex="1">
+          <mxGeometry height="28" width="885" x="855" y="326" as="geometry" />
+        </mxCell>
+        <mxCell id="m35" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;/reset&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="420" x="40" y="356" as="geometry" />
+        </mxCell>
+        <mxCell id="m36" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eeeeee;strokeColor=#999999;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="group" vertex="1">
+          <mxGeometry height="28" width="190" x="465" y="356" as="geometry" />
+        </mxCell>
+        <mxCell id="m37" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="-" vertex="1">
+          <mxGeometry height="28" width="190" x="660" y="356" as="geometry" />
+        </mxCell>
+        <mxCell id="m38" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Сброс пароля" vertex="1">
+          <mxGeometry height="28" width="885" x="855" y="356" as="geometry" />
+        </mxCell>
+        <mxCell id="m39" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="/request" vertex="1">
+          <mxGeometry height="28" width="420" x="40" y="386" as="geometry" />
+        </mxCell>
+        <mxCell id="m40" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="screen" vertex="1">
+          <mxGeometry height="28" width="190" x="465" y="386" as="geometry" />
+        </mxCell>
+        <mxCell id="m41" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="guest" vertex="1">
+          <mxGeometry height="28" width="190" x="660" y="386" as="geometry" />
+        </mxCell>
+        <mxCell id="m42" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Сброс: email" vertex="1">
+          <mxGeometry height="28" width="885" x="855" y="386" as="geometry" />
+        </mxCell>
+        <mxCell id="m43" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="/password" vertex="1">
+          <mxGeometry height="28" width="420" x="40" y="416" as="geometry" />
+        </mxCell>
+        <mxCell id="m44" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="screen" vertex="1">
+          <mxGeometry height="28" width="190" x="465" y="416" as="geometry" />
+        </mxCell>
+        <mxCell id="m45" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="token" vertex="1">
+          <mxGeometry height="28" width="190" x="660" y="416" as="geometry" />
+        </mxCell>
+        <mxCell id="m46" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Сброс: пароль" vertex="1">
+          <mxGeometry height="28" width="885" x="855" y="416" as="geometry" />
+        </mxCell>
+        <mxCell id="m47" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;/app&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="420" x="40" y="446" as="geometry" />
+        </mxCell>
+        <mxCell id="m48" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="shell" vertex="1">
+          <mxGeometry height="28" width="190" x="465" y="446" as="geometry" />
+        </mxCell>
+        <mxCell id="m49" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="auth" vertex="1">
+          <mxGeometry height="28" width="190" x="660" y="446" as="geometry" />
+        </mxCell>
+        <mxCell id="m50" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Нижний навбар — корень приложения" vertex="1">
+          <mxGeometry height="28" width="885" x="855" y="446" as="geometry" />
+        </mxCell>
+        <mxCell id="m51" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="/app/home" vertex="1">
+          <mxGeometry height="28" width="420" x="40" y="476" as="geometry" />
+        </mxCell>
+        <mxCell id="m52" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="tab" vertex="1">
+          <mxGeometry height="28" width="190" x="465" y="476" as="geometry" />
+        </mxCell>
+        <mxCell id="m53" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="auth" vertex="1">
+          <mxGeometry height="28" width="190" x="660" y="476" as="geometry" />
+        </mxCell>
+        <mxCell id="m54" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Лента проектов" vertex="1">
+          <mxGeometry height="28" width="885" x="855" y="476" as="geometry" />
+        </mxCell>
+        <mxCell id="m55" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="/app/projects" vertex="1">
+          <mxGeometry height="28" width="420" x="40" y="506" as="geometry" />
+        </mxCell>
+        <mxCell id="m56" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="tab" vertex="1">
+          <mxGeometry height="28" width="190" x="465" y="506" as="geometry" />
+        </mxCell>
+        <mxCell id="m57" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="auth" vertex="1">
+          <mxGeometry height="28" width="190" x="660" y="506" as="geometry" />
+        </mxCell>
+        <mxCell id="m58" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Мои проекты" vertex="1">
+          <mxGeometry height="28" width="885" x="855" y="506" as="geometry" />
+        </mxCell>
+        <mxCell id="m59" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="/app/resume" vertex="1">
+          <mxGeometry height="28" width="420" x="40" y="536" as="geometry" />
+        </mxCell>
+        <mxCell id="m60" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="tab" vertex="1">
+          <mxGeometry height="28" width="190" x="465" y="536" as="geometry" />
+        </mxCell>
+        <mxCell id="m61" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="auth" vertex="1">
+          <mxGeometry height="28" width="190" x="660" y="536" as="geometry" />
+        </mxCell>
+        <mxCell id="m62" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Мои резюме" vertex="1">
+          <mxGeometry height="28" width="885" x="855" y="536" as="geometry" />
+        </mxCell>
+        <mxCell id="m63" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="/app/profile" vertex="1">
+          <mxGeometry height="28" width="420" x="40" y="566" as="geometry" />
+        </mxCell>
+        <mxCell id="m64" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="tab" vertex="1">
+          <mxGeometry height="28" width="190" x="465" y="566" as="geometry" />
+        </mxCell>
+        <mxCell id="m65" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="auth" vertex="1">
+          <mxGeometry height="28" width="190" x="660" y="566" as="geometry" />
+        </mxCell>
+        <mxCell id="m66" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Мой профиль" vertex="1">
+          <mxGeometry height="28" width="885" x="855" y="566" as="geometry" />
+        </mxCell>
+        <mxCell id="m67" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;/app/notifications&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="420" x="40" y="596" as="geometry" />
+        </mxCell>
+        <mxCell id="m68" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="push" vertex="1">
+          <mxGeometry height="28" width="190" x="465" y="596" as="geometry" />
+        </mxCell>
+        <mxCell id="m69" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="auth" vertex="1">
+          <mxGeometry height="28" width="190" x="660" y="596" as="geometry" />
+        </mxCell>
+        <mxCell id="m70" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Лента уведомлений (из app bar)" vertex="1">
+          <mxGeometry height="28" width="885" x="855" y="596" as="geometry" />
+        </mxCell>
+        <mxCell id="m71" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;/app/projects/:id&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="420" x="40" y="626" as="geometry" />
+        </mxCell>
+        <mxCell id="m72" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="detail" vertex="1">
+          <mxGeometry height="28" width="190" x="465" y="626" as="geometry" />
+        </mxCell>
+        <mxCell id="m73" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="auth" vertex="1">
+          <mxGeometry height="28" width="190" x="660" y="626" as="geometry" />
+        </mxCell>
+        <mxCell id="m74" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Карточка проекта" vertex="1">
+          <mxGeometry height="28" width="885" x="855" y="626" as="geometry" />
+        </mxCell>
+        <mxCell id="m75" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="/stages" vertex="1">
+          <mxGeometry height="28" width="420" x="40" y="656" as="geometry" />
+        </mxCell>
+        <mxCell id="m76" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="detail" vertex="1">
+          <mxGeometry height="28" width="190" x="465" y="656" as="geometry" />
+        </mxCell>
+        <mxCell id="m77" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="auth" vertex="1">
+          <mxGeometry height="28" width="190" x="660" y="656" as="geometry" />
+        </mxCell>
+        <mxCell id="m78" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Этапы проекта" vertex="1">
+          <mxGeometry height="28" width="885" x="855" y="656" as="geometry" />
+        </mxCell>
+        <mxCell id="m79" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="/apply" vertex="1">
+          <mxGeometry height="28" width="420" x="40" y="686" as="geometry" />
+        </mxCell>
+        <mxCell id="m80" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="modal" vertex="1">
+          <mxGeometry height="28" width="190" x="465" y="686" as="geometry" />
+        </mxCell>
+        <mxCell id="m81" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="auth+participant" vertex="1">
+          <mxGeometry height="28" width="190" x="660" y="686" as="geometry" />
+        </mxCell>
+        <mxCell id="m82" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Отклик" vertex="1">
+          <mxGeometry height="28" width="885" x="855" y="686" as="geometry" />
+        </mxCell>
+        <mxCell id="m83" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;/app/resume/:id&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="420" x="40" y="716" as="geometry" />
+        </mxCell>
+        <mxCell id="m84" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="detail" vertex="1">
+          <mxGeometry height="28" width="190" x="465" y="716" as="geometry" />
+        </mxCell>
+        <mxCell id="m85" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="auth" vertex="1">
+          <mxGeometry height="28" width="190" x="660" y="716" as="geometry" />
+        </mxCell>
+        <mxCell id="m86" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Резюме" vertex="1">
+          <mxGeometry height="28" width="885" x="855" y="716" as="geometry" />
+        </mxCell>
+        <mxCell id="m87" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="/edit/:section" vertex="1">
+          <mxGeometry height="28" width="420" x="40" y="746" as="geometry" />
+        </mxCell>
+        <mxCell id="m88" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="editor" vertex="1">
+          <mxGeometry height="28" width="190" x="465" y="746" as="geometry" />
+        </mxCell>
+        <mxCell id="m89" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="auth+owner" vertex="1">
+          <mxGeometry height="28" width="190" x="660" y="746" as="geometry" />
+        </mxCell>
+        <mxCell id="m90" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Редактор секции" vertex="1">
+          <mxGeometry height="28" width="885" x="855" y="746" as="geometry" />
+        </mxCell>
+        <mxCell id="m91" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;/app/profile/edit&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="420" x="40" y="776" as="geometry" />
+        </mxCell>
+        <mxCell id="m92" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="editor" vertex="1">
+          <mxGeometry height="28" width="190" x="465" y="776" as="geometry" />
+        </mxCell>
+        <mxCell id="m93" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="auth" vertex="1">
+          <mxGeometry height="28" width="190" x="660" y="776" as="geometry" />
+        </mxCell>
+        <mxCell id="m94" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Редактирование профиля" vertex="1">
+          <mxGeometry height="28" width="885" x="855" y="776" as="geometry" />
+        </mxCell>
+        <mxCell id="m95" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;/app/profile/:userId&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="420" x="40" y="806" as="geometry" />
+        </mxCell>
+        <mxCell id="m96" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="detail" vertex="1">
+          <mxGeometry height="28" width="190" x="465" y="806" as="geometry" />
+        </mxCell>
+        <mxCell id="m97" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="auth" vertex="1">
+          <mxGeometry height="28" width="190" x="660" y="806" as="geometry" />
+        </mxCell>
+        <mxCell id="m98" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Публичный профиль" vertex="1">
+          <mxGeometry height="28" width="885" x="855" y="806" as="geometry" />
+        </mxCell>
+        <mxCell id="m99" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;/app/applications&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="420" x="40" y="836" as="geometry" />
+        </mxCell>
+        <mxCell id="m100" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="stack" vertex="1">
+          <mxGeometry height="28" width="190" x="465" y="836" as="geometry" />
+        </mxCell>
+        <mxCell id="m101" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="auth" vertex="1">
+          <mxGeometry height="28" width="190" x="660" y="836" as="geometry" />
+        </mxCell>
+        <mxCell id="m102" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Мои отклики" vertex="1">
+          <mxGeometry height="28" width="885" x="855" y="836" as="geometry" />
+        </mxCell>
+        <mxCell id="m103" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;/app/invitations&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="420" x="40" y="866" as="geometry" />
+        </mxCell>
+        <mxCell id="m104" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="stack" vertex="1">
+          <mxGeometry height="28" width="190" x="465" y="866" as="geometry" />
+        </mxCell>
+        <mxCell id="m105" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="auth" vertex="1">
+          <mxGeometry height="28" width="190" x="660" y="866" as="geometry" />
+        </mxCell>
+        <mxCell id="m106" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Приглашения" vertex="1">
+          <mxGeometry height="28" width="885" x="855" y="866" as="geometry" />
+        </mxCell>
+        <mxCell id="m107" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;/app/search&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="420" x="40" y="896" as="geometry" />
+        </mxCell>
+        <mxCell id="m108" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="stack" vertex="1">
+          <mxGeometry height="28" width="190" x="465" y="896" as="geometry" />
+        </mxCell>
+        <mxCell id="m109" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="auth" vertex="1">
+          <mxGeometry height="28" width="190" x="660" y="896" as="geometry" />
+        </mxCell>
+        <mxCell id="m110" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Поиск" vertex="1">
+          <mxGeometry height="28" width="885" x="855" y="896" as="geometry" />
+        </mxCell>
+        <mxCell id="m111" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;/app/sessions&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="420" x="40" y="926" as="geometry" />
+        </mxCell>
+        <mxCell id="m112" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="stack" vertex="1">
+          <mxGeometry height="28" width="190" x="465" y="926" as="geometry" />
+        </mxCell>
+        <mxCell id="m113" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="auth" vertex="1">
+          <mxGeometry height="28" width="190" x="660" y="926" as="geometry" />
+        </mxCell>
+        <mxCell id="m114" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Активные сессии" vertex="1">
+          <mxGeometry height="28" width="885" x="855" y="926" as="geometry" />
+        </mxCell>
+        <mxCell id="m115" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;/app/notifications/settings&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="420" x="40" y="956" as="geometry" />
+        </mxCell>
+        <mxCell id="m116" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="stack" vertex="1">
+          <mxGeometry height="28" width="190" x="465" y="956" as="geometry" />
+        </mxCell>
+        <mxCell id="m117" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontColor=#555555;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=11;" value="auth" vertex="1">
+          <mxGeometry height="28" width="190" x="660" y="956" as="geometry" />
+        </mxCell>
+        <mxCell id="m118" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="Настройки уведомлений" vertex="1">
+          <mxGeometry height="28" width="885" x="855" y="956" as="geometry" />
+        </mxCell>
+        <mxCell id="m119" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#1a1a1a;fontSize=13;fontSize=15;fontStyle=1;align=left;" value="&lt;b&gt;Guard-редиректы&lt;/b&gt;" vertex="1">
+          <mxGeometry height="26" width="1700" x="40" y="1006" as="geometry" />
+        </mxCell>
+        <mxCell id="m120" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontColor=#1a1a1a;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;session&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="190" x="40" y="1038" as="geometry" />
+        </mxCell>
+        <mxCell id="m121" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="isLoggedIn == false" vertex="1">
+          <mxGeometry height="28" width="400" x="235" y="1038" as="geometry" />
+        </mxCell>
+        <mxCell id="m122" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#cccccc;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="→ /login, splash не показывается" vertex="1">
+          <mxGeometry height="28" width="1100" x="640" y="1038" as="geometry" />
+        </mxCell>
+        <mxCell id="m123" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontColor=#1a1a1a;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;guest&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="190" x="40" y="1070" as="geometry" />
+        </mxCell>
+        <mxCell id="m124" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="isLoggedIn == true" vertex="1">
+          <mxGeometry height="28" width="400" x="235" y="1070" as="geometry" />
+        </mxCell>
+        <mxCell id="m125" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#cccccc;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="→ /app/home, чтобы не зайти на /login повторно" vertex="1">
+          <mxGeometry height="28" width="1100" x="640" y="1070" as="geometry" />
+        </mxCell>
+        <mxCell id="m126" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontColor=#1a1a1a;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;auth&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="190" x="40" y="1102" as="geometry" />
+        </mxCell>
+        <mxCell id="m127" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="нет access-токена" vertex="1">
+          <mxGeometry height="28" width="400" x="235" y="1102" as="geometry" />
+        </mxCell>
+        <mxCell id="m128" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#cccccc;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="→ /login, стек вкладок недоступен" vertex="1">
+          <mxGeometry height="28" width="1100" x="640" y="1102" as="geometry" />
+        </mxCell>
+        <mxCell id="m129" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontColor=#1a1a1a;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;token&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="190" x="40" y="1134" as="geometry" />
+        </mxCell>
+        <mxCell id="m130" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="password-reset токен истёк" vertex="1">
+          <mxGeometry height="28" width="400" x="235" y="1134" as="geometry" />
+        </mxCell>
+        <mxCell id="m131" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#cccccc;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="→ /reset/request" vertex="1">
+          <mxGeometry height="28" width="1100" x="640" y="1134" as="geometry" />
+        </mxCell>
+        <mxCell id="m132" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontColor=#1a1a1a;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;auth+owner&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="190" x="40" y="1166" as="geometry" />
+        </mxCell>
+        <mxCell id="m133" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="id != моего userId" vertex="1">
+          <mxGeometry height="28" width="400" x="235" y="1166" as="geometry" />
+        </mxCell>
+        <mxCell id="m134" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#cccccc;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="404 — чужое резюме/профиль не редактируем" vertex="1">
+          <mxGeometry height="28" width="1100" x="640" y="1166" as="geometry" />
+        </mxCell>
+        <mxCell id="m135" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontColor=#1a1a1a;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;auth+participant&lt;/b&gt;" vertex="1">
+          <mxGeometry height="28" width="190" x="40" y="1198" as="geometry" />
+        </mxCell>
+        <mxCell id="m136" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="пользователь не в команде" vertex="1">
+          <mxGeometry height="28" width="400" x="235" y="1198" as="geometry" />
+        </mxCell>
+        <mxCell id="m137" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#cccccc;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="кнопка «Откликнуться» скрыта" vertex="1">
+          <mxGeometry height="28" width="1100" x="640" y="1198" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="Стек и UI-кит" id="mob-stack">
+    <mxGraphModel dx="10020" dy="1008" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1780" pageHeight="1086" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="m1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#1a1a1a;fontSize=13;fontSize=20;fontStyle=1;" value="&lt;b&gt;Технологический стек и общие компоненты&lt;/b&gt;" vertex="1">
+          <mxGeometry height="34" width="1700" x="40" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="m2" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#666666;fontSize=13;fontSize=13;align=left;" value="Flutter · переиспользование контрактов и схем с существующего бэкенда" vertex="1">
+          <mxGeometry height="24" width="1700" x="40" y="78" as="geometry" />
+        </mxCell>
+        <mxCell id="m3" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#1a1a1a;fontSize=13;fontSize=15;fontStyle=1;align=left;" value="&lt;b&gt;Стек&lt;/b&gt;" vertex="1">
+          <mxGeometry height="26" width="1700" x="40" y="118" as="geometry" />
+        </mxCell>
+        <mxCell id="m4" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eeeeee;strokeColor=#999999;fontColor=#111111;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;Frontend&lt;/b&gt;" vertex="1">
+          <mxGeometry height="32" width="170" x="40" y="150" as="geometry" />
+        </mxCell>
+        <mxCell id="m5" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;Flutter 3.x + Dart&lt;/b&gt;" vertex="1">
+          <mxGeometry height="32" width="620" x="215" y="150" as="geometry" />
+        </mxCell>
+        <mxCell id="m6" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="Один код под iOS и Android" vertex="1">
+          <mxGeometry height="32" width="900" x="840" y="150" as="geometry" />
+        </mxCell>
+        <mxCell id="m7" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eeeeee;strokeColor=#999999;fontColor=#111111;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;Состояние&lt;/b&gt;" vertex="1">
+          <mxGeometry height="32" width="170" x="40" y="186" as="geometry" />
+        </mxCell>
+        <mxCell id="m8" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;Riverpod 2.x&lt;/b&gt;" vertex="1">
+          <mxGeometry height="32" width="620" x="215" y="186" as="geometry" />
+        </mxCell>
+        <mxCell id="m9" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="Без кодогенерации, удобен в команде с TS-фронтом" vertex="1">
+          <mxGeometry height="32" width="900" x="840" y="186" as="geometry" />
+        </mxCell>
+        <mxCell id="m10" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eeeeee;strokeColor=#999999;fontColor=#111111;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;Навигация&lt;/b&gt;" vertex="1">
+          <mxGeometry height="32" width="170" x="40" y="222" as="geometry" />
+        </mxCell>
+        <mxCell id="m11" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;go_router 14.x&lt;/b&gt;" vertex="1">
+          <mxGeometry height="32" width="620" x="215" y="222" as="geometry" />
+        </mxCell>
+        <mxCell id="m12" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="Декларативные маршруты + guard-редиректы" vertex="1">
+          <mxGeometry height="32" width="900" x="840" y="222" as="geometry" />
+        </mxCell>
+        <mxCell id="m13" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eeeeee;strokeColor=#999999;fontColor=#111111;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;Сеть&lt;/b&gt;" vertex="1">
+          <mxGeometry height="32" width="170" x="40" y="258" as="geometry" />
+        </mxCell>
+        <mxCell id="m14" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;dio + freezed + json_serializable&lt;/b&gt;" vertex="1">
+          <mxGeometry height="32" width="620" x="215" y="258" as="geometry" />
+        </mxCell>
+        <mxCell id="m15" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="Переиспользует те же схемы, что и web" vertex="1">
+          <mxGeometry height="32" width="900" x="840" y="258" as="geometry" />
+        </mxCell>
+        <mxCell id="m16" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eeeeee;strokeColor=#999999;fontColor=#111111;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;Хранилище&lt;/b&gt;" vertex="1">
+          <mxGeometry height="32" width="170" x="40" y="294" as="geometry" />
+        </mxCell>
+        <mxCell id="m17" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;flutter_secure_storage&lt;/b&gt;" vertex="1">
+          <mxGeometry height="32" width="620" x="215" y="294" as="geometry" />
+        </mxCell>
+        <mxCell id="m18" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="Access-токен в Keychain / Keystore, как HttpOnly-cookie на web" vertex="1">
+          <mxGeometry height="32" width="900" x="840" y="294" as="geometry" />
+        </mxCell>
+        <mxCell id="m19" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eeeeee;strokeColor=#999999;fontColor=#111111;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;Кэш&lt;/b&gt;" vertex="1">
+          <mxGeometry height="32" width="170" x="40" y="330" as="geometry" />
+        </mxCell>
+        <mxCell id="m20" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;Drift (SQLite)&lt;/b&gt;" vertex="1">
+          <mxGeometry height="32" width="620" x="215" y="330" as="geometry" />
+        </mxCell>
+        <mxCell id="m21" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="Оффлайн-чтение своих проектов и резюме" vertex="1">
+          <mxGeometry height="32" width="900" x="840" y="330" as="geometry" />
+        </mxCell>
+        <mxCell id="m22" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eeeeee;strokeColor=#999999;fontColor=#111111;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;Push&lt;/b&gt;" vertex="1">
+          <mxGeometry height="32" width="170" x="40" y="366" as="geometry" />
+        </mxCell>
+        <mxCell id="m23" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;Firebase Cloud Messaging&lt;/b&gt;" vertex="1">
+          <mxGeometry height="32" width="620" x="215" y="366" as="geometry" />
+        </mxCell>
+        <mxCell id="m24" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="Единственный способ получить уведомление без открытого приложения" vertex="1">
+          <mxGeometry height="32" width="900" x="840" y="366" as="geometry" />
+        </mxCell>
+        <mxCell id="m25" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eeeeee;strokeColor=#999999;fontColor=#111111;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;Иконки/тема&lt;/b&gt;" vertex="1">
+          <mxGeometry height="32" width="170" x="40" y="402" as="geometry" />
+        </mxCell>
+        <mxCell id="m26" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d4e1f5;strokeColor=#6c8ebf;fontColor=#1a1a1a;fontSize=13;align=left;spacingLeft=8;verticalAlign=middle;fontSize=12;" value="&lt;b&gt;Material 3 + glassmorphism-тема веба&lt;/b&gt;" vertex="1">
+          <mxGeometry height="32" width="620" x="215" y="402" as="geometry" />
+        </mxCell>
+        <mxCell id="m27" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="Визуально совпадает с frontend/src/components/ui" vertex="1">
+          <mxGeometry height="32" width="900" x="840" y="402" as="geometry" />
+        </mxCell>
+        <mxCell id="m28" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#1a1a1a;fontSize=13;fontSize=15;fontStyle=1;align=left;" value="&lt;b&gt;Общие компоненты и состояния&lt;/b&gt;" vertex="1">
+          <mxGeometry height="26" width="1700" x="40" y="458" as="geometry" />
+        </mxCell>
+        <mxCell id="m29" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontColor=#1a1a1a;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;Состояния экрана&lt;/b&gt;" vertex="1">
+          <mxGeometry height="34" width="200" x="40" y="490" as="geometry" />
+        </mxCell>
+        <mxCell id="m30" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="Loading (skeleton) · Empty (с CTA) · Error (кнопка «Повторить») · Offline (баннер) · Success (сниппет)" vertex="1">
+          <mxGeometry height="34" width="1495" x="245" y="490" as="geometry" />
+        </mxCell>
+        <mxCell id="m31" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontColor=#1a1a1a;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;Навигация&lt;/b&gt;" vertex="1">
+          <mxGeometry height="34" width="200" x="40" y="528" as="geometry" />
+        </mxCell>
+        <mxCell id="m32" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="BottomNavigationBar с 4 вкладками + badge на иконке уведомлений · Navigator 1.0 для модалок · deep-link через uni_links" vertex="1">
+          <mxGeometry height="34" width="1495" x="245" y="528" as="geometry" />
+        </mxCell>
+        <mxCell id="m33" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontColor=#1a1a1a;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;Формы&lt;/b&gt;" vertex="1">
+          <mxGeometry height="34" width="200" x="40" y="566" as="geometry" />
+        </mxCell>
+        <mxCell id="m34" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="Обёртка над react-hook-form с web: RHF-подобные хуки → отдельный Formik-слой, те же Zod-схемы приходят с бэкенда" vertex="1">
+          <mxGeometry height="34" width="1495" x="245" y="566" as="geometry" />
+        </mxCell>
+        <mxCell id="m35" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontColor=#1a1a1a;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;Списки&lt;/b&gt;" vertex="1">
+          <mxGeometry height="34" width="200" x="40" y="604" as="geometry" />
+        </mxCell>
+        <mxCell id="m36" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="Бесконечная лента через dio + кэш Drift, pull-to-refresh, кэширование картинок (cached_network_image)" vertex="1">
+          <mxGeometry height="34" width="1495" x="245" y="604" as="geometry" />
+        </mxCell>
+        <mxCell id="m37" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontColor=#1a1a1a;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;Токены темы&lt;/b&gt;" vertex="1">
+          <mxGeometry height="34" width="200" x="40" y="642" as="geometry" />
+        </mxCell>
+        <mxCell id="m38" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="Цвета/радиусы/шрифты из frontend/src/components/ui + tailwind.css — единый источник правды" vertex="1">
+          <mxGeometry height="34" width="1495" x="245" y="642" as="geometry" />
+        </mxCell>
+        <mxCell id="m39" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontColor=#1a1a1a;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;Обратная связь&lt;/b&gt;" vertex="1">
+          <mxGeometry height="34" width="200" x="40" y="680" as="geometry" />
+        </mxCell>
+        <mxCell id="m40" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="HapticFeedback на смену статуса заявки, SnackBar на ошибки с кодом, Sentry (GlitchTip) на краши" vertex="1">
+          <mxGeometry height="34" width="1495" x="245" y="680" as="geometry" />
+        </mxCell>
+        <mxCell id="m41" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontColor=#1a1a1a;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;Push&lt;/b&gt;" vertex="1">
+          <mxGeometry height="34" width="200" x="40" y="718" as="geometry" />
+        </mxCell>
+        <mxCell id="m42" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="FCM → foreground/background handler → deep-link на экран сущности; токен пишется в Notification.push_token" vertex="1">
+          <mxGeometry height="34" width="1495" x="245" y="718" as="geometry" />
+        </mxCell>
+        <mxCell id="m43" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontColor=#1a1a1a;fontSize=13;fontSize=12;align=left;spacingLeft=8;verticalAlign=middle;" value="&lt;b&gt;Deep links&lt;/b&gt;" vertex="1">
+          <mxGeometry height="34" width="200" x="40" y="756" as="geometry" />
+        </mxCell>
+        <mxCell id="m44" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="itmo://project/{id}, itmo://resume/{id}, itmo://notification/{id} — из тех же ссылок, что и в вебе/письмах" vertex="1">
+          <mxGeometry height="34" width="1495" x="245" y="756" as="geometry" />
+        </mxCell>
+        <mxCell id="m45" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#1a1a1a;fontSize=13;fontSize=15;fontStyle=1;align=left;" value="&lt;b&gt;Замечания по бэкенду (блокеры для мобильного клиента)&lt;/b&gt;" vertex="1">
+          <mxGeometry height="26" width="1700" x="40" y="814" as="geometry" />
+        </mxCell>
+        <mxCell id="m46" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontColor=#1a1a1a;fontSize=13;fontSize=12;align=center;verticalAlign=middle;" value="1" vertex="1">
+          <mxGeometry height="30" width="26" x="40" y="846" as="geometry" />
+        </mxCell>
+        <mxCell id="m47" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#f8cecc;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="Refresh-токен лежит в HttpOnly-cookie на вебе — в мобильном храним оба токена в Keychain/Keystore и шлём refresh в Authorization-заголовке." vertex="1">
+          <mxGeometry height="30" width="1668" x="72" y="846" as="geometry" />
+        </mxCell>
+        <mxCell id="m48" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontColor=#1a1a1a;fontSize=13;fontSize=12;align=center;verticalAlign=middle;" value="2" vertex="1">
+          <mxGeometry height="30" width="26" x="40" y="880" as="geometry" />
+        </mxCell>
+        <mxCell id="m49" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#f8cecc;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="Endpoint GET /resumes/me зарегистрирован после GET /resumes/{resume_id} и не работает (422) — на мобильном использовать GET /resumes/ и фильтровать по владельцу." vertex="1">
+          <mxGeometry height="30" width="1668" x="72" y="880" as="geometry" />
+        </mxCell>
+        <mxCell id="m50" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontColor=#1a1a1a;fontSize=13;fontSize=12;align=center;verticalAlign=middle;" value="3" vertex="1">
+          <mxGeometry height="30" width="26" x="40" y="914" as="geometry" />
+        </mxCell>
+        <mxCell id="m51" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#f8cecc;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="Пагинация и формат фильтров в /projects/ нужно зафиксировать контрактом: без него оффлайн-кэш и бесконечная лента не согласовать с вебом." vertex="1">
+          <mxGeometry height="30" width="1668" x="72" y="914" as="geometry" />
+        </mxCell>
+        <mxCell id="m52" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontColor=#1a1a1a;fontSize=13;fontSize=12;align=center;verticalAlign=middle;" value="4" vertex="1">
+          <mxGeometry height="30" width="26" x="40" y="948" as="geometry" />
+        </mxCell>
+        <mxCell id="m53" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#f8cecc;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="Audit-log и профиль пишутся через один и тот же эндпоинт профиля — отдельного PATCH /profile нет, править надо через PUT /users/{id} с проверкой прав." vertex="1">
+          <mxGeometry height="30" width="1668" x="72" y="948" as="geometry" />
+        </mxCell>
+        <mxCell id="m54" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontColor=#1a1a1a;fontSize=13;fontSize=12;align=center;verticalAlign=middle;" value="5" vertex="1">
+          <mxGeometry height="30" width="26" x="40" y="982" as="geometry" />
+        </mxCell>
+        <mxCell id="m55" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#f8cecc;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="Списки откликов по проекту недоступны отдельным эндпоинтом — мобильному экрану «Отклики проекта» нужен GET /projects/{id}/responses." vertex="1">
+          <mxGeometry height="30" width="1668" x="72" y="982" as="geometry" />
+        </mxCell>
+        <mxCell id="m56" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontColor=#1a1a1a;fontSize=13;fontSize=12;align=center;verticalAlign=middle;" value="6" vertex="1">
+          <mxGeometry height="30" width="26" x="40" y="1016" as="geometry" />
+        </mxCell>
+        <mxCell id="m57" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#f8cecc;fontColor=#333333;fontSize=13;align=left;spacingLeft=8;fontSize=12;verticalAlign=middle;" value="Для deep-link с push нужен FCM-плагин; на сервере NotificationService и Kafka отсутствуют — отправку пока делает SMTP." vertex="1">
+          <mxGeometry height="30" width="1668" x="72" y="1016" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

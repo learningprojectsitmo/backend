@@ -84,6 +84,39 @@ HTTP_ERRORS_TOTAL = Counter(
     ("method", "path", "status"),
 )
 
+# --- Push (FCM) ---
+
+#: `result` намеренно мелкий: `sent` / `retry` / `dropped` (токен мёртв) /
+#: `failed_permanent` (наш сломанный payload). Без раздельного
+#: failed_permanent нельзя отличить «сеть виновата» от «мы сами собрали
+#: сообщение неправильно» — а чинить нужно второе.
+PUSH_SENT_TOTAL = Counter(
+    "push_sent_total",
+    "Сообщения, принятые FCM",
+)
+
+PUSH_FAILURES_TOTAL = Counter(
+    "push_failures_total",
+    "Неудачные отправки push",
+    ("reason",),
+)
+
+PUSH_QUEUED = Gauge(
+    "push_outbox_pending",
+    "Сообщений в очереди доставки (pending + failed)",
+)
+
+PUSH_QUEUE_DEPTH = Histogram(
+    "push_outbox_enqueue_seconds",
+    "Время от постановки сообщения в очередь до принятия FCM, секунды",
+    buckets=(1, 5, 15, 60, 300, 900, 3600),
+)
+
+PUSH_TOKENS_DEACTIVATED = Counter(
+    "push_tokens_deactivated_total",
+    "Погашенные FCM-токены (устройство удалено или приложение переустановлено)",
+)
+
 
 def get_multiprocess_registry() -> CollectorRegistry | None:
     """Registry для multiprocess-режима uvicorn workers, если он включён.

@@ -10,6 +10,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from src.core.database import Base
 
 if TYPE_CHECKING:
+    from src.model.push import PushOutbox
     from src.model.user import User
 
 
@@ -54,6 +55,10 @@ class Notification(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     user: Mapped[User] = relationship(back_populates="notifications")
+    push_outbox: Mapped[list[PushOutbox]] = relationship(
+        back_populates="notification",
+        cascade="all, delete-orphan",
+    )
 
     def __repr__(self) -> str:
         return f"Notification(id={self.id!r}, user_id={self.user_id!r}, type={self.type!r}, read={self.read!r})"

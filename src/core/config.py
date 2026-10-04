@@ -69,6 +69,26 @@ class Settings(BaseSettings):
     SENTRY_DSN: str | None = None
     SENTRY_TRACES_SAMPLE_RATE: float = 1.0
 
+    # FCM (Firebase Cloud Messaging), HTTP v1
+    # Выключено по умолчанию: без ключа сервис-аккаунта воркер не должен
+    # ни стартовать, ни сыпать ошибками в логи на каждом уведомлении.
+    PUSH_ENABLED: bool = False
+    # JSON сервис-аккаунта целиком в base64 — в .env многострочные значения
+    # неудобны, а путь к файлу в контейнере лишний. Путь тоже поддерживается
+    # для локальной отладки.
+    FIREBASE_CREDENTIALS_BASE64: str | None = None
+    FIREBASE_CREDENTIALS_FILE: str | None = None
+    # Берётся из самого service account, отдельная настройка — только если
+    # ключ лежит в другом месте и project_id надо задать руками.
+    FIREBASE_PROJECT_ID: str | None = None
+    FCM_TIMEOUT_SECONDS: float = 10.0
+    # Пауза между опросами outbox, когда он пуст. Чаще поллить смысла нет:
+    # запросы к FCM платные, а задержка в несколько секунд на доставке
+    # уведомления не видна человеку.
+    PUSH_WORKER_POLL_SECONDS: float = 5.0
+    PUSH_WORKER_BATCH_SIZE: int = 50
+    PUSH_WORKER_ENABLED: bool = True
+
     model_config = SettingsConfigDict(env_file=_BACKEND_DIR / ".env", extra="ignore")
 
 
