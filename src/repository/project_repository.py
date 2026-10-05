@@ -64,13 +64,23 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         return result.scalar_one_or_none()
 
     async def is_user_in_project(self, project_id: int, user_id: int) -> bool:
+        """Есть ли пользователь в проекте.
+
+        ``limit(1)``, а не ``scalar_one_or_none``: проверка существования не
+        должна падать на дубликатах. Исторические базы могли получить по
+        несколько строк участия на пару (project_id, participant_id), и
+        ``scalar_one_or_none`` превращал такую базу в 500 на любом вызове,
+        где нужен булев ответ.
+        """
         result = await self.uow.session.execute(
-            select(ProjectParticipation).where(
+            select(ProjectParticipation)
+            .where(
                 ProjectParticipation.project_id == project_id,
                 ProjectParticipation.participant_id == user_id,
-            ),
+            )
+            .limit(1),
         )
-        return result.scalar_one_or_none() is not None
+        return result.scalars().first() is not None
 
     async def get_by_author_id(self, author_id: int) -> list[Project]:
         query = (
@@ -132,6 +142,24 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
     async def get_response_by_id(self, response_id: int) -> Response | None:
         result = await self.uow.session.execute(select(Response).where(Response.id == response_id))
         return result.scalar_one_or_none()
+
+    async def get_response_by_id_for_update(self, response_id: int) -> Response | None:
+        """Взять отклик/приглашение под блокировкой строки.
+
+        Принимание заявки — это «прочитал статус → потом вставил участие», и
+        без блокировки два параллельных запроса читают один и тот же статус
+        ``pending``/``accepted`` и оба вставляют по строке в
+        ``project_participation``. Такое происходит при двойном клике по кнопке
+        подтверждения: фронт не успевает её задизейблить между кликами.
+
+        Блокировка сериализует второй запрос — он дождётся коммита первого и
+        увидит терминальный статус. Аналог ``get_by_token_with_for_update`` в
+        invitation_repository для вступления по ссылке.
+        """
+        result = await self.uow.session.execute(
+            select(Response).where(Response.id == response_id).with_for_update(),
+        )
+        return result.scalars().first()
 
     async def update_response_status(self, response_id: int, status: str) -> Response | None:
         response = await self.get_response_by_id(response_id)
@@ -305,16 +333,26 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         return list(result.scalars().all())
 
     async def remove_participant(self, project_id: int, user_id: int) -> bool:
+        """Убрать пользователя из проекта, удалив ВСЕ строки участия.
+
+        Исторически пара (project_id, participant_id) могла встречаться
+        несколько раз. Удаление одной строки оставляло пользователя в команде
+        (и ``scalar_one_or_none`` на второй попытке падал бы), поэтому выбираем
+        и удаляем все. Именно ORM-delete, а не bulk ``delete()``: на bulk не
+        срабатывает ``before_delete`` в audit_listeners, и запись о снятии
+        участника пропала бы из ленты активности проекта.
+        """
         result = await self.uow.session.execute(
             select(ProjectParticipation).where(
                 ProjectParticipation.project_id == project_id,
                 ProjectParticipation.participant_id == user_id,
             ),
         )
-        participation = result.scalar_one_or_none()
-        if not participation:
+        participations = list(result.scalars().all())
+        if not participations:
             return False
-        await self.uow.session.delete(participation)
+        for participation in participations:
+            await self.uow.session.delete(participation)
         await self.uow.session.flush()
         return True
 
@@ -341,24 +379,28 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
 
     async def has_pending_response(self, project_id: int, user_id: int) -> bool:
         result = await self.uow.session.execute(
-            select(Response).where(
+            select(Response)
+            .where(
                 Response.project_id == project_id,
                 Response.respondent_id == user_id,
                 Response.status == "pending",
-            ),
+            )
+            .limit(1),
         )
-        return result.scalar_one_or_none() is not None
+        return result.scalars().first() is not None
 
     async def has_pending_invitation(self, project_id: int, user_id: int) -> bool:
         result = await self.uow.session.execute(
-            select(Response).where(
+            select(Response)
+            .where(
                 Response.project_id == project_id,
                 Response.respondent_id == user_id,
                 Response.type == "invitation",
                 Response.status == "pending",
-            ),
+            )
+            .limit(1),
         )
-        return result.scalar_one_or_none() is not None
+        return result.scalars().first() is not None
 
     async def create_response(
         self,
@@ -418,6 +460,28 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         await self.uow.session.flush()
 
     async def add_participant(self, project_id: int, user_id: int) -> ProjectParticipation:
+        """Добавить участника проекта, если его ещё нет.
+
+        Идемпотентно по контракту: повторный вызов возвращает существующую строку
+        участия, а не создаёт вторую. Раньше здесь был голый INSERT, поэтому любой
+        повторный путь (двойной клик по кнопке подтверждения, ретрай) добавлял
+        в ``project_participation`` ещё одну строку на ту же пару, а список
+        участников проекта показывал человека дважды.
+
+        Опора на уникальный индекс ``uq_pp_project_participant`` (см.
+        ``model/project.py``) — приложение само по себе ему не доверяет.
+        """
+        result = await self.uow.session.execute(
+            select(ProjectParticipation)
+            .where(
+                ProjectParticipation.project_id == project_id,
+                ProjectParticipation.participant_id == user_id,
+            )
+            .limit(1),
+        )
+        existing = result.scalars().first()
+        if existing is not None:
+            return existing
         participation = ProjectParticipation(
             project_id=project_id,
             participant_id=user_id,
@@ -504,11 +568,19 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         return result.first() is not None
 
     async def get_accepted_response_for_participant(self, project_id: int, user_id: int) -> Response | None:
+        """Принятый отклик пользователя по проекту.
+
+        ``first()``, а не ``scalar_one_or_none``: автор мог принять две разные
+        заявки одного человека (например, отклик и приглашение), и тогда
+        ``scalar_one_or_none`` ронял бы 500 вместо возврата одной строки.
+        """
         result = await self.uow.session.execute(
-            select(Response).where(
+            select(Response)
+            .where(
                 Response.project_id == project_id,
                 Response.respondent_id == user_id,
                 Response.status == "accepted",
             )
+            .limit(1),
         )
-        return result.scalar_one_or_none()
+        return result.scalars().first()

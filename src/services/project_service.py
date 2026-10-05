@@ -535,13 +535,22 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
 
     async def accept_invitation(self, invitation_id: int, user_id: int) -> Response:
         """Принять приглашение"""
-        invitation = await self._project_repository.get_response_by_id(invitation_id)
+        # Блокировка строки + guard на участие ниже: без них два параллельных
+        # «принять приглашение» читали один и тот же статус pending и оба
+        # добавляли по строке в project_participation.
+        invitation = await self._project_repository.get_response_by_id_for_update(invitation_id)
         if not invitation:
             raise NotFoundError("Invitation not found")
         if invitation.respondent_id != user_id:
             raise PermissionError("This invitation is not for you")
         if invitation.type != "invitation":
             raise ValidationError("This is not an invitation")
+        # Повторно принять приглашение — уже сделанное дело, а не ошибка. Guard
+        # стоит ДО проверки статуса: после первого принятия статус уже
+        # `accepted`, и проверка ниже вернула бы 400 на ретрай. Владелец и тип
+        # проверяются раньше — как и в confirm_join.
+        if await self._project_repository.is_user_in_project(invitation.project_id, user_id):
+            return await self._project_repository.update_response_status(invitation_id, "accepted") or invitation
         if invitation.status != "pending":
             raise ValidationError("Can only accept pending invitations")
         project = await self._project_repository.get_by_id(invitation.project_id)
@@ -986,12 +995,18 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         # Если проект принадлежит workspace — синхронизируем участие в workspace
         if project.workspace_id:
             existing = await self._project_repository.uow.session.execute(
-                select(WorkSpaceParticipation).where(
+                select(WorkSpaceParticipation)
+                .where(
                     WorkSpaceParticipation.workspace_id == project.workspace_id,
                     WorkSpaceParticipation.participant_id == author_id,
                 )
+                .limit(1)
             )
-            if not existing.scalar_one_or_none():
+            # first(), а не scalar_one_or_none(): в пространстве может быть
+            # больше одной строки участия на автора, и тогда scalar_one_or_none
+            # уронил бы создание проекта в 500 вместо того, чтобы просто
+            # пропустить вставку.
+            if existing.scalars().first() is None:
                 ws_participation = WorkSpaceParticipation(
                     workspace_id=project.workspace_id,
                     participant_id=author_id,
@@ -1284,13 +1299,22 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
 
     async def confirm_join(self, response_id: int, user_id: int) -> Response:
         """Участник подтверждает вступление в проект после принятия отклика"""
-        response = await self._project_repository.get_response_by_id(response_id)
+        # С блокировкой строки: второй параллельный запрос (двойной клик по кнопке
+        # подтверждения) дождётся коммита первого и увидит терминальный статус.
+        response = await self._project_repository.get_response_by_id_for_update(response_id)
         if not response:
             raise NotFoundError("Response not found")
         if response.respondent_id != user_id:
             raise PermissionError("This response is not yours")
         if response.type != "response":
             raise ValidationError("This is not a response")
+        # Повторное подтверждение — не ошибка, а уже сделанное дело. Проверка
+        # именно здесь, ДО проверки статуса: после первого запроса статус уже
+        # `in_team`, и проверка статуса ниже вернула бы 400, то есть двойной
+        # клик или ретрай ломал бы ретраиальность эндпоинта. Порядок выше
+        # (владелец → тип) менять нельзя: он отсекает чужие и неверные заявки.
+        if await self._project_repository.is_user_in_project(response.project_id, user_id):
+            return response
         if response.status != "accepted":
             raise ValidationError("Can only confirm accepted responses")
         project = await self._project_repository.get_by_id(response.project_id)

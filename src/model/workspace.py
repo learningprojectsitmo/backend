@@ -71,8 +71,12 @@ class WorkSpaceParticipation(Base):
 
     # Участники workspace и проверка membership — из шести мест в коде.
     # Обратный список: workspace, в которых участвует пользователь.
+    # Уникальный индекс по (workspace_id, participant_id) — по той же причине,
+    # что и `uq_pp_project_participant`: без него участник пространства мог
+    # числиться дважды и дважды показывался в таблице участников и в списке
+    # резюме пространства.
     __table_args__ = (
-        Index("ix_wp_workspace_participant", "workspace_id", "participant_id"),
+        Index("uq_wp_workspace_participant", "workspace_id", "participant_id", unique=True),
         Index("ix_wp_participant", "participant_id"),
     )
 

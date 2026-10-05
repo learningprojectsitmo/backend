@@ -471,19 +471,25 @@ class ProjectStageService(BaseService[Project, dict, dict]):
         # Доступ: автор, участник, преподаватель, админ
         if project.author_id != user_id:
             participant = await self._type_repository.uow.session.execute(
-                select(WorkSpaceParticipation).where(
+                select(WorkSpaceParticipation)
+                .where(
                     WorkSpaceParticipation.workspace_id == project.workspace_id,
                     WorkSpaceParticipation.participant_id == user_id,
                 )
+                .limit(1)
             )
             in_project = await self._type_repository.uow.session.execute(
-                select(ProjectParticipation).where(
+                select(ProjectParticipation)
+                .where(
                     ProjectParticipation.project_id == project_id,
                     ProjectParticipation.participant_id == user_id,
                 )
+                .limit(1)
             )
             is_teacher = await self._is_teacher(project, user_id)
-            if not in_project.scalar_one_or_none() and not is_teacher and not participant.scalar_one_or_none():
+            # ``limit(1)`` в выборках выше — иначе дубль строки участия ронял бы
+            # проверку доступа к этапам в 500 вместо того, чтобы пустить участника.
+            if in_project.scalars().first() is None and not is_teacher and participant.scalars().first() is None:
                 raise PermissionError("You do not have access to this project's stage history")
 
         transitions = await self._transition_repository.get_transitions_by_project(project_id)

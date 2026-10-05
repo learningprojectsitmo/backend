@@ -1235,7 +1235,8 @@ class TestMultiProjectRestriction:
         mock_session = AsyncMock()
         mock_uow.session = mock_session
         mock_repository.uow = mock_uow
-        mock_repository.get_response_by_id = AsyncMock(return_value=self._make_accepted_response(1, 2, 3))
+        mock_repository.get_response_by_id_for_update = AsyncMock(return_value=self._make_accepted_response(1, 2, 3))
+        mock_repository.is_user_in_project = AsyncMock(return_value=False)
         mock_repository.get_by_id = AsyncMock(
             return_value=Project(id=3, name="P", author_id=1, workspace_id=7, max_participants=None)
         )
@@ -1263,7 +1264,8 @@ class TestMultiProjectRestriction:
         mock_session = AsyncMock()
         mock_uow.session = mock_session
         mock_repository.uow = mock_uow
-        mock_repository.get_response_by_id = AsyncMock(return_value=self._make_accepted_response(1, 2, 3))
+        mock_repository.get_response_by_id_for_update = AsyncMock(return_value=self._make_accepted_response(1, 2, 3))
+        mock_repository.is_user_in_project = AsyncMock(return_value=False)
         mock_repository.get_by_id = AsyncMock(
             return_value=Project(id=3, name="P", author_id=1, workspace_id=7, max_participants=None)
         )
@@ -1290,7 +1292,8 @@ class TestMultiProjectRestriction:
         mock_session = AsyncMock()
         mock_uow.session = mock_session
         mock_repository.uow = mock_uow
-        mock_repository.get_response_by_id = AsyncMock(return_value=self._make_accepted_response(1, 2, 3))
+        mock_repository.get_response_by_id_for_update = AsyncMock(return_value=self._make_accepted_response(1, 2, 3))
+        mock_repository.is_user_in_project = AsyncMock(return_value=False)
         mock_repository.get_by_id = AsyncMock(
             return_value=Project(id=3, name="P", author_id=1, workspace_id=7, max_participants=None)
         )
@@ -1314,7 +1317,8 @@ class TestMultiProjectRestriction:
         mock_session = AsyncMock()
         mock_uow.session = mock_session
         mock_repository.uow = mock_uow
-        mock_repository.get_response_by_id = AsyncMock(return_value=self._make_pending_invitation(5, 2, 3))
+        mock_repository.get_response_by_id_for_update = AsyncMock(return_value=self._make_pending_invitation(5, 2, 3))
+        mock_repository.is_user_in_project = AsyncMock(return_value=False)
         mock_repository.get_by_id = AsyncMock(
             return_value=Project(id=3, name="P", author_id=1, workspace_id=7, max_participants=None)
         )
@@ -1341,7 +1345,8 @@ class TestMultiProjectRestriction:
         mock_session = AsyncMock()
         mock_uow.session = mock_session
         mock_repository.uow = mock_uow
-        mock_repository.get_response_by_id = AsyncMock(return_value=self._make_pending_invitation(5, 2, 3))
+        mock_repository.get_response_by_id_for_update = AsyncMock(return_value=self._make_pending_invitation(5, 2, 3))
+        mock_repository.is_user_in_project = AsyncMock(return_value=False)
         mock_repository.get_by_id = AsyncMock(
             return_value=Project(id=3, name="P", author_id=1, workspace_id=7, max_participants=None)
         )
@@ -1624,6 +1629,222 @@ class TestMultiProjectRestriction:
 
         # then
         mock_repository.create_response.assert_awaited_once()
+
+
+class TestParticipationDuplicates:
+    """Повторное принятие заявки не должно плодить строки участия.
+
+    Регрессия: на проде у одного человека накопились четыре строки в
+    `project_participation` на пару (project_id, participant_id) — по одной на
+    каждый клик по кнопке подтверждения. Список участников проекта строится по
+    этим строкам, поэтому человек показывался четырежды.
+
+    Отсюда два требования к сервису: блокировка строки заявки (сериализует
+    параллельные запросы) и guard на уже существующее участие (повторный запрос
+    — не ошибка, а уже сделанное дело).
+    """
+
+    def _accepted_response(self, response_id: int = 1, user_id: int = 2, project_id: int = 3) -> Response:
+        return Response(
+            id=response_id,
+            respondent_id=user_id,
+            project_id=project_id,
+            type="response",
+            status="accepted",
+        )
+
+    def _pending_invitation(self, invitation_id: int = 5, user_id: int = 2, project_id: int = 3) -> Response:
+        return Response(
+            id=invitation_id,
+            respondent_id=user_id,
+            project_id=project_id,
+            type="invitation",
+            status="pending",
+        )
+
+    def _repo(self, **kwargs) -> Mock:
+        repository = Mock(spec=ProjectRepository)
+        uow = Mock()
+        uow.session = AsyncMock()
+        repository.uow = uow
+        repository.get_response_by_id_for_update = AsyncMock(
+            return_value=kwargs.pop("response", None),
+        )
+        repository.get_by_id = AsyncMock(
+            return_value=Project(id=3, name="P", author_id=1, workspace_id=None, max_participants=None),
+        )
+        # По умолчанию участника в проекте нет — иначе новый guard срезал бы
+        # тело метода раньше, чем его интересно проверить.
+        repository.is_user_in_project = AsyncMock(return_value=False)
+        repository.is_user_participant_in_other_project = AsyncMock(return_value=False)
+        repository.add_participant = AsyncMock()
+        repository.update_response_status = AsyncMock(return_value=True)
+        repository.decrement_vacancy_count = AsyncMock()
+        for key, value in kwargs.items():
+            setattr(repository, key, value)
+        return repository
+
+    def _stateful_repo(self, response: Response) -> Mock:
+        """Репозиторий, который помнит состояние — как реальная БД.
+
+        Нужен для тестов на повторный запрос: `add_participant` обязан увидеть
+        уже добавленную строку, а статус заявки — обновлённый. Статические
+        `AsyncMock(return_value=...)` этого не моделируют, и тест на «две
+        строки участия» проходит, ничего не проверяя.
+        """
+        repository = self._repo(response=response)
+        repository.participations = []
+        repository.status_updates = []
+        repository.vacancy_decrements = []
+
+        async def _add_participant(project_id: int, user_id: int):
+            pair = (project_id, user_id)
+            if pair in repository.participations:
+                return Mock()
+            repository.participations.append(pair)
+            return Mock()
+
+        async def _is_user_in_project(project_id: int, user_id: int) -> bool:
+            return (project_id, user_id) in repository.participations
+
+        async def _update_response_status(response_id: int, status: str):
+            repository.status_updates.append((response_id, status))
+            response.status = status
+            return response
+
+        async def _decrement(vacancy_id: int):
+            repository.vacancy_decrements.append(vacancy_id)
+
+        repository.add_participant = AsyncMock(side_effect=_add_participant)
+        repository.is_user_in_project = AsyncMock(side_effect=_is_user_in_project)
+        repository.update_response_status = AsyncMock(side_effect=_update_response_status)
+        repository.decrement_vacancy_count = AsyncMock(side_effect=_decrement)
+        return repository
+
+    @pytest.mark.asyncio
+    async def test_confirm_join_takes_row_lock_on_response(self):
+        # given
+        repository = self._repo(response=self._accepted_response())
+
+        # when
+        await ProjectService(repository).confirm_join(1, 2)
+
+        # then: заявка читается под блокировкой, иначе параллельные запросы
+        # прочитают один статус и оба вставят участие
+        repository.get_response_by_id_for_update.assert_awaited_once_with(1)
+        repository.add_participant.assert_awaited_once_with(3, 2)
+
+    @pytest.mark.asyncio
+    async def test_confirm_join_is_noop_when_already_participant(self):
+        # given: участие уже есть (пользователь вступил по приглашению, а этот
+        # отклик остался в accepted) — вторая строка участия не создаётся
+        repository = self._repo(response=self._accepted_response(), is_user_in_project=AsyncMock(return_value=True))
+
+        # when
+        await ProjectService(repository).confirm_join(1, 2)
+
+        # then
+        repository.add_participant.assert_not_called()
+        repository.decrement_vacancy_count.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_confirm_join_double_request_creates_one_participation(self):
+        # given: два «клика» подряд на одну и ту же заявку
+        repository = self._stateful_repo(self._accepted_response())
+        service = ProjectService(repository)
+
+        # when
+        first = await service.confirm_join(1, 2)
+        second = await service.confirm_join(1, 2)
+
+        # then: ровно одна строка участия, оба вызова успешны
+        assert repository.participations == [(3, 2)]
+        assert first is not None and second is not None
+
+    @pytest.mark.asyncio
+    async def test_confirm_join_noop_when_status_already_in_team(self):
+        # given: именно состояние после первого успешного подтверждения —
+        # строка участия создана, статус уже in_team. Именно к нему приходит
+        # второй клик по кнопке.
+        repository = self._stateful_repo(self._accepted_response())
+        service = ProjectService(repository)
+        await service.confirm_join(1, 2)
+
+        # when
+        await service.confirm_join(1, 2)
+
+        # then: повтор — не ошибка и не новая строка участия
+        assert repository.participations == [(3, 2)]
+        assert repository.status_updates == [(1, "in_team")]
+
+    @pytest.mark.asyncio
+    async def test_confirm_join_rejects_repeat_after_user_left_project(self):
+        # given: пользователь был в проекте, вышел, статус заявки — in_team.
+        # Повторное подтверждение тут уже НЕ no-op: участие снято, заявка
+        # терминальная, и вернуть 200 молча было бы враньём.
+        response = self._accepted_response()
+        response.status = "in_team"
+        repository = self._repo(response=response, is_user_in_project=AsyncMock(return_value=False))
+
+        # when / then
+        with pytest.raises(ValidationError, match="accepted"):
+            await ProjectService(repository).confirm_join(1, 2)
+        repository.add_participant.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_accept_invitation_takes_row_lock(self):
+        # given
+        repository = self._repo(response=self._pending_invitation())
+
+        # when
+        await ProjectService(repository).accept_invitation(5, 2)
+
+        # then
+        repository.get_response_by_id_for_update.assert_awaited_once_with(5)
+        repository.add_participant.assert_awaited_once_with(3, 2)
+
+    @pytest.mark.asyncio
+    async def test_accept_invitation_is_noop_when_already_participant(self):
+        # given: пользователь уже в проекте, приглашение висит pending
+        repository = self._repo(
+            response=self._pending_invitation(),
+            is_user_in_project=AsyncMock(return_value=True),
+            update_response_status=AsyncMock(return_value=None),
+        )
+
+        # when
+        await ProjectService(repository).accept_invitation(5, 2)
+
+        # then: главное — не вторая строка участия
+        repository.add_participant.assert_not_called()
+        repository.decrement_vacancy_count.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_accept_invitation_double_request_creates_one_participation(self):
+        # given
+        repository = self._stateful_repo(self._pending_invitation())
+        service = ProjectService(repository)
+
+        # when
+        await service.accept_invitation(5, 2)
+        await service.accept_invitation(5, 2)
+
+        # then
+        assert repository.participations == [(3, 2)]
+
+    @pytest.mark.asyncio
+    async def test_accept_invitation_noop_when_status_already_accepted(self):
+        # given: состояние после первого принятия — участие есть, статус accepted
+        repository = self._stateful_repo(self._pending_invitation())
+        service = ProjectService(repository)
+        await service.accept_invitation(5, 2)
+
+        # when: повторный клик «Принять»
+        await service.accept_invitation(5, 2)
+
+        # then
+        assert repository.participations == [(3, 2)]
+        assert repository.vacancy_decrements == []
 
 
 class TestListAllResponses:

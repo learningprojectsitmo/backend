@@ -67,13 +67,18 @@ class WikiService(BaseService[WikiPage, WikiPageCreate, WikiPageUpdate]):
         return result.first() is not None
 
     async def _is_project_participant(self, project_id: int, user_id: int) -> bool:
+        # ``limit(1)``: в паре (project_id, participant_id) исторически могло быть
+        # несколько строк участия, и ``scalar_one_or_none`` превращал такую базу в
+        # 500 на проверке доступа к вики, вместо того чтобы вернуть «участник».
         result = await self._wiki_repository.uow.session.execute(
-            select(ProjectParticipation).where(
+            select(ProjectParticipation)
+            .where(
                 ProjectParticipation.project_id == project_id,
                 ProjectParticipation.participant_id == user_id,
             )
+            .limit(1)
         )
-        return result.scalar_one_or_none() is not None
+        return result.scalars().first() is not None
 
     async def _is_team_member(self, project: Project, user_id: int) -> bool:
         """Свой ли проект для пользователя — по образцу SpecificationService._can_view."""

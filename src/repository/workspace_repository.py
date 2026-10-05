@@ -133,17 +133,18 @@ class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUp
         return category
 
     async def remove_participant(self, workspace_id: int, user_id: int) -> bool:
-        """Удалить участника из workspace"""
+        """Удалить участника из workspace (все строки участия, если их вдруг больше одной)"""
         result = await self.uow.session.execute(
             select(WorkSpaceParticipation).where(
                 WorkSpaceParticipation.workspace_id == workspace_id,
                 WorkSpaceParticipation.participant_id == user_id,
             )
         )
-        participation = result.scalar_one_or_none()
-        if not participation:
+        participations = list(result.scalars().all())
+        if not participations:
             return False
-        await self.uow.session.delete(participation)
+        for participation in participations:
+            await self.uow.session.delete(participation)
         return True
 
     @staticmethod

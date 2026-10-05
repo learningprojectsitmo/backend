@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import pytest
 from pydantic import ValidationError
+from sqlalchemy.schema import CreateIndex
 
 from src.model.project import Project, ProjectParticipation, ProjectVacancy, Response
 from src.model.user import User
+from src.model.workspace import WorkSpaceParticipation
 from src.schema.project import (
     MAX_VACANCY_TASK_LENGTH,
     PROJECT_AUTHOR_ROLE,
@@ -216,3 +218,59 @@ class TestProjectTeamMembers:
         accepted = next(m for m in members if m.user_id == 2)
         assert accepted.role == ""
         assert accepted.resume_url == ""
+
+
+class TestParticipationUniqueIndexes:
+    """Уникальность пары (проект, участник) и (пространство, участник).
+
+    Регрессия: в `project_participation` накопились четыре строки на пару
+    (21, 36) — по одной на каждый клик по кнопке подтверждения. Список
+    участников проекта строится по этим строкам, поэтому человек показывался
+    четырежды, а `participants_count` завышался.
+
+    Проверяем именно `unique=True` в модели, а не только наличие индекса:
+    неуникальный индекс по той же паре колонок не защищает от дублей, но
+    выглядит в схеме почти так же — регрессия прошла бы незамеченной.
+    """
+
+    @staticmethod
+    def _index(table, name: str):
+        return next(idx for idx in table.indexes if idx.name == name)
+
+    def test_project_participation_pair_is_unique(self):
+        # given / when
+        index = self._index(ProjectParticipation.__table__, "uq_pp_project_participant")
+
+        # then
+        assert index.unique is True
+        assert [col.name for col in index.columns] == ["project_id", "participant_id"]
+
+    def test_workspace_participation_pair_is_unique(self):
+        # given / when
+        index = self._index(WorkSpaceParticipation.__table__, "uq_wp_workspace_participant")
+
+        # then
+        assert index.unique is True
+        assert [col.name for col in index.columns] == ["workspace_id", "participant_id"]
+
+    def test_participation_indexes_reject_multiples_in_create_all(self):
+        # given: DDL, который SQLAlchemy генерирует из моделей
+        statements = {
+            index.name: str(CreateIndex(index))
+            for table in (ProjectParticipation.__table__, WorkSpaceParticipation.__table__)
+            for index in table.indexes
+        }
+
+        # then: обе пары объявляются как UNIQUE на уровне самой схемы
+        assert "CREATE UNIQUE INDEX uq_pp_project_participant" in statements["uq_pp_project_participant"]
+        assert "CREATE UNIQUE INDEX uq_wp_workspace_participant" in statements["uq_wp_workspace_participant"]
+
+    def test_reverse_lookup_index_stays_non_unique(self):
+        # given / when: обратный список «проекты пользователя» / «пространства
+        # пользователя» — там дубли как раз законны
+        project_index = self._index(ProjectParticipation.__table__, "ix_pp_participant")
+        workspace_index = self._index(WorkSpaceParticipation.__table__, "ix_wp_participant")
+
+        # then
+        assert project_index.unique is not True
+        assert workspace_index.unique is not True

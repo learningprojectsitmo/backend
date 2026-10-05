@@ -64,9 +64,18 @@ def _session() -> Mock:
 
 
 def _found(value: object) -> Mock:
-    """Результат execute() для exists-подобных выборок."""
+    """Результат execute() для exists-подобных выборок.
+
+    Задаёт оба способа достать значение — `scalar_one_or_none` и
+    `scalars().first()`. Проверка участия в проекте перешла на
+    `scalars().first()`: на `scalar_one_or_none` дубль в
+    `project_participation` ронял бы запрос, вместо того чтобы считать
+    человека участником. Соседние проверки этого сервиса остались на старой
+    форме, поэтому нужны оба.
+    """
     result = Mock()
     result.scalar_one_or_none.return_value = value
+    result.scalars.return_value.first.return_value = value
     return result
 
 

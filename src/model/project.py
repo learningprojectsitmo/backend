@@ -138,8 +138,14 @@ class ProjectParticipation(Base):
 
     # Проверка доступа к проекту выполняется на каждом запросе к доске.
     # Обратный список: проекмы, в которых участвует пользователь.
+    # `uq_pp_project_participant` — уникальный: без него пара
+    # (project_id, participant_id) могла встречаться многократно, и человек
+    # показывался в списке участников проекта дважды (а participants_count
+    # завышался). Исторически этот индекс был создан как обычный
+    # (`c52423977558`), отсюда и переименование: уникальный индекс на ту же пару
+    # колонок заменяет прежний, а не добавляется вторым.
     __table_args__ = (
-        Index("ix_pp_project_participant", "project_id", "participant_id"),
+        Index("uq_pp_project_participant", "project_id", "participant_id", unique=True),
         Index("ix_pp_participant", "participant_id"),
     )
 
