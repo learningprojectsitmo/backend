@@ -1,12 +1,31 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from src.model.project import Project
 from src.schema.stage import ProjectStageInfo
 from src.util.urls import build_resume_url
+
+if TYPE_CHECKING:
+    from src.model.project import ProjectParticipation, Response
+
+#: Потолок длины одной задачи роли. ``project_vacancy.tasks`` — JSON без
+#: ограничения на стороне БД, поэтому длина задаётся только здесь.
+MAX_VACANCY_TASK_LENGTH = 500
+
+
+def _find_duplicates(values: list[str]) -> list[str]:
+    """Повторы в списке строк, в порядке первого появления."""
+    seen: set[str] = set()
+    duplicates: list[str] = []
+    for value in values:
+        if value in seen and value not in duplicates:
+            duplicates.append(value)
+        seen.add(value)
+    return duplicates
 
 
 class ParticipantPreview(BaseModel):
@@ -15,6 +34,12 @@ class ParticipantPreview(BaseModel):
     avatar_url: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# Роль автора проекта в таблице команды. Автора добавляют в участники при
+# создании проекта, без отклика, поэтому роль из принятого отклика ему не
+# достаётся — иначе колонка «Роль» выглядит пустой.
+PROJECT_AUTHOR_ROLE = "Автор"
 
 
 class ParticipantFull(BaseModel):
@@ -124,7 +149,31 @@ class VacancyCreate(BaseModel):
         cleaned = [t.strip() for t in v if t.strip()]
         if not cleaned:
             raise ValueError("У роли должны быть указаны задачи")
+
+        too_long = [t for t in cleaned if len(t) > MAX_VACANCY_TASK_LENGTH]
+        if too_long:
+            raise ValueError(f"Задача не может быть длиннее {MAX_VACANCY_TASK_LENGTH} символов")
+
+        duplicates = _find_duplicates(cleaned)
+        if duplicates:
+            listed = ", ".join(f"«{d}»" for d in duplicates[:3])
+            raise ValueError(f"Задачи роли не должны повторяться: {listed}")
+
         return cleaned
+
+
+class VacancyUpdate(VacancyCreate):
+    """Роль в запросе на обновление проекта.
+
+    Обновление синхронизирует список ролей по ``id``, а не пересоздаёт его:
+    пересоздание обнуляло бы ``response.vacancy_id`` у уже откликнувшихся, и
+    роль пропадала бы из откликов при каждом сохранении проекта.
+
+    ``id`` есть у ролей, пришедших с сервера, и отсутствует у новых — те
+    создаются этим же запросом.
+    """
+
+    id: int | None = None
 
 
 class ProjectCreate(BaseModel):
@@ -168,7 +217,7 @@ class ProjectUpdate(BaseModel):
     progress: int | None = None
     tags: list[str] | None = None
     workspace_id: int | None = None
-    vacancies: list[VacancyCreate] | None = None
+    vacancies: list[VacancyUpdate] | None = None
     project_type_id: int | None = None
 
 
@@ -235,6 +284,41 @@ def _latest_rejection(project: Project) -> StageRejectionInfo | None:
     return latest
 
 
+def _member_role(
+    participation: ProjectParticipation,
+    project: Project,
+    accepted_by_participant: dict[int, Response],
+) -> str:
+    """Роль участника команды: из принятого отклика, иначе «Автор».
+
+    Пустая строка читалась как «данных нет», хотя для автора проекта роль
+    определена — он и есть автор.
+    """
+    if participation.participant_id == project.author_id:
+        return PROJECT_AUTHOR_ROLE
+    response = accepted_by_participant.get(participation.participant_id)
+    if response is None or response.vacancy is None:
+        return ""
+    return response.vacancy.title or ""
+
+
+def _member_resume_url(
+    participation: ProjectParticipation,
+    accepted_by_participant: dict[int, Response],
+    *,
+    workspace_id: int | None = None,
+) -> str:
+    """Ссылка на резюме участника из принятого отклика.
+
+    У участника без принятого отклика (автор проекта, добавленный вручную)
+    резюма нет, и колонка остаётся пустой — это ожидаемо.
+    """
+    response = accepted_by_participant.get(participation.participant_id)
+    if response is None:
+        return ""
+    return build_resume_url(response.resume_id, workspace_id=workspace_id)
+
+
 class ProjectFull(ProjectCreate):
     """Полная схема проекта"""
 
@@ -299,20 +383,23 @@ class ProjectFull(ProjectCreate):
         except Exception:
             all_responses = []
 
-        # Build a lookup: participant_id -> vacancy title from accepted response
-        accepted_role_map: dict[int, str] = {}
+        # Роль и резюме участника берём из принятого отклика: участник попадает
+        # в команду только через принятие отклика или приглашения, и там есть
+        # и роль, и резюме. Раньше резюме не подставлялось вовсе, колонка
+        # «Резюме» была пустой у всех.
+        accepted_by_participant: dict[int, Response] = {}
         for r in all_responses:
             if r.status == "accepted" and r.respondent_id:
-                title = getattr(r.vacancy, "title", "") if r.vacancy else ""
-                accepted_role_map[r.respondent_id] = title
+                accepted_by_participant[r.respondent_id] = r
 
         members = [
             ParticipantFull(
                 id=p.id,
                 user_id=p.participant_id,
                 name=f"{p.participant.first_name} {p.participant.last_name}",
-                role=accepted_role_map.get(p.participant_id, ""),
+                role=_member_role(p, project, accepted_by_participant),
                 contacts=getattr(p.participant, "email", ""),
+                resume_url=_member_resume_url(p, accepted_by_participant, workspace_id=project.workspace_id),
                 date_added=str(p.created_at.date()) if p.created_at else "",
             )
             for p in participants

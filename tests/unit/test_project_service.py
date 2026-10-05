@@ -8,7 +8,7 @@ import pytest
 
 from src.core.exceptions import NotFoundError, PermissionError, ValidationError
 from src.model.notification import NotificationType
-from src.model.project import Project, ProjectStage, ProjectType, Response
+from src.model.project import Project, ProjectStage, ProjectType, ProjectVacancy, Response
 from src.model.resume import Resume
 from src.model.settings import SpaceSettings
 from src.model.user import Role, User
@@ -345,6 +345,171 @@ class TestProjectService:
         # then
         assert result == updated_project
         mock_repository.update.assert_called_once()
+
+    def _vacancy_sync_setup(self, vacancies: list[ProjectVacancy], response_counts: dict[int, int] | None = None):
+        """Репозиторий и проект для проверки синхронизации ролей.
+
+        ``response_counts`` — сколько откликов висит на каждой роли
+        (для ``ProjectVacancy`` без откликов ключа нет).
+        """
+        mock_repo = self._setup_mock_repo()
+        mock_repo.get_response_counts_by_vacancy_ids = AsyncMock(return_value=response_counts or {})
+
+        existing_project = Project(id=1, name="Project", author_id=1, vacancies=vacancies)
+        mock_repo.get_by_id.return_value = existing_project
+        mock_repo.update.return_value = existing_project
+        mock_repo.get_or_create_tags = AsyncMock(return_value=[])
+        return mock_repo, existing_project
+
+    @pytest.mark.asyncio
+    async def test_should_update_existing_vacancy_in_place_keeping_its_id(self):
+        # given: роль с откликами, у которой в правке изменились поля
+        mock_repo, project = self._vacancy_sync_setup(
+            vacancies=[ProjectVacancy(id=5, project_id=1, title="Backend", tasks=["t"], required_count=2)],
+        )
+        project_service = ProjectService(mock_repo)
+
+        # when
+        await project_service.update_project(
+            1,
+            ProjectUpdate(vacancies=[{"id": 5, "title": "Backend dev", "tasks": ["a", "b"], "required_count": 3}]),
+            current_user_id=1,
+        )
+
+        # then: та же строка обновлена, ничего не удалено и не создано
+        vacancy = project.vacancies[0]
+        assert vacancy.id == 5
+        assert vacancy.title == "Backend dev"
+        assert vacancy.tasks == ["a", "b"]
+        assert vacancy.required_count == 3
+        assert vacancy.project_id == 1
+        assert len(project.vacancies) == 1
+        mock_repo.uow.session.delete.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_should_create_vacancy_without_id_and_keep_existing_one(self):
+        # given
+        mock_repo, project = self._vacancy_sync_setup(
+            vacancies=[ProjectVacancy(id=5, project_id=1, title="Backend", tasks=["t"], required_count=1)],
+        )
+        project_service = ProjectService(mock_repo)
+
+        # when: приехала существующая роль и новая (без id)
+        await project_service.update_project(
+            1,
+            ProjectUpdate(
+                vacancies=[
+                    {"id": 5, "title": "Backend", "tasks": ["t"], "required_count": 1},
+                    {"title": "Frontend", "tasks": ["ui"], "required_count": 1},
+                ]
+            ),
+            current_user_id=1,
+        )
+
+        # then: создана ровно одна новая роль, существующая не тронута
+        added = [call.args[0] for call in mock_repo.uow.session.add.call_args_list]
+        created = [v for v in added if isinstance(v, ProjectVacancy)]
+        assert len(created) == 1
+        assert created[0].title == "Frontend"
+        assert created[0].project_id == 1
+        assert project.vacancies[0].title == "Backend"
+        assert mock_repo.uow.session.delete.call_count == 0
+
+    @pytest.mark.asyncio
+    async def test_should_delete_vacancy_without_responses(self):
+        # given: на удаляемую роль никто не откликался
+        mock_repo, _ = self._vacancy_sync_setup(
+            vacancies=[
+                ProjectVacancy(id=5, project_id=1, title="Backend", tasks=["t"], required_count=1),
+                ProjectVacancy(id=6, project_id=1, title="QA", tasks=["q"], required_count=1),
+            ],
+            response_counts={5: 1},
+        )
+        project_service = ProjectService(mock_repo)
+
+        # when: роль 6 убрали из списка
+        await project_service.update_project(
+            1,
+            ProjectUpdate(vacancies=[{"id": 5, "title": "Backend", "tasks": ["t"], "required_count": 1}]),
+            current_user_id=1,
+        )
+
+        # then: удалена только роль без откликов
+        deleted = {call.args[0].id for call in mock_repo.uow.session.delete.call_args_list}
+        assert deleted == {6}
+
+    @pytest.mark.asyncio
+    async def test_should_reject_removing_vacancy_with_responses(self):
+        # given: на удаляемую роль есть отклик
+        mock_repo, _ = self._vacancy_sync_setup(
+            vacancies=[
+                ProjectVacancy(id=5, project_id=1, title="Backend", tasks=["t"], required_count=1),
+                ProjectVacancy(id=6, project_id=1, title="QA", tasks=["q"], required_count=1),
+            ],
+            response_counts={6: 3},
+        )
+        project_service = ProjectService(mock_repo)
+
+        # when / then: правка падает, и название роли есть в сообщении
+        with pytest.raises(ValidationError, match=re.escape("«QA» — 3")):
+            await project_service.update_project(
+                1,
+                ProjectUpdate(vacancies=[{"id": 5, "title": "Backend", "tasks": ["t"], "required_count": 1}]),
+                current_user_id=1,
+            )
+        assert mock_repo.uow.session.delete.call_count == 0
+
+    @pytest.mark.asyncio
+    async def test_should_reject_vacancy_id_from_another_project(self):
+        # given: в payload подставлен id роли из чужого проекта
+        mock_repo, _ = self._vacancy_sync_setup(vacancies=[])
+        project_service = ProjectService(mock_repo)
+
+        # when / then
+        with pytest.raises(ValidationError, match=re.escape("id=99")):
+            await project_service.update_project(
+                1,
+                ProjectUpdate(vacancies=[{"id": 99, "title": "Hacker", "tasks": ["t"], "required_count": 1}]),
+                current_user_id=1,
+            )
+        assert mock_repo.uow.session.delete.call_count == 0
+
+    @pytest.mark.asyncio
+    async def test_should_reject_duplicate_vacancy_id(self):
+        # given: одна и та же роль прислана дважды
+        mock_repo, _ = self._vacancy_sync_setup(
+            vacancies=[ProjectVacancy(id=5, project_id=1, title="Backend", tasks=["t"], required_count=1)],
+        )
+        project_service = ProjectService(mock_repo)
+
+        # when / then
+        with pytest.raises(ValidationError, match=re.escape("продублирована")):
+            await project_service.update_project(
+                1,
+                ProjectUpdate(
+                    vacancies=[
+                        {"id": 5, "title": "Backend", "tasks": ["t"], "required_count": 1},
+                        {"id": 5, "title": "Backend", "tasks": ["t"], "required_count": 1},
+                    ]
+                ),
+                current_user_id=1,
+            )
+        assert mock_repo.uow.session.delete.call_count == 0
+
+    @pytest.mark.asyncio
+    async def test_should_not_touch_vacancies_when_field_absent(self):
+        # given: правим только название проекта
+        mock_repo, project = self._vacancy_sync_setup(
+            vacancies=[ProjectVacancy(id=5, project_id=1, title="Backend", tasks=["t"], required_count=1)],
+        )
+        project_service = ProjectService(mock_repo)
+
+        # when
+        await project_service.update_project(1, ProjectUpdate(name="New name"), current_user_id=1)
+
+        # then
+        assert mock_repo.uow.session.delete.call_count == 0
+        assert project.vacancies[0].title == "Backend"
 
     @pytest.mark.asyncio
     async def test_should_get_projects_paginated(self):

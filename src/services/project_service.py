@@ -1006,6 +1006,63 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
 
         return project
 
+    async def _sync_vacancies(self, project: Project, vacancies_data: list[dict]) -> None:
+        """Синхронизировать роли проекта с пришедшим списком.
+
+        Роли сопоставляются по ``id``: существующая роль обновляется на месте,
+        чтобы не потерять ``response.vacancy_id`` у уже откликнувшихся и не
+        сбить счётчик мест. Пересоздание списка обнуляло бы ссылку у каждого
+        отклика при каждом сохранении проекта.
+
+        Роль, на которую кто-то откликнулся, удалить нельзя: обнуление ссылки
+        убрало бы роль из отклика и сломало бы возврат места при выходе из
+        команды. Поэтому такая попытка отклоняется с понятным сообщением.
+        """
+        existing = {v.id: v for v in (project.vacancies or [])}
+
+        seen_ids: set[int] = set()
+        for v in vacancies_data:
+            vacancy_id = v.get("id")
+            if vacancy_id is None:
+                continue
+            if vacancy_id in seen_ids:
+                raise ValidationError(f"Роль с id={vacancy_id} продублирована в запросе")
+            if vacancy_id not in existing:
+                raise ValidationError(f"Роль с id={vacancy_id} не найдена в проекте")
+            seen_ids.add(vacancy_id)
+
+        to_delete = [vac for vacancy_id, vac in existing.items() if vacancy_id not in seen_ids]
+        if to_delete:
+            counts = await self._project_repository.get_response_counts_by_vacancy_ids([v.id for v in to_delete])
+            blocked = [v for v in to_delete if counts.get(v.id)]
+            if blocked:
+                details = "; ".join(f"«{v.title}» — {counts[v.id]}" for v in blocked)
+                raise ValidationError(
+                    f"Нельзя удалить роль с откликами: {details}. "
+                    "Сначала обработайте отклики и приглашения по этим ролям."
+                )
+
+        for v in vacancies_data:
+            vacancy = existing.get(v.get("id"))
+            if vacancy is None:
+                self._project_repository.uow.session.add(
+                    ProjectVacancy(
+                        project_id=project.id,
+                        title=v["title"],
+                        tasks=v.get("tasks", []),
+                        required_count=v.get("required_count", 1),
+                    )
+                )
+                continue
+            vacancy.title = v["title"]
+            vacancy.tasks = v.get("tasks", [])
+            vacancy.required_count = v.get("required_count", 1)
+
+        for vacancy in to_delete:
+            await self._project_repository.uow.session.delete(vacancy)
+
+        await self._project_repository.uow.session.flush()
+
     async def update_project(
         self,
         project_id: int,
@@ -1041,20 +1098,7 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
                         f"Сумма необходимых участников ({total_required}) превышает максимальное количество ({project.max_participants})",
                     )
 
-                # Удаляем старые вакансии и создаём новые
-                for old_v in project.vacancies:
-                    await self._project_repository.uow.session.delete(old_v)
-                await self._project_repository.uow.session.flush()
-
-                for v in vacancies_data:
-                    vacancy = ProjectVacancy(
-                        project_id=project.id,
-                        title=v["title"],
-                        tasks=v.get("tasks", []),
-                        required_count=v.get("required_count", 1),
-                    )
-                    self._project_repository.uow.session.add(vacancy)
-                await self._project_repository.uow.session.flush()
+                await self._sync_vacancies(project, vacancies_data)
 
             await self._project_repository.uow.session.refresh(
                 project, ["tags", "status", "participants", "vacancies", "project_type", "current_stage"]

@@ -384,6 +384,23 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         await self.uow.session.refresh(response, ["vacancy"])
         return response
 
+    async def get_response_counts_by_vacancy_ids(self, vacancy_ids: list[int]) -> dict[int, int]:
+        """Сколько откликов и приглашений висит на каждой из ролей.
+
+        Нужна перед удалением роли при правке проекта: у роли с откликами
+        нельзя рвать ``response.vacancy_id``, иначе отклик потеряет роль,
+        а счётчик мест перестанет уменьшаться при выходе участника.
+        Роли без откликов в словарь не попадают.
+        """
+        if not vacancy_ids:
+            return {}
+        result = await self.uow.session.execute(
+            select(Response.vacancy_id, func.count(Response.id))
+            .where(Response.vacancy_id.in_(vacancy_ids))
+            .group_by(Response.vacancy_id),
+        )
+        return {vacancy_id: count for vacancy_id, count in result.all() if vacancy_id is not None}
+
     async def decrement_vacancy_count(self, vacancy_id: int) -> None:
         await self.uow.session.execute(
             update(ProjectVacancy)
