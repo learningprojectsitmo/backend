@@ -65,6 +65,8 @@ class ResponseItem(BaseModel):
     role: str = ""
     type: str = "response"
     status: str = "pending"
+    #: Причина отказа, если отклик отклонён (и руководитель её указал).
+    rejection_reason: str | None = None
     allow_multi_project_participation: bool = True
     busy_in_other_project: bool = False
 
@@ -202,6 +204,21 @@ class InviteRequest(BaseModel):
     user_id: int
     vacancy_id: int | None = None
     resume_id: int | None = None
+
+
+class ResponseRejectRequest(BaseModel):
+    """Тело отказа на отклик: причина опциональна и не длиннее 200 символов."""
+
+    reason: str | None = Field(default=None, max_length=200)
+
+    @field_validator("reason")
+    @classmethod
+    def _normalize_reason(cls, value: str | None) -> str | None:
+        """Убрать краевые пробелы; пустую строку считать незаполненной причиной."""
+        if value is None:
+            return None
+        stripped = value.strip()
+        return stripped or None
 
 
 class ProjectUpdate(BaseModel):
@@ -421,6 +438,7 @@ class ProjectFull(ProjectCreate):
                     vacancy_id=getattr(r.vacancy, "id", None) if r.vacancy else None,
                     role=getattr(r.vacancy, "title", "") if r.vacancy else "",
                     type=r.type,
+                    rejection_reason=r.rejection_reason,
                     allow_multi_project_participation=allow_multi_project_participation,
                     **resolve_busy_status(
                         r.status,
@@ -436,6 +454,9 @@ class ProjectFull(ProjectCreate):
         except Exception:
             vacancies_list = []
 
+        # Архивные роли (снятые из проекта) наружу не отдаются: в форме
+        # правки, диалогах отклика и приглашения их быть не должно. Строки
+        # в базе остаются — на них ссылается `response.vacancy_id`.
         vacancies = [
             VacancyItem(
                 id=v.id,
@@ -444,6 +465,7 @@ class ProjectFull(ProjectCreate):
                 required_count=v.required_count,
             )
             for v in vacancies_list
+            if not v.archived
         ]
 
         try:
@@ -599,6 +621,8 @@ class MyResponseItem(BaseModel):
     resume_title: str = ""
     date: str
     status: str
+    #: Причина отказа при статусе ``rejected``, если её указал руководитель.
+    rejection_reason: str | None = None
     busy_in_other_project: bool = False
 
     model_config = ConfigDict(from_attributes=True)
@@ -662,6 +686,7 @@ class ResponseListItem(BaseModel):
     response_date: str = ""
     type: str = "response"
     status: str = "pending"
+    rejection_reason: str | None = None
     allow_multi_project_participation: bool = True
     busy_in_other_project: bool = False
     created_at: datetime | None = None

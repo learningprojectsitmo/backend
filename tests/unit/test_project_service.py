@@ -416,9 +416,9 @@ class TestProjectService:
         assert mock_repo.uow.session.delete.call_count == 0
 
     @pytest.mark.asyncio
-    async def test_should_delete_vacancy_without_responses(self):
-        # given: на удаляемую роль никто не откликался
-        mock_repo, _ = self._vacancy_sync_setup(
+    async def test_should_archive_vacancy_without_responses(self):
+        # given: на снимаемую роль никто не откликался
+        mock_repo, project = self._vacancy_sync_setup(
             vacancies=[
                 ProjectVacancy(id=5, project_id=1, title="Backend", tasks=["t"], required_count=1),
                 ProjectVacancy(id=6, project_id=1, title="QA", tasks=["q"], required_count=1),
@@ -434,9 +434,14 @@ class TestProjectService:
             current_user_id=1,
         )
 
-        # then: удалена только роль без откликов
-        deleted = {call.args[0].id for call in mock_repo.uow.session.delete.call_args_list}
-        assert deleted == {6}
+        # then: снятая роль архивирована, а не удалена — строка хранит
+        # историю откликов, ссылки response.vacancy_id остаются рабочими
+        by_id = {v.id: v for v in project.vacancies}
+        assert by_id[6].archived is True
+        # default колонки применяется при flush, поэтому у незаполненной роли
+        # значение ещё None — важно, что это не True
+        assert not by_id[5].archived
+        mock_repo.uow.session.delete.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_should_reject_removing_vacancy_with_responses(self):
@@ -2173,9 +2178,15 @@ class TestCancelInvitation:
             return_value=Project(id=3, name="P", author_id=author_id, workspace_id=workspace_id)
         )
         mock_repository.update_response_status = AsyncMock(return_value=Response(id=5, type="invitation"))
-        mock_session.get = AsyncMock(
-            return_value=User(id=2, first_name="Анна", last_name="Петрова", email="anna@example.com")
-        )
+
+        async def _get(model, ident, *args, **kwargs):
+            # session.get используется и для актёра уведомления, и для работы
+            # пространства при проверке прав (WorkSpace в моке нет → None).
+            if model is User:
+                return User(id=2, first_name="Анна", last_name="Петрова", email="anna@example.com")
+            return None
+
+        mock_session.get = AsyncMock(side_effect=_get)
         mock_session.execute = AsyncMock(return_value=self._empty_result())
         return mock_repository, mock_session, ProjectService(mock_repository)
 
@@ -2284,4 +2295,151 @@ class TestCancelInvitation:
         # when / then
         with pytest.raises(NotFoundError, match="Invitation not found"):
             await project_service.cancel_invitation(5, current_user_id=1)
+        mock_repository.update_response_status.assert_not_called()
+
+
+class TestManageResponses:
+    """Принять/отклонить отклик: общий состав прав и причина отказа.
+
+    Права те же, что показывает фронт (``canManageProject``): автор проекта,
+    глобальные admin/teacher, автор пространства и его admin/teacher.
+    """
+
+    @staticmethod
+    def _result(role_name: str | None = None, *, editor: bool = False) -> Mock:
+        """Результат запроса прав: роль из ``role`` + членство в пространстве."""
+        result = Mock()
+        result.scalar_one_or_none.return_value = role_name
+        result.first.return_value = object() if editor else None
+        return result
+
+    def _setup(self, *, author_id: int = 1, workspace_id: int | None = None) -> tuple[Mock, AsyncMock, ProjectService]:
+        mock_repository = Mock(spec=ProjectRepository)
+        mock_uow = Mock()
+        mock_session = AsyncMock()
+        mock_uow.session = mock_session
+        mock_repository.uow = mock_uow
+        mock_repository.get_response_by_id = AsyncMock(
+            return_value=Response(id=5, respondent_id=2, project_id=3, type="response", status="pending")
+        )
+        mock_repository.get_by_id = AsyncMock(
+            return_value=Project(id=3, name="P", author_id=author_id, workspace_id=workspace_id)
+        )
+        mock_repository.update_response_status = AsyncMock(
+            return_value=Response(id=5, type="response", status="rejected")
+        )
+
+        async def _get(model, ident, *args, **kwargs):
+            # session.get нужен и для актёра уведомления, и для проверки
+            # авторства пространства (в моке WorkSpace не подставляем).
+            if model is User:
+                return User(id=99, first_name="Иван", last_name="Иванов", email="ivan@example.com")
+            return None
+
+        mock_session.get = AsyncMock(side_effect=_get)
+        mock_session.execute = AsyncMock(return_value=self._result(None))
+        return mock_repository, mock_session, ProjectService(mock_repository)
+
+    @pytest.mark.asyncio
+    async def test_should_pass_reason_to_repository_when_rejecting(self):
+        # given
+        mock_repository, _, project_service = self._setup(author_id=1)
+
+        # when
+        result = await project_service.reject_response(5, author_id=1, reason="Не хватает опыта")
+
+        # then: причина уезжает в ту же транзакцию, что и статус
+        assert result.status == "rejected"
+        mock_repository.update_response_status.assert_awaited_once_with(
+            5, "rejected", rejection_reason="Не хватает опыта"
+        )
+
+    @pytest.mark.asyncio
+    async def test_should_reject_without_reason(self):
+        # given
+        mock_repository, _, project_service = self._setup(author_id=1)
+
+        # when: причина не передана — отказ «без причины»
+        await project_service.reject_response(5, author_id=1)
+
+        # then
+        mock_repository.update_response_status.assert_awaited_once_with(5, "rejected", rejection_reason=None)
+
+    @pytest.mark.asyncio
+    async def test_should_allow_workspace_editor_to_reject(self):
+        # given: не автор проекта, но admin/teacher пространства
+        mock_repository, mock_session, project_service = self._setup(author_id=1, workspace_id=7)
+        mock_session.execute = AsyncMock(
+            side_effect=[self._result("member"), self._result(editor=True)],
+        )
+
+        # when
+        await project_service.reject_response(5, author_id=99, reason="Не подходит")
+
+        # then
+        mock_repository.update_response_status.assert_awaited_once_with(5, "rejected", rejection_reason="Не подходит")
+
+    @pytest.mark.asyncio
+    async def test_should_allow_workspace_editor_to_accept(self):
+        # given
+        mock_repository, mock_session, project_service = self._setup(author_id=1, workspace_id=7)
+        mock_session.execute = AsyncMock(
+            side_effect=[self._result("member"), self._result(editor=True)],
+        )
+
+        # when
+        await project_service.accept_response(5, author_id=99)
+
+        # then
+        mock_repository.update_response_status.assert_awaited_once_with(5, "accepted")
+
+    @pytest.mark.asyncio
+    async def test_should_allow_global_teacher_without_workspace(self):
+        # given: глобальный teacher управляет откликами любого проекта
+        mock_repository, mock_session, project_service = self._setup(author_id=1, workspace_id=None)
+        mock_session.execute = AsyncMock(return_value=self._result("teacher"))
+
+        # when
+        await project_service.reject_response(5, author_id=99)
+
+        # then
+        mock_repository.update_response_status.assert_awaited_once_with(5, "rejected", rejection_reason=None)
+
+    @pytest.mark.asyncio
+    async def test_should_deny_stranger_to_reject(self):
+        # given: ни автор, ни роли, ни прав в пространстве
+        mock_repository, mock_session, project_service = self._setup(author_id=1, workspace_id=7)
+        mock_session.execute = AsyncMock(
+            side_effect=[self._result("member"), self._result()],
+        )
+
+        # when / then
+        with pytest.raises(PermissionError, match="not allowed to reject"):
+            await project_service.reject_response(5, author_id=99, reason="Причина")
+        mock_repository.update_response_status.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_should_deny_stranger_to_accept(self):
+        # given
+        mock_repository, mock_session, project_service = self._setup(author_id=1, workspace_id=7)
+        mock_session.execute = AsyncMock(
+            side_effect=[self._result("member"), self._result()],
+        )
+
+        # when / then
+        with pytest.raises(PermissionError, match="not allowed to accept"):
+            await project_service.accept_response(5, author_id=99)
+        mock_repository.update_response_status.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_should_reject_only_pending_responses(self):
+        # given
+        mock_repository, _, project_service = self._setup(author_id=1)
+        mock_repository.get_response_by_id = AsyncMock(
+            return_value=Response(id=5, respondent_id=2, project_id=3, type="response", status="accepted")
+        )
+
+        # when / then
+        with pytest.raises(ValidationError, match="Can only reject pending responses"):
+            await project_service.reject_response(5, author_id=1, reason="Поздно")
         mock_repository.update_response_status.assert_not_called()

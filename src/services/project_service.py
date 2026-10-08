@@ -11,7 +11,7 @@ from src.model.notification import NotificationType
 from src.model.project import Project, ProjectParticipation, ProjectStage, ProjectStatus, ProjectVacancy, Response
 from src.model.settings import SpaceSettings
 from src.model.user import Role, User
-from src.model.workspace import WorkSpaceParticipation
+from src.model.workspace import WorkSpace, WorkSpaceParticipation
 from src.schema.project import (
     MyInvitationItem,
     MyInvitationListResponse,
@@ -251,6 +251,7 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
                 resume_url=resume_url,
                 resume_title=resume_title,
                 date=r.created_at.isoformat() if r.created_at else "",
+                rejection_reason=r.rejection_reason,
                 **resolve_status_fields(
                     r.status,
                     busy_by_project.get(r.project_id, False),
@@ -417,6 +418,7 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
                     resume_url=build_resume_url(row.resume_id, workspace_id=workspace_id),
                     response_date=str(row.created_at.date()) if row.created_at else "",
                     type=row.type,
+                    rejection_reason=row.rejection_reason,
                     allow_multi_project_participation=allow_multi,
                     **resolve_busy_status(
                         row.status,
@@ -474,7 +476,7 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
                 progress=p.progress or 0,
                 start_date=p.created_at.isoformat() if p.created_at else "",
                 members_count=len(p.participants or []),
-                roles=[v.title for v in (p.vacancies or [])],
+                roles=[v.title for v in (p.vacancies or []) if not v.archived],
             )
             for p in projects
         ]
@@ -492,7 +494,7 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
                 progress=p.progress or 0,
                 start_date=p.created_at.isoformat() if p.created_at else "",
                 members_count=len(p.participants or []),
-                roles=[v.title for v in (p.vacancies or [])],
+                roles=[v.title for v in (p.vacancies or []) if not v.archived],
             )
             for p in projects
         ]
@@ -511,7 +513,7 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
                 progress=p.progress or 0,
                 start_date=p.created_at.isoformat() if p.created_at else "",
                 members_count=len(p.participants or []),
-                roles=[v.title for v in (p.vacancies or [])],
+                roles=[v.title for v in (p.vacancies or []) if not v.archived],
             )
             for p in projects
         ]
@@ -685,16 +687,35 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
                 )
         return result
 
-    async def _can_cancel_invitation(self, project: Project, user_id: int) -> bool:
-        """Кто может отозвать приглашение: автор проекта либо admin/teacher пространства.
+    async def _can_manage_responses(self, project: Project, user_id: int) -> bool:
+        """Кто управляет откликами проекта: принять, отклонить, отозвать приглашение.
 
-        Приглашение отправляет только автор (``invite_to_project``), но отзыв
-        разрешён и редакторам пространства — тем же составу, что и удаление
-        участника из команды (``remove_participant``).
+        Состав совпадает с фронтовым ``canManageProject`` — иначе на
+        странице проекта кнопки были бы у того, кому бэкенд отвечает 403:
+
+        * автор проекта;
+        * глобальные admin/teacher;
+        * автор пространства проекта (в участниках он обычно ``manager``,
+          поэтому одного ``is_workspace_editor`` мало);
+        * admin/teacher пространства.
         """
-        if await self._can_manage_team(project, user_id):
+        if project.author_id == user_id:
+            return True
+        result = await self._project_repository.uow.session.execute(
+            select(Role.name).join(User, User.role_id == Role.id).where(User.id == user_id)
+        )
+        if result.scalar_one_or_none() in ("admin", "teacher"):
+            return True
+        if not project.workspace_id:
+            return False
+        workspace = await self._project_repository.uow.session.get(WorkSpace, project.workspace_id)
+        if workspace and workspace.author_id == user_id:
             return True
         return await self.is_workspace_editor(user_id, project.workspace_id)
+
+    async def _can_cancel_invitation(self, project: Project, user_id: int) -> bool:
+        """Кто может отозвать приглашение — тот же состав, что и по откликам."""
+        return await self._can_manage_responses(project, user_id)
 
     async def get_projects_by_workspace(
         self, workspace_id: int, page: int = 1, limit: int = 10, viewer_id: int | None = None, **filters
@@ -1029,11 +1050,20 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         сбить счётчик мест. Пересоздание списка обнуляло бы ссылку у каждого
         отклика при каждом сохранении проекта.
 
-        Роль, на которую кто-то откликнулся, удалить нельзя: обнуление ссылки
-        убрало бы роль из отклика и сломало бы возврат места при выходе из
-        команды. Поэтому такая попытка отклоняется с понятным сообщением.
+        Снятая из формы роль не удаляется, а помечается ``archived=True``:
+        строка остаётся в базе, поэтому история откликов хранит название роли,
+        а возврат места при выходе участника продолжает работать. Архивные
+        роли выпадают из ``existing`` — иначе каждое сохранение «удаляло» бы
+        их заново и гоняло бы проверку откликов.
+
+        Архивировать роль, на которую есть АКТИВНЫЕ отклики или приглашения,
+        нельзя: заявитель ещё ждёт решения, а роль участника в команде
+        пропала бы из вида. Отклонённые, отозванные и отменённые записи
+        такой роли не мешают — именно после обработки откликов отказом роль
+        и становится свободной. Причина блокировки возвращается как
+        ``ValidationError``, её же показывает форма.
         """
-        existing = {v.id: v for v in (project.vacancies or [])}
+        existing = {v.id: v for v in (project.vacancies or []) if not v.archived}
 
         seen_ids: set[int] = set()
         for v in vacancies_data:
@@ -1046,15 +1076,15 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
                 raise ValidationError(f"Роль с id={vacancy_id} не найдена в проекте")
             seen_ids.add(vacancy_id)
 
-        to_delete = [vac for vacancy_id, vac in existing.items() if vacancy_id not in seen_ids]
-        if to_delete:
-            counts = await self._project_repository.get_response_counts_by_vacancy_ids([v.id for v in to_delete])
-            blocked = [v for v in to_delete if counts.get(v.id)]
+        to_archive = [vac for vacancy_id, vac in existing.items() if vacancy_id not in seen_ids]
+        if to_archive:
+            counts = await self._project_repository.get_response_counts_by_vacancy_ids([v.id for v in to_archive])
+            blocked = [v for v in to_archive if counts.get(v.id)]
             if blocked:
                 details = "; ".join(f"«{v.title}» — {counts[v.id]}" for v in blocked)
                 raise ValidationError(
-                    f"Нельзя удалить роль с откликами: {details}. "
-                    "Сначала обработайте отклики и приглашения по этим ролям."
+                    f"Нельзя удалить роль с активными откликами: {details}. "
+                    "Сначала примите или отклоните отклики и приглашения по этим ролям."
                 )
 
         for v in vacancies_data:
@@ -1073,8 +1103,8 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
             vacancy.tasks = v.get("tasks", [])
             vacancy.required_count = v.get("required_count", 1)
 
-        for vacancy in to_delete:
-            await self._project_repository.uow.session.delete(vacancy)
+        for vacancy in to_archive:
+            vacancy.archived = True
 
         await self._project_repository.uow.session.flush()
 
@@ -1145,6 +1175,21 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         )
         return result.scalar_one_or_none() == "admin"
 
+    async def _assert_vacancy_available(self, project: Project, vacancy_id: int | None) -> None:
+        """Роль для нового отклика/приглашения должна существовать и не быть архивной.
+
+        Архивные роли отданы наружу только в истории откликов, поэтому клиент
+        не должен на них откликаться — защита от устаревшей формы, открытой
+        до архивации роли.
+        """
+        if vacancy_id is None:
+            return
+        vacancy = await self._project_repository.uow.session.get(ProjectVacancy, vacancy_id)
+        if vacancy is None or vacancy.project_id != project.id:
+            raise ValidationError(f"Роль с id={vacancy_id} не найдена в проекте")
+        if vacancy.archived:
+            raise ValidationError("Эта роль больше неактуальна: выберите другую")
+
     async def apply_for_project(
         self, project_id: int, user_id: int, vacancy_id: int | None = None, resume_id: int | None = None
     ) -> Response:
@@ -1152,6 +1197,7 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         project = await self._project_repository.get_by_id(project_id)
         if not project:
             raise NotFoundError("Project not found")
+        await self._assert_vacancy_available(project, vacancy_id)
         if not resume_id:
             raise ValidationError("Resume is required to apply for a project")
         if self._resume_repository:
@@ -1209,6 +1255,7 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         project = await self._project_repository.get_by_id(project_id)
         if not project:
             raise NotFoundError("Project not found")
+        await self._assert_vacancy_available(project, vacancy_id)
         if project.author_id != inviter_id:
             raise PermissionError("Only project author can invite")
         if await self._project_repository.is_user_in_project(project_id, invitee_id):
@@ -1258,7 +1305,11 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         return invitation
 
     async def accept_response(self, response_id: int, author_id: int) -> Response:
-        """Принять отклик (автор проекта) — участник получает уведомление и решает, вступить ли"""
+        """Принять отклик — участник получает уведомление и решает, вступить ли.
+
+        Принимать может тот же состав, что и отклоняет (``_can_manage_responses``):
+        кнопки «Принять»/«Отклонить» в одном ряду таблицы.
+        """
         response = await self._project_repository.get_response_by_id(response_id)
         if not response:
             raise NotFoundError("Response not found")
@@ -1267,15 +1318,16 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         if response.status != "pending":
             raise ValidationError("Can only accept pending responses")
         project = await self._project_repository.get_by_id(response.project_id)
-        if not project or project.author_id != author_id:
-            raise PermissionError("Only project author can accept responses")
+        if not project or not await self._can_manage_responses(project, author_id):
+            raise PermissionError("You are not allowed to accept responses in this project")
         if project.max_participants is not None and len(project.participants) >= project.max_participants:
             raise ValidationError("Project has reached maximum number of participants")
         result = await self._project_repository.update_response_status(response_id, "accepted")
         if not result:
             raise NotFoundError("Response not found")
-        if self._notification_service and project.author:
-            actor_name = f"{project.author.first_name} {project.author.last_name or ''}".strip()
+        if self._notification_service:
+            actor = await self._project_repository.uow.session.get(User, author_id)
+            actor_name = f"{actor.first_name} {actor.last_name or ''}".strip() if actor else "Пользователь"
             await self._notification_service.create_notification(
                 user_id=response.respondent_id,
                 type=NotificationType.response_accepted,
@@ -1357,8 +1409,8 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
             )
         return response
 
-    async def reject_response(self, response_id: int, author_id: int) -> Response:
-        """Отклонить отклик (автор проекта)"""
+    async def reject_response(self, response_id: int, author_id: int, reason: str | None = None) -> Response:
+        """Отклонить отклик с опциональной причиной (автор проекта или редактор пространства)"""
         response = await self._project_repository.get_response_by_id(response_id)
         if not response:
             raise NotFoundError("Response not found")
@@ -1367,13 +1419,16 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         if response.status != "pending":
             raise ValidationError("Can only reject pending responses")
         project = await self._project_repository.get_by_id(response.project_id)
-        if not project or project.author_id != author_id:
-            raise PermissionError("Only project author can reject responses")
-        result = await self._project_repository.update_response_status(response_id, "rejected")
+        if not project or not await self._can_manage_responses(project, author_id):
+            raise PermissionError("You are not allowed to reject responses in this project")
+        # Причина пишется в ту же транзакцию, что и статус: отклик не может
+        # стать отклонённым без уже сохранённой причины (или наоборот).
+        result = await self._project_repository.update_response_status(response_id, "rejected", rejection_reason=reason)
         if not result:
             raise NotFoundError("Response not found")
-        if self._notification_service and project.author:
-            actor_name = f"{project.author.first_name} {project.author.last_name or ''}".strip()
+        if self._notification_service:
+            actor = await self._project_repository.uow.session.get(User, author_id)
+            actor_name = f"{actor.first_name} {actor.last_name or ''}".strip() if actor else "Пользователь"
             await self._notification_service.create_notification(
                 user_id=response.respondent_id,
                 type=NotificationType.response_rejected,

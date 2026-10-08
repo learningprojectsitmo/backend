@@ -9,6 +9,7 @@ from sqlalchemy.sql.elements import ColumnElement
 
 from src.core.uow import IUnitOfWork
 from src.model.project import (
+    ACTIVE_RESPONSE_STATUSES,
     Project,
     ProjectParticipation,
     ProjectStage,
@@ -161,11 +162,17 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         )
         return result.scalars().first()
 
-    async def update_response_status(self, response_id: int, status: str) -> Response | None:
+    async def update_response_status(
+        self, response_id: int, status: str, rejection_reason: str | None = None
+    ) -> Response | None:
         response = await self.get_response_by_id(response_id)
         if not response:
             return None
         response.status = status
+        # Причина передаётся только из ``reject_response``: остальные смены
+        # статуса (принятие, отзыв, отмена соседних записей) её не трогают.
+        if rejection_reason is not None:
+            response.rejection_reason = rejection_reason
         await self.uow.session.flush()
         return response
 
@@ -427,18 +434,26 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         return response
 
     async def get_response_counts_by_vacancy_ids(self, vacancy_ids: list[int]) -> dict[int, int]:
-        """Сколько откликов и приглашений висит на каждой из ролей.
+        """Сколько АКТИВНЫХ откликов и приглашений висит на каждой из ролей.
 
-        Нужна перед удалением роли при правке проекта: у роли с откликами
-        нельзя рвать ``response.vacancy_id``, иначе отклик потеряет роль,
-        а счётчик мест перестанет уменьшаться при выходе участника.
-        Роли без откликов в словарь не попадают.
+        Нужна перед архивацией роли при правке проекта: у роли с живыми
+        откликами нельзя прятаться из формы — заявитель ещё ждёт решения, а
+        у участника пропала бы роль в команде. Отклонённые, отозванные и
+        отменённые записи не считаются: именно они раньше делали роль
+        неудаляемой навсегда, даже после обработки всех откликов.
+
+        Роли без активных откликов в словарь не попадают. Статусы —
+        ``ACTIVE_RESPONSE_STATUSES``, тот же набор считает фронтовый
+        ``vacancy-sync``: расхождение дало бы 422 на сохранении формы.
         """
         if not vacancy_ids:
             return {}
         result = await self.uow.session.execute(
             select(Response.vacancy_id, func.count(Response.id))
-            .where(Response.vacancy_id.in_(vacancy_ids))
+            .where(
+                Response.vacancy_id.in_(vacancy_ids),
+                Response.status.in_(ACTIVE_RESPONSE_STATUSES),
+            )
             .group_by(Response.vacancy_id),
         )
         return {vacancy_id: count for vacancy_id, count in result.all() if vacancy_id is not None}

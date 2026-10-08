@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 
 from src.core.container import (
     get_audit_service,
@@ -27,6 +27,7 @@ from src.schema.project import (
     ProjectListResponse,
     ProjectUpdate,
     ResponseListResponse,
+    ResponseRejectRequest,
 )
 from src.services.audit_service import ACTIVITY_ITEMS_LIMIT, AuditService
 from src.services.auth_service import AuthService
@@ -345,7 +346,7 @@ async def accept_response(
     current_user: User = Depends(permission_required("project:update")),
     _audit=Depends(setup_audit),
 ) -> dict[str, str]:
-    """Принять отклик (только автор)"""
+    """Принять отклик (автор проекта или редактор пространства)"""
     await project_service.accept_response(response_id, current_user.id)
     return {"message": "Response accepted successfully"}
 
@@ -354,12 +355,13 @@ async def accept_response(
 async def reject_response(
     project_id: int,
     response_id: int,
+    body: ResponseRejectRequest = Body(default_factory=ResponseRejectRequest),
     project_service: ProjectService = Depends(get_project_service),
     current_user: User = Depends(permission_required("project:update")),
     _audit=Depends(setup_audit),
 ) -> dict[str, str]:
-    """Отклонить отклик (только автор)"""
-    await project_service.reject_response(response_id, current_user.id)
+    """Отклонить отклик с опциональной причиной (автор проекта или редактор пространства)"""
+    await project_service.reject_response(response_id, current_user.id, reason=body.reason)
     return {"message": "Response rejected successfully"}
 
 

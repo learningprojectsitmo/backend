@@ -3,7 +3,20 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String, Table, Text, UniqueConstraint, func, text
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Table,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy import Column as SAColumn
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -167,6 +180,14 @@ class ProjectParticipation(Base):
         )
 
 
+#: Статусы отклика/приглашения, которые ещё «живы»: по ним роль проекта
+#: нельзя архивировать, по терминальным (``rejected``/``withdrawn``/
+#: ``cancelled``) — можно. Единственный источник правды и для подсчёта
+#: ``get_response_counts_by_vacancy_ids``, и для фронтового ``vacancy-sync``:
+#: разные наборы статусов дали бы 422 на сохранении формы.
+ACTIVE_RESPONSE_STATUSES: tuple[str, ...] = ("pending", "accepted", "in_team")
+
+
 class Response(Base):
     __tablename__ = "response"
 
@@ -186,6 +207,9 @@ class Response(Base):
     type: Mapped[str] = mapped_column(String(20), nullable=False, default="response")
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
     note: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    #: Причина отказа, которую руководитель указал при отклонении отклика.
+    #: Пусто, если отказ пришёл без причины или запись не отклонялась.
+    rejection_reason: Mapped[str | None] = mapped_column(String(200), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
@@ -212,6 +236,11 @@ class ProjectVacancy(Base):
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     tasks: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     required_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    #: Роль удалена из проекта, но строка осталась: ``response.vacancy_id``
+    #: не рвётся, поэтому история откликов сохраняет название роли, а счётчик
+    #: мест у вышедших участников продолжает работать. Архивные роли не
+    #: отдаются в ``ProjectFull.vacancies`` — в форме и диалогах их нет.
+    archived: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
 
     project: Mapped[Project] = relationship(back_populates="vacancies")
     responses: Mapped[list[Response]] = relationship(back_populates="vacancy")

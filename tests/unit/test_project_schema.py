@@ -11,6 +11,7 @@ from src.schema.project import (
     MAX_VACANCY_TASK_LENGTH,
     PROJECT_AUTHOR_ROLE,
     ProjectFull,
+    ResponseRejectRequest,
     VacancyCreate,
     VacancyUpdate,
 )
@@ -274,3 +275,130 @@ class TestParticipationUniqueIndexes:
         # then
         assert project_index.unique is not True
         assert workspace_index.unique is not True
+
+
+class TestProjectFullVacancies:
+    """Архивные роли не попадают в карточку проекта (форма правки, диалоги)."""
+
+    @staticmethod
+    def _project() -> Project:
+        return Project(
+            id=1,
+            name="Проект",
+            author_id=1,
+            stage_pending_approval=False,
+            vacancies=[
+                ProjectVacancy(id=5, project_id=1, title="Backend", tasks=["api"], required_count=1, archived=False),
+                ProjectVacancy(id=6, project_id=1, title="QA", tasks=["тесты"], required_count=1, archived=True),
+            ],
+        )
+
+    def test_should_hide_archived_vacancy(self):
+        # given / when
+        full = ProjectFull.from_orm(self._project())
+
+        # then: наружу отдаётся только неархивная роль
+        assert [v.id for v in full.vacancies] == [5]
+
+    def test_should_keep_active_vacancy_fields(self):
+        # given / when
+        full = ProjectFull.from_orm(self._project())
+
+        # then
+        vacancy = full.vacancies[0]
+        assert vacancy.title == "Backend"
+        assert vacancy.required_count == 1
+        assert vacancy.tasks == ["api"]
+
+
+class TestRejectionReasonInProjectFull:
+    """Причина отказа доходит до карточки проекта."""
+
+    def test_should_expose_reason_on_rejected_response(self):
+        # given
+        project = Project(
+            id=1,
+            name="Проект",
+            author_id=1,
+            stage_pending_approval=False,
+            responses=[
+                Response(
+                    id=9,
+                    respondent_id=2,
+                    project_id=1,
+                    type="response",
+                    status="rejected",
+                    rejection_reason="Не хватает опыта",
+                    respondent=User(id=2, first_name="Анна", last_name="Петрова", email="anna@example.com"),
+                )
+            ],
+        )
+
+        # when
+        full = ProjectFull.from_orm(project)
+
+        # then
+        assert full.replycants[0].status == "rejected"
+        assert full.replycants[0].rejection_reason == "Не хватает опыта"
+
+    def test_should_return_none_when_reject_without_reason(self):
+        # given: отказ без причины (старые записи и явный отказ без текста)
+        project = Project(
+            id=1,
+            name="Проект",
+            author_id=1,
+            stage_pending_approval=False,
+            responses=[
+                Response(
+                    id=9,
+                    respondent_id=2,
+                    project_id=1,
+                    type="response",
+                    status="rejected",
+                    rejection_reason=None,
+                    respondent=User(id=2, first_name="Анна", last_name="Петрова", email="anna@example.com"),
+                )
+            ],
+        )
+
+        # when
+        full = ProjectFull.from_orm(project)
+
+        # then
+        assert full.replycants[0].rejection_reason is None
+
+
+class TestResponseRejectRequest:
+    """Тело отказа: причина опциональна, ограничена 200 символами."""
+
+    def test_should_default_to_none(self):
+        # given / when / then
+        assert ResponseRejectRequest().reason is None
+
+    @pytest.mark.parametrize(
+        ("raw", "expected"),
+        [
+            ("Не подходит по опыту", "Не подходит по опыту"),
+            ("  Уточните задачи  ", "Уточните задачи"),
+            ("   ", None),
+            ("", None),
+        ],
+    )
+    def test_should_strip_and_normalize_reason(self, raw, expected):
+        # given / when
+        request = ResponseRejectRequest(reason=raw)
+
+        # then
+        assert request.reason == expected
+
+    def test_should_reject_too_long_reason(self):
+        # given / when / then
+        with pytest.raises(ValidationError):
+            ResponseRejectRequest(reason="о" * 201)
+
+    def test_should_accept_reason_at_length_limit(self):
+        # given / when
+        request = ResponseRejectRequest(reason="о" * 200)
+
+        # then
+        assert request.reason == "о" * 200
