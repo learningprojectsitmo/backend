@@ -16,6 +16,10 @@ if TYPE_CHECKING:
 #: ограничения на стороне БД, поэтому длина задаётся только здесь.
 MAX_VACANCY_TASK_LENGTH = 500
 
+#: Потолок длины ручной роли участника — совпадает с колонкой
+#: ``project_participation.role`` (``String(200)``).
+MAX_PARTICIPANT_ROLE_LENGTH = 200
+
 
 def _find_duplicates(values: list[str]) -> list[str]:
     """Повторы в списке строк, в порядке первого появления."""
@@ -54,6 +58,26 @@ class ParticipantFull(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ParticipantRoleUpdate(BaseModel):
+    """Тело ручного назначения роли участнику команды.
+
+    Пустая строка (и одни пробелы) неотличима от «снять ручную роль» и
+    нормализуется в ``None``: тогда снова работает автоматический вывод роли.
+    """
+
+    role: str | None = None
+
+    @field_validator("role")
+    @classmethod
+    def _normalize_role(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        stripped = value.strip()
+        if len(stripped) > MAX_PARTICIPANT_ROLE_LENGTH:
+            raise ValueError("Роль не может быть длиннее 200 символов")
+        return stripped or None
+
+
 class ResponseItem(BaseModel):
     id: int
     user_id: int
@@ -76,6 +100,11 @@ class ResponseItem(BaseModel):
 #: Статусы, которые производный пересчёт может превратить в ``in_team``.
 #: ``rejected``/``withdrawn`` — решения сторон, их не пересматриваем.
 CLOSABLE_STATUSES = ("pending", "accepted")
+
+#: Статусы отклика, по которым роль участника уже закреплена: ``accepted`` —
+#: принятое приглашение, ``in_team`` — подтверждённое вступление по отклику.
+#: ``pending`` сюда не входит: человек ещё не в команде, роль не его.
+ROLE_RESPONSE_STATUSES = ("accepted", "in_team")
 
 
 def resolve_status_fields(
@@ -306,11 +335,15 @@ def _member_role(
     project: Project,
     accepted_by_participant: dict[int, Response],
 ) -> str:
-    """Роль участника команды: из принятого отклика, иначе «Автор».
+    """Роль участника команды: ручная, иначе из отклика, иначе «Автор».
 
-    Пустая строка читалась как «данных нет», хотя для автора проекта роль
-    определена — он и есть автор.
+    Приоритет у роли, назначенной руководителем вручную. Без неё роль берётся
+    из принятого отклика (``accepted``/``in_team``); у автора проекта отклика
+    нет, поэтому он «Автор». Пустая строка остаётся только у участника без
+    отклика и без ручной роли.
     """
+    if participation.role:
+        return participation.role
     if participation.participant_id == project.author_id:
         return PROJECT_AUTHOR_ROLE
     response = accepted_by_participant.get(participation.participant_id)
@@ -400,13 +433,15 @@ class ProjectFull(ProjectCreate):
         except Exception:
             all_responses = []
 
-        # Роль и резюме участника берём из принятого отклика: участник попадает
-        # в команду только через принятие отклика или приглашения, и там есть
-        # и роль, и резюме. Раньше резюме не подставлялось вовсе, колонка
+        # Роль и резюме участника берём из отклика, закрепившего его в команде:
+        # это либо принятое приглашение (``accepted``), либо подтверждённое
+        # вступление по отклику (``in_team``). Учитывать только ``accepted``
+        # нельзя: подтверждение переводит отклик в ``in_team``, и участник
+        # оставался без роли. Раньше резюме не подставлялось вовсе, колонка
         # «Резюме» была пустой у всех.
         accepted_by_participant: dict[int, Response] = {}
         for r in all_responses:
-            if r.status == "accepted" and r.respondent_id:
+            if r.status in ROLE_RESPONSE_STATUSES and r.respondent_id:
                 accepted_by_participant[r.respondent_id] = r
 
         members = [

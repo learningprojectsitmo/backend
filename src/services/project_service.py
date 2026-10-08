@@ -1166,6 +1166,25 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
             await self._project_repository.increment_vacancy_count(accepted.vacancy_id)
         return await self._project_repository.remove_participant(project_id, participant_user_id)
 
+    async def update_participant_role(
+        self, project_id: int, participant_user_id: int, role: str | None, current_user_id: int
+    ) -> ProjectParticipation:
+        """Назначить участнику ручную роль или снять её (``None``).
+
+        Состав управляющих совпадает с удалением участника: автор проекта или
+        глобальный админ. Строка участия должна существовать: ручная роль не
+        добавляет человека в команду.
+        """
+        project = await self.get_project_by_id(project_id)
+        if not project:
+            raise NotFoundError("Project not found")
+        if not await self._can_manage_team(project, current_user_id):
+            raise PermissionError("Only project author or admin can change participant role")
+        updated = await self._project_repository.update_participant_role(project_id, participant_user_id, role)
+        if updated is None:
+            raise NotFoundError("Participant not found")
+        return updated
+
     async def _can_manage_team(self, project: Project, user_id: int) -> bool:
         """Может ли пользователь управлять командой проекта (автор или глобальный админ)."""
         if project.author_id == user_id:

@@ -8,7 +8,7 @@ import pytest
 
 from src.core.exceptions import NotFoundError, PermissionError, ValidationError
 from src.model.notification import NotificationType
-from src.model.project import Project, ProjectStage, ProjectType, ProjectVacancy, Response
+from src.model.project import Project, ProjectParticipation, ProjectStage, ProjectType, ProjectVacancy, Response
 from src.model.resume import Resume
 from src.model.settings import SpaceSettings
 from src.model.user import Role, User
@@ -2160,6 +2160,88 @@ class TestRemoveParticipant:
         with pytest.raises(ValidationError, match="Cannot remove the project author"):
             await project_service.remove_participant(3, 1, current_user_id=999)
         mock_repository.remove_participant.assert_not_called()
+
+
+class TestUpdateParticipantRole:
+    """Тесты для ProjectService.update_participant_role (автор или глобальный админ)"""
+
+    def _setup(self, *, project_author_id: int = 1, updated: ProjectParticipation | None = None) -> Mock:
+        mock_repository = Mock(spec=ProjectRepository)
+        mock_uow = Mock()
+        mock_session = AsyncMock()
+        mock_uow.session = mock_session
+        mock_repository.uow = mock_uow
+        mock_repository.get_by_id = AsyncMock(return_value=Project(id=3, name="P", author_id=project_author_id))
+        mock_repository.update_participant_role = AsyncMock(
+            return_value=updated if updated is not None else ProjectParticipation(id=1, project_id=3, participant_id=42)
+        )
+        return mock_repository
+
+    def _role_result(self, role_name: str | None) -> Mock:
+        role_result = Mock()
+        role_result.scalar_one_or_none.return_value = role_name
+        return role_result
+
+    @pytest.mark.asyncio
+    async def test_should_allow_author_to_set_role(self):
+        # given
+        mock_repository = self._setup(project_author_id=1)
+        project_service = ProjectService(mock_repository)
+
+        # when
+        await project_service.update_participant_role(3, 42, "Тимлид", current_user_id=1)
+
+        # then
+        mock_repository.update_participant_role.assert_awaited_once_with(3, 42, "Тимлид")
+
+    @pytest.mark.asyncio
+    async def test_should_allow_global_admin_to_set_role(self):
+        # given
+        mock_repository = self._setup(project_author_id=1)
+        mock_repository.uow.session.execute = AsyncMock(return_value=self._role_result("admin"))
+        project_service = ProjectService(mock_repository)
+
+        # when
+        await project_service.update_participant_role(3, 42, None, current_user_id=999)
+
+        # then: None — снятие ручной роли, а не «ничего не делать»
+        mock_repository.update_participant_role.assert_awaited_once_with(3, 42, None)
+
+    @pytest.mark.asyncio
+    async def test_should_deny_non_admin_non_author(self):
+        # given
+        mock_repository = self._setup(project_author_id=1)
+        mock_repository.uow.session.execute = AsyncMock(return_value=self._role_result("member"))
+        project_service = ProjectService(mock_repository)
+
+        # when / then
+        with pytest.raises(PermissionError, match="Only project author or admin can change participant role"):
+            await project_service.update_participant_role(3, 42, "Тимлид", current_user_id=999)
+        mock_repository.update_participant_role.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_should_raise_when_project_not_found(self):
+        # given
+        mock_repository = Mock(spec=ProjectRepository)
+        mock_repository.uow = Mock()
+        mock_repository.uow.session = AsyncMock()
+        mock_repository.get_by_id = AsyncMock(return_value=None)
+        project_service = ProjectService(mock_repository)
+
+        # when / then
+        with pytest.raises(NotFoundError, match="Project not found"):
+            await project_service.update_participant_role(3, 42, "Тимлид", current_user_id=1)
+
+    @pytest.mark.asyncio
+    async def test_should_raise_when_participant_not_found(self):
+        # given: пары (проект, участник) нет — ручная роль не создаёт участие
+        mock_repository = self._setup(project_author_id=1)
+        mock_repository.update_participant_role = AsyncMock(return_value=None)
+        project_service = ProjectService(mock_repository)
+
+        # when / then
+        with pytest.raises(NotFoundError, match="Participant not found"):
+            await project_service.update_participant_role(3, 42, "Тимлид", current_user_id=1)
 
 
 class TestCancelInvitation:

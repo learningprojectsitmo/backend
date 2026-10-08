@@ -505,6 +505,30 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         await self.uow.session.flush()
         return participation
 
+    async def update_participant_role(
+        self, project_id: int, user_id: int, role: str | None
+    ) -> ProjectParticipation | None:
+        """Задать или снять ручную роль участника.
+
+        ``None`` возвращается, если пары (проект, участник) нет: вызывающий
+        отличает «участника нет» от «роль обновлена». Строку не создаём —
+        ручная роль не должна добавлять человека в команду.
+        """
+        result = await self.uow.session.execute(
+            select(ProjectParticipation)
+            .where(
+                ProjectParticipation.project_id == project_id,
+                ProjectParticipation.participant_id == user_id,
+            )
+            .limit(1),
+        )
+        participation = result.scalars().first()
+        if participation is None:
+            return None
+        participation.role = role
+        await self.uow.session.flush()
+        return participation
+
     async def get_responses_by_project_id(self, project_id: int) -> list[Response]:
         result = await self.uow.session.execute(
             select(Response)

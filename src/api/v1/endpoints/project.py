@@ -21,6 +21,7 @@ from src.schema.project import (
     MyInvitationListResponse,
     MyProjectListResponse,
     MyResponseListResponse,
+    ParticipantRoleUpdate,
     ProjectCreate,
     ProjectFilterFacetsResponse,
     ProjectFull,
@@ -378,6 +379,23 @@ async def remove_participant(
     if not success:
         raise HTTPException(status_code=404, detail="Participant not found")
     return {"message": "Participant removed successfully"}
+
+
+@project_router.patch("/{project_id}/participants/{user_id}/role", response_model=ProjectFull)
+async def update_participant_role(
+    project_id: int,
+    user_id: int,
+    body: ParticipantRoleUpdate,
+    project_service: ProjectService = Depends(get_project_service),
+    current_user: User = Depends(permission_required("project:update")),
+    _audit=Depends(setup_audit),
+) -> ProjectFull:
+    """Назначить участнику ручную роль или снять её (автор проекта или админ)"""
+    await project_service.update_participant_role(project_id, user_id, body.role, current_user.id)
+    project = await project_service.get_project_by_id(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return await project_service.build_full(project, current_user.id)
 
 
 @project_router.delete("/{project_id}")

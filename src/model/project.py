@@ -165,6 +165,10 @@ class ProjectParticipation(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     project_id: Mapped[int] = mapped_column(ForeignKey("project.id"), nullable=False)
     participant_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
+    # Роль, назначенная руководителем вручную. ``NULL`` — роль не задавали,
+    # и она выводится автоматически (автор проекта или вакансия принятого
+    # отклика). Ручное значение имеет приоритет над автоматическим.
+    role: Mapped[str | None] = mapped_column(String(200), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
