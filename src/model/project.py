@@ -184,14 +184,6 @@ class ProjectParticipation(Base):
         )
 
 
-#: Статусы отклика/приглашения, которые ещё «живы»: по ним роль проекта
-#: нельзя архивировать, по терминальным (``rejected``/``withdrawn``/
-#: ``cancelled``) — можно. Единственный источник правды и для подсчёта
-#: ``get_response_counts_by_vacancy_ids``, и для фронтового ``vacancy-sync``:
-#: разные наборы статусов дали бы 422 на сохранении формы.
-ACTIVE_RESPONSE_STATUSES: tuple[str, ...] = ("pending", "accepted", "in_team")
-
-
 class Response(Base):
     __tablename__ = "response"
 

@@ -1051,19 +1051,22 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         отклика при каждом сохранении проекта.
 
         Снятая из формы роль не удаляется, а помечается ``archived=True``:
-        строка остаётся в базе, поэтому история откликов хранит название роли,
-        а возврат места при выходе участника продолжает работать. Архивные
-        роли выпадают из ``existing`` — иначе каждое сохранение «удаляло» бы
-        их заново и гоняло бы проверку откликов.
+        строка остаётся в базе, поэтому ``response.vacancy_id`` у откликов
+        продолжает ссылаться на валидную строку, история хранит название роли,
+        роль участника в команде не пропадает, а возврат места при выходе
+        участника работает. Архивные роли выпадают из ``existing`` — иначе
+        каждое сохранение «удаляло» бы их заново.
 
-        Архивировать роль, на которую есть АКТИВНЫЕ отклики или приглашения,
-        нельзя: заявитель ещё ждёт решения, а роль участника в команде
-        пропала бы из вида. Отклонённые, отозванные и отменённые записи
-        такой роли не мешают — именно после обработки откликов отказом роль
-        и становится свободной. Причина блокировки возвращается как
-        ``ValidationError``, её же показывает форма.
+        Роль, пришедшая в запросе со своим ``id``, может быть архивной: так
+        форма возвращает её из архива — просто снимается ``archived``.
+
+        Живые отклики и приглашения архивацию не блокируют: принять висящий
+        отклик можно и на архивную роль (``accept_response``/``confirm_join``
+        берут ``vacancy_id`` напрямую), а новые отклики на архивную роль не
+        создаются (``_assert_vacancy_available``).
         """
-        existing = {v.id: v for v in (project.vacancies or []) if not v.archived}
+        existing_all = {v.id: v for v in (project.vacancies or [])}
+        existing = {vacancy_id: v for vacancy_id, v in existing_all.items() if not v.archived}
 
         seen_ids: set[int] = set()
         for v in vacancies_data:
@@ -1072,23 +1075,14 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
                 continue
             if vacancy_id in seen_ids:
                 raise ValidationError(f"Роль с id={vacancy_id} продублирована в запросе")
-            if vacancy_id not in existing:
+            if vacancy_id not in existing_all:
                 raise ValidationError(f"Роль с id={vacancy_id} не найдена в проекте")
             seen_ids.add(vacancy_id)
 
         to_archive = [vac for vacancy_id, vac in existing.items() if vacancy_id not in seen_ids]
-        if to_archive:
-            counts = await self._project_repository.get_response_counts_by_vacancy_ids([v.id for v in to_archive])
-            blocked = [v for v in to_archive if counts.get(v.id)]
-            if blocked:
-                details = "; ".join(f"«{v.title}» — {counts[v.id]}" for v in blocked)
-                raise ValidationError(
-                    f"Нельзя удалить роль с активными откликами: {details}. "
-                    "Сначала примите или отклоните отклики и приглашения по этим ролям."
-                )
 
         for v in vacancies_data:
-            vacancy = existing.get(v.get("id"))
+            vacancy = existing_all.get(v.get("id"))
             if vacancy is None:
                 self._project_repository.uow.session.add(
                     ProjectVacancy(
@@ -1102,10 +1096,11 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
             vacancy.title = v["title"]
             vacancy.tasks = v.get("tasks", [])
             vacancy.required_count = v.get("required_count", 1)
+            # Роль пришла с id и в запросе — значит она в форме, а не в архиве.
+            vacancy.archived = False
 
         for vacancy in to_archive:
             vacancy.archived = True
-
         await self._project_repository.uow.session.flush()
 
     async def update_project(

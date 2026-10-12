@@ -9,7 +9,6 @@ from sqlalchemy.sql.elements import ColumnElement
 
 from src.core.uow import IUnitOfWork
 from src.model.project import (
-    ACTIVE_RESPONSE_STATUSES,
     Project,
     ProjectParticipation,
     ProjectStage,
@@ -432,31 +431,6 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         await self.uow.session.flush()
         await self.uow.session.refresh(response, ["vacancy"])
         return response
-
-    async def get_response_counts_by_vacancy_ids(self, vacancy_ids: list[int]) -> dict[int, int]:
-        """Сколько АКТИВНЫХ откликов и приглашений висит на каждой из ролей.
-
-        Нужна перед архивацией роли при правке проекта: у роли с живыми
-        откликами нельзя прятаться из формы — заявитель ещё ждёт решения, а
-        у участника пропала бы роль в команде. Отклонённые, отозванные и
-        отменённые записи не считаются: именно они раньше делали роль
-        неудаляемой навсегда, даже после обработки всех откликов.
-
-        Роли без активных откликов в словарь не попадают. Статусы —
-        ``ACTIVE_RESPONSE_STATUSES``, тот же набор считает фронтовый
-        ``vacancy-sync``: расхождение дало бы 422 на сохранении формы.
-        """
-        if not vacancy_ids:
-            return {}
-        result = await self.uow.session.execute(
-            select(Response.vacancy_id, func.count(Response.id))
-            .where(
-                Response.vacancy_id.in_(vacancy_ids),
-                Response.status.in_(ACTIVE_RESPONSE_STATUSES),
-            )
-            .group_by(Response.vacancy_id),
-        )
-        return {vacancy_id: count for vacancy_id, count in result.all() if vacancy_id is not None}
 
     async def decrement_vacancy_count(self, vacancy_id: int) -> None:
         await self.uow.session.execute(

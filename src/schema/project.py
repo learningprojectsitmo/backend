@@ -383,6 +383,11 @@ class ProjectFull(ProjectCreate):
     members: list[ParticipantFull] = []
     replycants: list[ResponseItem] = []
     vacancies: list[VacancyItem] = []
+    #: Роли, снятые из проекта (``archived=True``), но сохранённые в базе: на
+    #: них ссылается ``response.vacancy_id``. Наружу отдаются отдельным полем,
+    #: потому что в диалогах отклика/приглашения их быть не должно, а форма
+    #: правки показывает их в блоке «Архивные роли» с возможностью вернуть.
+    archived_vacancies: list[VacancyItem] = []
     author_name: str = ""
     author_email: str | None = None
     has_user_applied: bool = False
@@ -489,9 +494,10 @@ class ProjectFull(ProjectCreate):
         except Exception:
             vacancies_list = []
 
-        # Архивные роли (снятые из проекта) наружу не отдаются: в форме
-        # правки, диалогах отклика и приглашения их быть не должно. Строки
-        # в базе остаются — на них ссылается `response.vacancy_id`.
+        # Активные роли — те, что видит форма и диалоги. Архивные (снятые из
+        # проекта) уходят отдельным списком ``archived_vacancies``: строки в
+        # базе остаются, на них ссылается `response.vacancy_id`, поэтому их
+        # нужно уметь показать и вернуть, но их не должно быть в apply/invite.
         vacancies = [
             VacancyItem(
                 id=v.id,
@@ -502,6 +508,23 @@ class ProjectFull(ProjectCreate):
             for v in vacancies_list
             if not v.archived
         ]
+        # Архивные роли видит только автор проекта: для остальных это
+        # управление ролями, которого у них нет, а данные о снятых вакансиях
+        # им не нужны. Пустой список отдаётся всем прочим без исключения.
+        archived_vacancies = (
+            [
+                VacancyItem(
+                    id=v.id,
+                    title=v.title,
+                    tasks=v.tasks or [],
+                    required_count=v.required_count,
+                )
+                for v in vacancies_list
+                if v.archived
+            ]
+            if current_user_id is not None and project.author_id == current_user_id
+            else []
+        )
 
         try:
             author = project.author
@@ -566,6 +589,7 @@ class ProjectFull(ProjectCreate):
             members=members,
             replycants=replycants,
             vacancies=vacancies,
+            archived_vacancies=archived_vacancies,
             has_user_applied=has_user_applied,
             project_type_id=project.project_type_id,
             current_stage_id=current_stage_id,

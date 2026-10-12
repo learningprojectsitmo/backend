@@ -328,7 +328,7 @@ class TestParticipationUniqueIndexes:
 
 
 class TestProjectFullVacancies:
-    """Архивные роли не попадают в карточку проекта (форма правки, диалоги)."""
+    """Архивные роли уходят отдельным полем и видны только автору проекта."""
 
     @staticmethod
     def _project() -> Project:
@@ -347,8 +347,39 @@ class TestProjectFullVacancies:
         # given / when
         full = ProjectFull.from_orm(self._project())
 
-        # then: наружу отдаётся только неархивная роль
+        # then: в основном списке только неархивная роль
         assert [v.id for v in full.vacancies] == [5]
+
+    def test_should_expose_archived_vacancy_to_author(self):
+        # given / when: запрос от автора проекта
+        full = ProjectFull.from_orm(self._project(), current_user_id=1)
+
+        # then: архивная роль доступна автору, чтобы её можно было вернуть
+        assert [v.id for v in full.archived_vacancies] == [6]
+
+    def test_should_hide_archived_vacancy_from_non_author(self):
+        # given / when: карточку смотрит не автор
+        full = ProjectFull.from_orm(self._project(), current_user_id=2)
+
+        # then: архивные роли не отдаются
+        assert full.archived_vacancies == []
+
+    def test_should_hide_archived_vacancy_from_anonymous(self):
+        # given / when: карточку смотрят без авторизации
+        full = ProjectFull.from_orm(self._project())
+
+        # then
+        assert full.archived_vacancies == []
+
+    def test_should_keep_archived_vacancy_fields(self):
+        # given / when
+        full = ProjectFull.from_orm(self._project(), current_user_id=1)
+
+        # then
+        vacancy = full.archived_vacancies[0]
+        assert vacancy.title == "QA"
+        assert vacancy.required_count == 1
+        assert vacancy.tasks == ["тесты"]
 
     def test_should_keep_active_vacancy_fields(self):
         # given / when
@@ -359,6 +390,24 @@ class TestProjectFullVacancies:
         assert vacancy.title == "Backend"
         assert vacancy.required_count == 1
         assert vacancy.tasks == ["api"]
+
+    def test_should_return_empty_archived_list_without_archived_roles(self):
+        # given
+        project = Project(
+            id=1,
+            name="Проект",
+            author_id=1,
+            stage_pending_approval=False,
+            vacancies=[
+                ProjectVacancy(id=5, project_id=1, title="Backend", tasks=["api"], required_count=1, archived=False),
+            ],
+        )
+
+        # when
+        full = ProjectFull.from_orm(project, current_user_id=1)
+
+        # then
+        assert full.archived_vacancies == []
 
 
 class TestRejectionReasonInProjectFull:

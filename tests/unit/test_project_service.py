@@ -346,14 +346,9 @@ class TestProjectService:
         assert result == updated_project
         mock_repository.update.assert_called_once()
 
-    def _vacancy_sync_setup(self, vacancies: list[ProjectVacancy], response_counts: dict[int, int] | None = None):
-        """Репозиторий и проект для проверки синхронизации ролей.
-
-        ``response_counts`` — сколько откликов висит на каждой роли
-        (для ``ProjectVacancy`` без откликов ключа нет).
-        """
+    def _vacancy_sync_setup(self, vacancies: list[ProjectVacancy]):
+        """Репозиторий и проект для проверки синхронизации ролей."""
         mock_repo = self._setup_mock_repo()
-        mock_repo.get_response_counts_by_vacancy_ids = AsyncMock(return_value=response_counts or {})
 
         existing_project = Project(id=1, name="Project", author_id=1, vacancies=vacancies)
         mock_repo.get_by_id.return_value = existing_project
@@ -416,14 +411,13 @@ class TestProjectService:
         assert mock_repo.uow.session.delete.call_count == 0
 
     @pytest.mark.asyncio
-    async def test_should_archive_vacancy_without_responses(self):
-        # given: на снимаемую роль никто не откликался
+    async def test_should_archive_vacancy_removed_from_form(self):
+        # given: роль убрали из формы
         mock_repo, project = self._vacancy_sync_setup(
             vacancies=[
                 ProjectVacancy(id=5, project_id=1, title="Backend", tasks=["t"], required_count=1),
                 ProjectVacancy(id=6, project_id=1, title="QA", tasks=["q"], required_count=1),
             ],
-            response_counts={5: 1},
         )
         project_service = ProjectService(mock_repo)
 
@@ -444,25 +438,76 @@ class TestProjectService:
         mock_repo.uow.session.delete.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_should_reject_removing_vacancy_with_responses(self):
-        # given: на удаляемую роль есть отклик
-        mock_repo, _ = self._vacancy_sync_setup(
+    async def test_should_archive_vacancy_even_with_active_responses(self):
+        # given: на снимаемую роль висят живые отклики — архивация всё равно
+        # разрешена, ведь строка остаётся в базе и отклик можно обработать
+        mock_repo, project = self._vacancy_sync_setup(
             vacancies=[
                 ProjectVacancy(id=5, project_id=1, title="Backend", tasks=["t"], required_count=1),
                 ProjectVacancy(id=6, project_id=1, title="QA", tasks=["q"], required_count=1),
             ],
-            response_counts={6: 3},
         )
         project_service = ProjectService(mock_repo)
 
-        # when / then: правка падает, и название роли есть в сообщении
-        with pytest.raises(ValidationError, match=re.escape("«QA» — 3")):
-            await project_service.update_project(
-                1,
-                ProjectUpdate(vacancies=[{"id": 5, "title": "Backend", "tasks": ["t"], "required_count": 1}]),
-                current_user_id=1,
-            )
-        assert mock_repo.uow.session.delete.call_count == 0
+        # when: роль 6 убрали из формы, хотя по ней есть отклик
+        await project_service.update_project(
+            1,
+            ProjectUpdate(vacancies=[{"id": 5, "title": "Backend", "tasks": ["t"], "required_count": 1}]),
+            current_user_id=1,
+        )
+
+        # then: роль архивирована, а не удалена — response.vacancy_id цел
+        by_id = {v.id: v for v in project.vacancies}
+        assert by_id[6].archived is True
+        mock_repo.uow.session.delete.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_should_restore_archived_vacancy_when_id_present(self):
+        # given: роль уже в архиве и приходит обратно в форме со своим id
+        archived = ProjectVacancy(id=6, project_id=1, title="QA", tasks=["q"], required_count=1, archived=True)
+        mock_repo, project = self._vacancy_sync_setup(
+            vacancies=[
+                ProjectVacancy(id=5, project_id=1, title="Backend", tasks=["t"], required_count=1),
+                archived,
+            ],
+        )
+        project_service = ProjectService(mock_repo)
+
+        # when
+        await project_service.update_project(
+            1,
+            ProjectUpdate(
+                vacancies=[
+                    {"id": 6, "title": "QA", "tasks": ["q"], "required_count": 1},
+                ]
+            ),
+            current_user_id=1,
+        )
+
+        # then: та же строка вернулась из архива, id сохранён
+        assert archived.archived is False
+        assert archived.id == 6
+        # роль 5 сняли из формы — она архивируется; роль 6 была архивной и
+        # вернулась, поэтому повторно в архив не уходит
+        by_id = {v.id: v for v in project.vacancies}
+        assert by_id[5].archived is True
+
+    @pytest.mark.asyncio
+    async def test_should_keep_archived_vacancy_when_absent_from_payload(self):
+        # given: роль в архиве и в форме её нет
+        archived = ProjectVacancy(id=6, project_id=1, title="QA", tasks=["q"], required_count=1, archived=True)
+        mock_repo, _ = self._vacancy_sync_setup(vacancies=[archived])
+        project_service = ProjectService(mock_repo)
+
+        # when: сохраняем форму без роли 6
+        await project_service.update_project(
+            1,
+            ProjectUpdate(vacancies=[]),
+            current_user_id=1,
+        )
+
+        # then: архивная роль остаётся в архиве
+        assert archived.archived is True
 
     @pytest.mark.asyncio
     async def test_should_reject_vacancy_id_from_another_project(self):
