@@ -10,7 +10,9 @@ from src.model.workspace import WorkSpaceParticipation
 from src.schema.project import (
     MAX_VACANCY_TASK_LENGTH,
     PROJECT_AUTHOR_ROLE,
+    ParticipantRoleUpdate,
     ProjectFull,
+    ResponseRejectRequest,
     VacancyCreate,
     VacancyUpdate,
 )
@@ -219,6 +221,55 @@ class TestProjectTeamMembers:
         assert accepted.role == ""
         assert accepted.resume_url == ""
 
+    def test_should_fill_role_from_in_team_response(self):
+        # given: подтверждённое вступление переводит отклик в in_team, а не accepted
+        project = self._project_with_team()
+        project.responses[0].status = "in_team"
+
+        # when
+        members = ProjectFull.from_orm(project).members
+
+        # then: роль и резюме не теряются после подтверждения вступления
+        accepted = next(m for m in members if m.user_id == 2)
+        assert accepted.role == "Backend"
+        assert accepted.resume_url == "/app/resume?id=99&workspaceId=7"
+
+    def test_should_prefer_manual_role_over_derived(self):
+        # given: участнику без отклика роль задали вручную
+        project = self._project_with_team()
+        manual = next(p for p in project.participants if p.participant_id == 3)
+        manual.role = "Тимлид"
+
+        # when
+        members = ProjectFull.from_orm(project).members
+
+        # then
+        assert next(m for m in members if m.user_id == 3).role == "Тимлид"
+
+    def test_should_prefer_manual_role_over_accepted_vacancy(self):
+        # given: у участника есть принятый отклик, но роль задали вручную
+        project = self._project_with_team()
+        accepted_participation = next(p for p in project.participants if p.participant_id == 2)
+        accepted_participation.role = "Ведущий разработчик"
+
+        # when
+        members = ProjectFull.from_orm(project).members
+
+        # then: ручная роль перекрывает вакансию отклика
+        assert next(m for m in members if m.user_id == 2).role == "Ведущий разработчик"
+
+    def test_should_let_manual_role_override_author(self):
+        # given
+        project = self._project_with_team()
+        author_participation = next(p for p in project.participants if p.participant_id == 1)
+        author_participation.role = "Руководитель проекта"
+
+        # when
+        members = ProjectFull.from_orm(project).members
+
+        # then
+        assert next(m for m in members if m.user_id == 1).role == "Руководитель проекта"
+
 
 class TestParticipationUniqueIndexes:
     """Уникальность пары (проект, участник) и (пространство, участник).
@@ -274,3 +325,214 @@ class TestParticipationUniqueIndexes:
         # then
         assert project_index.unique is not True
         assert workspace_index.unique is not True
+
+
+class TestProjectFullVacancies:
+    """Архивные роли уходят отдельным полем и видны только автору проекта."""
+
+    @staticmethod
+    def _project() -> Project:
+        return Project(
+            id=1,
+            name="Проект",
+            author_id=1,
+            stage_pending_approval=False,
+            vacancies=[
+                ProjectVacancy(id=5, project_id=1, title="Backend", tasks=["api"], required_count=1, archived=False),
+                ProjectVacancy(id=6, project_id=1, title="QA", tasks=["тесты"], required_count=1, archived=True),
+            ],
+        )
+
+    def test_should_hide_archived_vacancy(self):
+        # given / when
+        full = ProjectFull.from_orm(self._project())
+
+        # then: в основном списке только неархивная роль
+        assert [v.id for v in full.vacancies] == [5]
+
+    def test_should_expose_archived_vacancy_to_author(self):
+        # given / when: запрос от автора проекта
+        full = ProjectFull.from_orm(self._project(), current_user_id=1)
+
+        # then: архивная роль доступна автору, чтобы её можно было вернуть
+        assert [v.id for v in full.archived_vacancies] == [6]
+
+    def test_should_hide_archived_vacancy_from_non_author(self):
+        # given / when: карточку смотрит не автор
+        full = ProjectFull.from_orm(self._project(), current_user_id=2)
+
+        # then: архивные роли не отдаются
+        assert full.archived_vacancies == []
+
+    def test_should_hide_archived_vacancy_from_anonymous(self):
+        # given / when: карточку смотрят без авторизации
+        full = ProjectFull.from_orm(self._project())
+
+        # then
+        assert full.archived_vacancies == []
+
+    def test_should_keep_archived_vacancy_fields(self):
+        # given / when
+        full = ProjectFull.from_orm(self._project(), current_user_id=1)
+
+        # then
+        vacancy = full.archived_vacancies[0]
+        assert vacancy.title == "QA"
+        assert vacancy.required_count == 1
+        assert vacancy.tasks == ["тесты"]
+
+    def test_should_keep_active_vacancy_fields(self):
+        # given / when
+        full = ProjectFull.from_orm(self._project())
+
+        # then
+        vacancy = full.vacancies[0]
+        assert vacancy.title == "Backend"
+        assert vacancy.required_count == 1
+        assert vacancy.tasks == ["api"]
+
+    def test_should_return_empty_archived_list_without_archived_roles(self):
+        # given
+        project = Project(
+            id=1,
+            name="Проект",
+            author_id=1,
+            stage_pending_approval=False,
+            vacancies=[
+                ProjectVacancy(id=5, project_id=1, title="Backend", tasks=["api"], required_count=1, archived=False),
+            ],
+        )
+
+        # when
+        full = ProjectFull.from_orm(project, current_user_id=1)
+
+        # then
+        assert full.archived_vacancies == []
+
+
+class TestRejectionReasonInProjectFull:
+    """Причина отказа доходит до карточки проекта."""
+
+    def test_should_expose_reason_on_rejected_response(self):
+        # given
+        project = Project(
+            id=1,
+            name="Проект",
+            author_id=1,
+            stage_pending_approval=False,
+            responses=[
+                Response(
+                    id=9,
+                    respondent_id=2,
+                    project_id=1,
+                    type="response",
+                    status="rejected",
+                    rejection_reason="Не хватает опыта",
+                    respondent=User(id=2, first_name="Анна", last_name="Петрова", email="anna@example.com"),
+                )
+            ],
+        )
+
+        # when
+        full = ProjectFull.from_orm(project)
+
+        # then
+        assert full.replycants[0].status == "rejected"
+        assert full.replycants[0].rejection_reason == "Не хватает опыта"
+
+    def test_should_return_none_when_reject_without_reason(self):
+        # given: отказ без причины (старые записи и явный отказ без текста)
+        project = Project(
+            id=1,
+            name="Проект",
+            author_id=1,
+            stage_pending_approval=False,
+            responses=[
+                Response(
+                    id=9,
+                    respondent_id=2,
+                    project_id=1,
+                    type="response",
+                    status="rejected",
+                    rejection_reason=None,
+                    respondent=User(id=2, first_name="Анна", last_name="Петрова", email="anna@example.com"),
+                )
+            ],
+        )
+
+        # when
+        full = ProjectFull.from_orm(project)
+
+        # then
+        assert full.replycants[0].rejection_reason is None
+
+
+class TestResponseRejectRequest:
+    """Тело отказа: причина опциональна, ограничена 200 символами."""
+
+    def test_should_default_to_none(self):
+        # given / when / then
+        assert ResponseRejectRequest().reason is None
+
+    @pytest.mark.parametrize(
+        ("raw", "expected"),
+        [
+            ("Не подходит по опыту", "Не подходит по опыту"),
+            ("  Уточните задачи  ", "Уточните задачи"),
+            ("   ", None),
+            ("", None),
+        ],
+    )
+    def test_should_strip_and_normalize_reason(self, raw, expected):
+        # given / when
+        request = ResponseRejectRequest(reason=raw)
+
+        # then
+        assert request.reason == expected
+
+    def test_should_reject_too_long_reason(self):
+        # given / when / then
+        with pytest.raises(ValidationError):
+            ResponseRejectRequest(reason="о" * 201)
+
+    def test_should_accept_reason_at_length_limit(self):
+        # given / when
+        request = ResponseRejectRequest(reason="о" * 200)
+
+        # then
+        assert request.reason == "о" * 200
+
+
+class TestParticipantRoleUpdate:
+    """Ручное назначение роли: пустое значение снимает ручную роль."""
+
+    def test_should_default_to_none(self):
+        # given / when / then
+        assert ParticipantRoleUpdate().role is None
+
+    @pytest.mark.parametrize("raw", ["", "   ", "\n"])
+    def test_should_normalize_blank_to_none(self, raw):
+        # given / when
+        update = ParticipantRoleUpdate(role=raw)
+
+        # then: пустая строка = «снять ручную роль», а не роль из пробелов
+        assert update.role is None
+
+    def test_should_trim_role(self):
+        # given / when
+        update = ParticipantRoleUpdate(role="  Тимлид  ")
+
+        # then
+        assert update.role == "Тимлид"
+
+    def test_should_reject_role_over_length_limit(self):
+        # given / when / then
+        with pytest.raises(ValidationError, match="длиннее"):
+            ParticipantRoleUpdate(role="р" * 201)
+
+    def test_should_accept_role_at_length_limit(self):
+        # given / when
+        update = ParticipantRoleUpdate(role="р" * 200)
+
+        # then
+        assert update.role == "р" * 200

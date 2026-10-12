@@ -16,6 +16,10 @@ if TYPE_CHECKING:
 #: ограничения на стороне БД, поэтому длина задаётся только здесь.
 MAX_VACANCY_TASK_LENGTH = 500
 
+#: Потолок длины ручной роли участника — совпадает с колонкой
+#: ``project_participation.role`` (``String(200)``).
+MAX_PARTICIPANT_ROLE_LENGTH = 200
+
 
 def _find_duplicates(values: list[str]) -> list[str]:
     """Повторы в списке строк, в порядке первого появления."""
@@ -54,6 +58,26 @@ class ParticipantFull(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ParticipantRoleUpdate(BaseModel):
+    """Тело ручного назначения роли участнику команды.
+
+    Пустая строка (и одни пробелы) неотличима от «снять ручную роль» и
+    нормализуется в ``None``: тогда снова работает автоматический вывод роли.
+    """
+
+    role: str | None = None
+
+    @field_validator("role")
+    @classmethod
+    def _normalize_role(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        stripped = value.strip()
+        if len(stripped) > MAX_PARTICIPANT_ROLE_LENGTH:
+            raise ValueError("Роль не может быть длиннее 200 символов")
+        return stripped or None
+
+
 class ResponseItem(BaseModel):
     id: int
     user_id: int
@@ -65,6 +89,8 @@ class ResponseItem(BaseModel):
     role: str = ""
     type: str = "response"
     status: str = "pending"
+    #: Причина отказа, если отклик отклонён (и руководитель её указал).
+    rejection_reason: str | None = None
     allow_multi_project_participation: bool = True
     busy_in_other_project: bool = False
 
@@ -74,6 +100,11 @@ class ResponseItem(BaseModel):
 #: Статусы, которые производный пересчёт может превратить в ``in_team``.
 #: ``rejected``/``withdrawn`` — решения сторон, их не пересматриваем.
 CLOSABLE_STATUSES = ("pending", "accepted")
+
+#: Статусы отклика, по которым роль участника уже закреплена: ``accepted`` —
+#: принятое приглашение, ``in_team`` — подтверждённое вступление по отклику.
+#: ``pending`` сюда не входит: человек ещё не в команде, роль не его.
+ROLE_RESPONSE_STATUSES = ("accepted", "in_team")
 
 
 def resolve_status_fields(
@@ -204,6 +235,21 @@ class InviteRequest(BaseModel):
     resume_id: int | None = None
 
 
+class ResponseRejectRequest(BaseModel):
+    """Тело отказа на отклик: причина опциональна и не длиннее 200 символов."""
+
+    reason: str | None = Field(default=None, max_length=200)
+
+    @field_validator("reason")
+    @classmethod
+    def _normalize_reason(cls, value: str | None) -> str | None:
+        """Убрать краевые пробелы; пустую строку считать незаполненной причиной."""
+        if value is None:
+            return None
+        stripped = value.strip()
+        return stripped or None
+
+
 class ProjectUpdate(BaseModel):
     """Схема для обновления проекта"""
 
@@ -289,11 +335,15 @@ def _member_role(
     project: Project,
     accepted_by_participant: dict[int, Response],
 ) -> str:
-    """Роль участника команды: из принятого отклика, иначе «Автор».
+    """Роль участника команды: ручная, иначе из отклика, иначе «Автор».
 
-    Пустая строка читалась как «данных нет», хотя для автора проекта роль
-    определена — он и есть автор.
+    Приоритет у роли, назначенной руководителем вручную. Без неё роль берётся
+    из принятого отклика (``accepted``/``in_team``); у автора проекта отклика
+    нет, поэтому он «Автор». Пустая строка остаётся только у участника без
+    отклика и без ручной роли.
     """
+    if participation.role:
+        return participation.role
     if participation.participant_id == project.author_id:
         return PROJECT_AUTHOR_ROLE
     response = accepted_by_participant.get(participation.participant_id)
@@ -333,6 +383,11 @@ class ProjectFull(ProjectCreate):
     members: list[ParticipantFull] = []
     replycants: list[ResponseItem] = []
     vacancies: list[VacancyItem] = []
+    #: Роли, снятые из проекта (``archived=True``), но сохранённые в базе: на
+    #: них ссылается ``response.vacancy_id``. Наружу отдаются отдельным полем,
+    #: потому что в диалогах отклика/приглашения их быть не должно, а форма
+    #: правки показывает их в блоке «Архивные роли» с возможностью вернуть.
+    archived_vacancies: list[VacancyItem] = []
     author_name: str = ""
     author_email: str | None = None
     has_user_applied: bool = False
@@ -383,13 +438,15 @@ class ProjectFull(ProjectCreate):
         except Exception:
             all_responses = []
 
-        # Роль и резюме участника берём из принятого отклика: участник попадает
-        # в команду только через принятие отклика или приглашения, и там есть
-        # и роль, и резюме. Раньше резюме не подставлялось вовсе, колонка
+        # Роль и резюме участника берём из отклика, закрепившего его в команде:
+        # это либо принятое приглашение (``accepted``), либо подтверждённое
+        # вступление по отклику (``in_team``). Учитывать только ``accepted``
+        # нельзя: подтверждение переводит отклик в ``in_team``, и участник
+        # оставался без роли. Раньше резюме не подставлялось вовсе, колонка
         # «Резюме» была пустой у всех.
         accepted_by_participant: dict[int, Response] = {}
         for r in all_responses:
-            if r.status == "accepted" and r.respondent_id:
+            if r.status in ROLE_RESPONSE_STATUSES and r.respondent_id:
                 accepted_by_participant[r.respondent_id] = r
 
         members = [
@@ -421,6 +478,7 @@ class ProjectFull(ProjectCreate):
                     vacancy_id=getattr(r.vacancy, "id", None) if r.vacancy else None,
                     role=getattr(r.vacancy, "title", "") if r.vacancy else "",
                     type=r.type,
+                    rejection_reason=r.rejection_reason,
                     allow_multi_project_participation=allow_multi_project_participation,
                     **resolve_busy_status(
                         r.status,
@@ -436,6 +494,10 @@ class ProjectFull(ProjectCreate):
         except Exception:
             vacancies_list = []
 
+        # Активные роли — те, что видит форма и диалоги. Архивные (снятые из
+        # проекта) уходят отдельным списком ``archived_vacancies``: строки в
+        # базе остаются, на них ссылается `response.vacancy_id`, поэтому их
+        # нужно уметь показать и вернуть, но их не должно быть в apply/invite.
         vacancies = [
             VacancyItem(
                 id=v.id,
@@ -444,7 +506,25 @@ class ProjectFull(ProjectCreate):
                 required_count=v.required_count,
             )
             for v in vacancies_list
+            if not v.archived
         ]
+        # Архивные роли видит только автор проекта: для остальных это
+        # управление ролями, которого у них нет, а данные о снятых вакансиях
+        # им не нужны. Пустой список отдаётся всем прочим без исключения.
+        archived_vacancies = (
+            [
+                VacancyItem(
+                    id=v.id,
+                    title=v.title,
+                    tasks=v.tasks or [],
+                    required_count=v.required_count,
+                )
+                for v in vacancies_list
+                if v.archived
+            ]
+            if current_user_id is not None and project.author_id == current_user_id
+            else []
+        )
 
         try:
             author = project.author
@@ -509,6 +589,7 @@ class ProjectFull(ProjectCreate):
             members=members,
             replycants=replycants,
             vacancies=vacancies,
+            archived_vacancies=archived_vacancies,
             has_user_applied=has_user_applied,
             project_type_id=project.project_type_id,
             current_stage_id=current_stage_id,
@@ -599,6 +680,8 @@ class MyResponseItem(BaseModel):
     resume_title: str = ""
     date: str
     status: str
+    #: Причина отказа при статусе ``rejected``, если её указал руководитель.
+    rejection_reason: str | None = None
     busy_in_other_project: bool = False
 
     model_config = ConfigDict(from_attributes=True)
@@ -662,6 +745,7 @@ class ResponseListItem(BaseModel):
     response_date: str = ""
     type: str = "response"
     status: str = "pending"
+    rejection_reason: str | None = None
     allow_multi_project_participation: bool = True
     busy_in_other_project: bool = False
     created_at: datetime | None = None

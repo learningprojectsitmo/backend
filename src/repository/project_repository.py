@@ -161,11 +161,17 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         )
         return result.scalars().first()
 
-    async def update_response_status(self, response_id: int, status: str) -> Response | None:
+    async def update_response_status(
+        self, response_id: int, status: str, rejection_reason: str | None = None
+    ) -> Response | None:
         response = await self.get_response_by_id(response_id)
         if not response:
             return None
         response.status = status
+        # Причина передаётся только из ``reject_response``: остальные смены
+        # статуса (принятие, отзыв, отмена соседних записей) её не трогают.
+        if rejection_reason is not None:
+            response.rejection_reason = rejection_reason
         await self.uow.session.flush()
         return response
 
@@ -426,23 +432,6 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         await self.uow.session.refresh(response, ["vacancy"])
         return response
 
-    async def get_response_counts_by_vacancy_ids(self, vacancy_ids: list[int]) -> dict[int, int]:
-        """Сколько откликов и приглашений висит на каждой из ролей.
-
-        Нужна перед удалением роли при правке проекта: у роли с откликами
-        нельзя рвать ``response.vacancy_id``, иначе отклик потеряет роль,
-        а счётчик мест перестанет уменьшаться при выходе участника.
-        Роли без откликов в словарь не попадают.
-        """
-        if not vacancy_ids:
-            return {}
-        result = await self.uow.session.execute(
-            select(Response.vacancy_id, func.count(Response.id))
-            .where(Response.vacancy_id.in_(vacancy_ids))
-            .group_by(Response.vacancy_id),
-        )
-        return {vacancy_id: count for vacancy_id, count in result.all() if vacancy_id is not None}
-
     async def decrement_vacancy_count(self, vacancy_id: int) -> None:
         await self.uow.session.execute(
             update(ProjectVacancy)
@@ -487,6 +476,30 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
             participant_id=user_id,
         )
         self.uow.session.add(participation)
+        await self.uow.session.flush()
+        return participation
+
+    async def update_participant_role(
+        self, project_id: int, user_id: int, role: str | None
+    ) -> ProjectParticipation | None:
+        """Задать или снять ручную роль участника.
+
+        ``None`` возвращается, если пары (проект, участник) нет: вызывающий
+        отличает «участника нет» от «роль обновлена». Строку не создаём —
+        ручная роль не должна добавлять человека в команду.
+        """
+        result = await self.uow.session.execute(
+            select(ProjectParticipation)
+            .where(
+                ProjectParticipation.project_id == project_id,
+                ProjectParticipation.participant_id == user_id,
+            )
+            .limit(1),
+        )
+        participation = result.scalars().first()
+        if participation is None:
+            return None
+        participation.role = role
         await self.uow.session.flush()
         return participation
 
