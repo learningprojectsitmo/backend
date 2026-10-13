@@ -10,9 +10,9 @@ footer: "Отборочный питчинг"
 #   npx -y @marp-team/marp-cli --allow-local-files docs/pitch/eduflow-pitch.md -o eduflow-pitch.pptx
 #   npx -y @marp-team/marp-cli -s docs/pitch            # живой предпросмотр
 # Дизайн слайдов повторяет UI сайта (frontend/src/index.css, ProjectCard, KanbanTask,
-# column-styles, Button). Мокапы нарисованы CSS-компонентами — вставлять скриншоты не нужно.
+# column-styles, Button). Продуктовые экраны — реальные скриншоты docs/images/features/.
 # Оценочные цифры помечены «оценка (уточнить)» — заменить на реальные перед выступлением.
-# Тайминг: слайды 1–14 = 3 минуты. Всё после «Приложение» — только для Q&A, не показывать.
+# Тайминг: слайды 1–16 = 3 минуты. Всё после «Приложение» — только для Q&A, не показывать.
 # Текст слайдов озвучивания — в комментариях-заметках (презентерские заметки в .pptx).
 ---
 
@@ -83,7 +83,8 @@ section[data-marpit-pagination="5"],
 section[data-marpit-pagination="8"],
 section[data-marpit-pagination="11"],
 section[data-marpit-pagination="14"],
-section[data-marpit-pagination="17"] {
+section[data-marpit-pagination="17"],
+section[data-marpit-pagination="20"] {
   background-image:
     radial-gradient(circle at 12% 8%, rgba(219, 234, 254, 0.8), rgba(219, 234, 254, 0) 60%),
     radial-gradient(circle at 90% 94%, rgba(220, 252, 231, 0.75), rgba(220, 252, 231, 0) 60%),
@@ -97,7 +98,8 @@ section[data-marpit-pagination="6"],
 section[data-marpit-pagination="9"],
 section[data-marpit-pagination="12"],
 section[data-marpit-pagination="15"],
-section[data-marpit-pagination="18"] {
+section[data-marpit-pagination="18"],
+section[data-marpit-pagination="21"] {
   background-image:
     radial-gradient(circle at 12% 8%, rgba(219, 234, 254, 0.8), rgba(219, 234, 254, 0) 60%),
     radial-gradient(circle at 90% 94%, rgba(220, 252, 231, 0.75), rgba(220, 252, 231, 0) 60%),
@@ -236,6 +238,21 @@ th { color: var(--app-muted); font-weight: 500; }
 /* ============ Цифры ============ */
 .stat { color: var(--gray-900); font-weight: 700; font-size: 38px; line-height: 1.1; }
 .stat-label { color: var(--app-muted); font-size: 13px; }
+
+/* ============ График роста ============ */
+/* SVG отдаём через background-image: Marp экранирует inline <svg> (рендерит как текст). */
+.growth-chart { width: 100%; max-width: 900px; height: 336px; margin: 8px auto 0;
+  background-repeat: no-repeat; background-position: center; background-size: contain;
+  background-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA5MDAgMzYwIiBmb250LWZhbWlseT0iSW50ZXIsIHN5c3RlbS11aSwgc2Fucy1zZXJpZiI+CjxnIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM0YjU1NjMiPjxyZWN0IHg9IjcwIiB5PSI0IiB3aWR0aD0iMTQiIGhlaWdodD0iMTQiIHJ4PSIzIiBmaWxsPSIjMjU2M2ViIi8+PHRleHQgeD0iOTAiIHk9IjE2Ij7Rg9GH0LDRgdGC0L3QuNC60Lg8L3RleHQ+PGNpcmNsZSBjeD0iMjEyIiBjeT0iMTEiIHI9IjYiIGZpbGw9IiNmZmZmZmYiIHN0cm9rZT0iIzBmMTcyYSIgc3Ryb2tlLXdpZHRoPSIzIi8+PHRleHQgeD0iMjI0IiB5PSIxNiI+0L/RgNC+0LXQutGC0Ys8L3RleHQ+PC9nPgo8ZyBzdHJva2U9IiNlNWU3ZWIiIHN0cm9rZS13aWR0aD0iMSI+PGxpbmUgeDE9IjcwIiB5MT0iMzEwIiB4Mj0iODMwIiB5Mj0iMzEwIi8+PGxpbmUgeDE9IjcwIiB5MT0iMjU2IiB4Mj0iODMwIiB5Mj0iMjU2Ii8+PGxpbmUgeDE9IjcwIiB5MT0iMjAyIiB4Mj0iODMwIiB5Mj0iMjAyIi8+PGxpbmUgeDE9IjcwIiB5MT0iMTQ4IiB4Mj0iODMwIiB5Mj0iMTQ4Ii8+PGxpbmUgeDE9IjcwIiB5MT0iOTQiIHgyPSI4MzAiIHkyPSI5NCIvPjxsaW5lIHgxPSI3MCIgeTE9IjQwIiB4Mj0iODMwIiB5Mj0iNDAiLz48L2c+CjxnIGZvbnQtc2l6ZT0iMTIiIGZpbGw9IiM5Y2EzYWYiIHRleHQtYW5jaG9yPSJlbmQiPjx0ZXh0IHg9IjU4IiB5PSIzMTQiPjA8L3RleHQ+PHRleHQgeD0iNTgiIHk9IjI2MCI+NTA8L3RleHQ+PHRleHQgeD0iNTgiIHk9IjIwNiI+MTAwPC90ZXh0Pjx0ZXh0IHg9IjU4IiB5PSIxNTIiPjE1MDwvdGV4dD48dGV4dCB4PSI1OCIgeT0iOTgiPjIwMDwvdGV4dD48dGV4dCB4PSI1OCIgeT0iNDQiPjI1MDwvdGV4dD48L2c+CjxnIGZvbnQtc2l6ZT0iMTIiIGZpbGw9IiM5Y2EzYWYiIHRleHQtYW5jaG9yPSJzdGFydCI+PHRleHQgeD0iODQyIiB5PSIzMTQiPjA8L3RleHQ+PHRleHQgeD0iODQyIiB5PSIyMjQiPjEwPC90ZXh0Pjx0ZXh0IHg9Ijg0MiIgeT0iMTM0Ij4yMDwvdGV4dD48dGV4dCB4PSI4NDIiIHk9IjQ0Ij4zMDwvdGV4dD48L2c+CjxnIGZpbGw9IiMyNTYzZWIiPjxyZWN0IHg9IjExNSIgeT0iMTE0LjUiIHdpZHRoPSI1NiIgaGVpZ2h0PSIxOTUuNSIgcng9IjQiLz48cmVjdCB4PSIzMDUiIHk9IjEwOCIgd2lkdGg9IjU2IiBoZWlnaHQ9IjIwMiIgcng9IjQiLz48cmVjdCB4PSI0OTUiIHk9IjcxLjMiIHdpZHRoPSI1NiIgaGVpZ2h0PSIyMzguNyIgcng9IjQiLz48cmVjdCB4PSI2ODUiIHk9IjEwOS4xIiB3aWR0aD0iNTYiIGhlaWdodD0iMjAwLjkiIHJ4PSI0Ii8+PC9nPgo8ZyBmaWxsPSIjMWQ0ZWQ4IiBmb250LXNpemU9IjE0IiBmb250LXdlaWdodD0iNzAwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj48dGV4dCB4PSIxNDMiIHk9IjEwNiI+MTgxPC90ZXh0Pjx0ZXh0IHg9IjMzMyIgeT0iMTAwIj4xODc8L3RleHQ+PHRleHQgeD0iNTIzIiB5PSI2MyI+MjIxPC90ZXh0Pjx0ZXh0IHg9IjcxMyIgeT0iMTAxIj4xODY8L3RleHQ+PC9nPgo8cG9seWxpbmUgcG9pbnRzPSIxOTUsMTAzIDM4NSw4NSA1NzUsNjcgNzY1LDc2IiBmaWxsPSJub25lIiBzdHJva2U9IiMwZjE3MmEiIHN0cm9rZS13aWR0aD0iMyIvPgo8ZyBmaWxsPSIjZmZmZmZmIiBzdHJva2U9IiMwZjE3MmEiIHN0cm9rZS13aWR0aD0iMyI+PGNpcmNsZSBjeD0iMTk1IiBjeT0iMTAzIiByPSI2Ii8+PGNpcmNsZSBjeD0iMzg1IiBjeT0iODUiIHI9IjYiLz48Y2lyY2xlIGN4PSI1NzUiIGN5PSI2NyIgcj0iNiIvPjxjaXJjbGUgY3g9Ijc2NSIgY3k9Ijc2IiByPSI2Ii8+PC9nPgo8ZyBmaWxsPSIjMGYxNzJhIiBmb250LXNpemU9IjE0IiBmb250LXdlaWdodD0iNzAwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj48dGV4dCB4PSIxOTUiIHk9Ijg5Ij4yMzwvdGV4dD48dGV4dCB4PSIzODUiIHk9IjcxIj4yNTwvdGV4dD48dGV4dCB4PSI1NzUiIHk9IjUzIj4yNzwvdGV4dD48dGV4dCB4PSI3NjUiIHk9IjYyIj4yNjwvdGV4dD48L2c+CjxnIGZvbnQtc2l6ZT0iMTYiIGZvbnQtd2VpZ2h0PSI2MDAiIGZpbGw9IiM0YjU1NjMiIHRleHQtYW5jaG9yPSJtaWRkbGUiPjx0ZXh0IHg9IjE2NSIgeT0iMzM4Ij4yMDIzPC90ZXh0Pjx0ZXh0IHg9IjM1NSIgeT0iMzM4Ij4yMDI0PC90ZXh0Pjx0ZXh0IHg9IjU0NSIgeT0iMzM4Ij4yMDI1PC90ZXh0Pjx0ZXh0IHg9IjczNSIgeT0iMzM4Ij4yMDI2PC90ZXh0PjwvZz4KPHRleHQgeD0iNDUwIiB5PSIzNTYiIGZvbnQtc2l6ZT0iMTIiIGZpbGw9IiM5Y2EzYWYiIHRleHQtYW5jaG9yPSJtaWRkbGUiPtC70LXQstCw0Y8g0YjQutCw0LvQsCDigJQg0YPRh9Cw0YHRgtC90LjQutC4IMK3INC/0YDQsNCy0LDRjyDRiNC60LDQu9CwIOKAlCDQv9GA0L7QtdC60YLRizwvdGV4dD4KPC9zdmc+Cg=="); }
+
+/* Компактный график на слайде «Целевая аудитория» */
+.growth-chart.compact { height: 250px; max-width: 660px; margin-top: 10px; }
+
+/* ============ Скриншоты интерфейса (крупно, по 2 на слайд) ============ */
+section.shots { padding: 26px 30px; }
+.shot-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 4px 0 0; }
+.shot-grid2 figure { margin: 0; border: 1px solid var(--app-border); border-radius: 16px; overflow: hidden; background: var(--app-surface); box-shadow: var(--shadow-card); }
+.shot-grid2 img { display: block; width: 100%; height: auto; }
 
 section.title { background: var(--app-surface); }
 section.title::before { content: ""; display: block; height: 6px; background: var(--app-primary); position: absolute; top: 0; left: 0; right: 0; }
@@ -446,8 +463,8 @@ ol.roadmap > li > ol > li::before { content: counter(rm) "." counter(sub); posit
 ---
 
 <!--
-[0:45–1:00] ЦЕЛЕВАЯ АУДИТОРИЯ
-Продукт — для трёх сегментов. Учебные команды и вузы: распределение людей по командам, десятки проектов, оценивание. Организаторы событий: хакатоны и акселераторы, где надо быстро собрать команды, раздать роли жюри и держать дедлайны. Продуктовые команды: доска, этапы и история решений вместо мессенджеров.
+[0:45–1:07] ЦЕЛЕВАЯ АУДИТОРИЯ
+Продукт — для трёх сегментов. Учебные команды и вузы: распределение людей по командам, десятки проектов, оценивание. Организаторы событий: хакатоны и акселераторы, где надо быстро собрать команды, раздать роли жюри и держать дедлайны. Продуктовые команды: доска, этапы и история решений вместо мессенджеров. И это не гипотеза: с 2023 года каждый год 23–27 проектов и 180–220 участников, в 2026 — 26 проектов и 186 участников.
 -->
 
 ## Целевая аудитория
@@ -467,25 +484,29 @@ ol.roadmap > li > ol > li::before { content: counter(rm) "." counter(sub); posit
 </div>
 </div>
 
-**Уже четвёртый год работаем в ФПИН ИТМО (с 2022)** — дальше вузы с проектным обучением и организаторы хакатонов.
+**Уже четвёртый год работаем в ФПИН ИТМО (с 2023)** — дальше вузы с проектным обучением и организаторы хакатонов.
+
+<div class="growth-chart compact"></div>
+
+<div class="center"><span class="sub">Участники — столбцы (левая шкала), проекты — линия (правая шкала).</span></div>
 
 ---
 
 <!--
-[1:00–1:15] КЕЙС ФПИН ИТМО
-Мы не гипотеза: платформа работает в ФПИН ИТМО с 2022 года, сейчас это 4-й год. В 2026 — 26 проектов и 186 участников. Бакалавры проходят «Введение в профессиональную деятельность», магистранты — «Курсовой проект»: магистрант собирает команду, пишет ТЗ и ведёт проект как руководитель и ментор, а бакалавры реализуют. По опросу студенты получили командную работу, погружение в специальность и реальные инструменты — Docker, FastAPI, Figma, iOS.
+[1:07–1:22] КЕЙС ФПИН ИТМО
+Мы не гипотеза: платформа работает в ФПИН ИТМО с 2023 года, сейчас это 4-й год. В 2026 — 26 проектов и 186 участников. Бакалавры проходят «Введение в профессиональную деятельность», магистранты — «Курсовой проект»: магистрант собирает команду, пишет ТЗ и ведёт проект как руководитель и ментор, а бакалавры реализуют. По опросу студенты получили командную работу, погружение в специальность и реальные инструменты — Docker, FastAPI, Figma, iOS.
 -->
 
-## Кейс: платформа в ФПИН ИТМО с 2022 года
+## Кейс: платформа в ФПИН ИТМО с 2023 года
 
 <div class="grid" style="grid-template-columns:repeat(4,1fr)">
-<div><div class="stat">4</div><div class="stat-label">года в ФПИН ИТМО (с 2022)</div></div>
+<div><div class="stat">4</div><div class="stat-label">года в ФПИН ИТМО (с 2023)</div></div>
 <div><div class="stat">1</div><div class="stat-label">дисциплина</div></div>
 <div><div class="stat">26</div><div class="stat-label">проектов в 2026</div></div>
 <div><div class="stat">186</div><div class="stat-label">участников в 2026</div></div>
 </div>
 
-**4-й год внедрения (с 2022)** · Бакалавры — «Введение в профессиональную деятельность» (1 курс) · Магистранты — «Курсовой проект»
+**4-й год внедрения (с 2023)** · Бакалавры — «Введение в профессиональную деятельность» (1 курс) · Магистранты — «Курсовой проект»
 
 <div class="grid" style="margin:12px 0 0">
 <div class="ui-card">
@@ -503,7 +524,7 @@ ol.roadmap > li > ol > li::before { content: counter(rm) "." counter(sub); posit
 ---
 
 <!--
-[1:15–1:35] ПРОДУКТ
+[1:22–1:35] ПРОДУКТ
 Вот два реальных экрана. Слева — единый список проектов: поиск, фильтры по этапу, тегу, участнику и сроку, карточки со статусом, прогрессом и командой. Справа — канбан проекта: колонки с WIP-лимитами, задачи с приоритетом, дедлайном и исполнителями. Логика простая: пространство → проект с этапами и командой → доска с задачами, ТЗ и вики.
 Если спросят: за одним канбаном могут работать несколько команд — это разные проекты в одном пространстве.
 -->
@@ -639,7 +660,58 @@ ol.roadmap > li > ol > li::before { content: counter(rm) "." counter(sub); posit
 ---
 
 <!--
-[1:35–1:50] ВОЗМОЖНОСТИ
+[1:35–1:37] ИНТЕРФЕЙС · ЭКРАНЫ 1–2
+Единый список проектов с поиском и фильтрами; карточки со статусом, прогрессом и командой.
+-->
+<!-- _class: shots -->
+
+## Интерфейс платформы
+
+<div class="sub">Экраны 1–2 из 6</div>
+
+<div class="shot-grid2">
+<figure><img src="../images/features/shot-1.png" alt="Экран 1"></figure>
+<figure><img src="../images/features/shot-2.png" alt="Экран 2"></figure>
+</div>
+
+---
+
+<!--
+[1:37–1:39] ИНТЕРФЕЙС · ЭКРАНЫ 3–4
+Канбан с WIP-лимитами и приоритетами; техзадание с группами требований и согласованием.
+-->
+<!-- _class: shots -->
+
+## Интерфейс платформы
+
+<div class="sub">Экраны 3–4 из 6</div>
+
+<div class="shot-grid2">
+<figure><img src="../images/features/shot-3.png" alt="Экран 3"></figure>
+<figure><img src="../images/features/shot-4.png" alt="Экран 4"></figure>
+</div>
+
+---
+
+<!--
+[1:39–1:40] ИНТЕРФЕЙС · ЭКРАНЫ 5–6
+Вики проекта, история активности и уведомления из всех проектов.
+-->
+<!-- _class: shots -->
+
+## Интерфейс платформы
+
+<div class="sub">Экраны 5–6 из 6</div>
+
+<div class="shot-grid2">
+<figure><img src="../images/features/shot-5.png" alt="Экран 5"></figure>
+<figure><img src="../images/features/shot-6.png" alt="Экран 6"></figure>
+</div>
+
+---
+
+<!--
+[1:40–1:55] ВОЗМОЖНОСТИ
 Три группы возможностей. Команда: пространства по направлениям, поиск проектов и людей, приглашения по ссылке и отклики, роли и права на уровне проекта. Работа: канбан с перетаскиванием, WIP-лимиты и приоритеты, техзадание с согласованием, вики проекта. Контроль: единый список проектов с фильтрами, уведомления из всех проектов и история активности как в GitHub.
 -->
 
@@ -680,7 +752,7 @@ ol.roadmap > li > ol > li::before { content: counter(rm) "." counter(sub); posit
 ---
 
 <!--
-[1:50–2:00] ЧЕМ ОТЛИЧАЕМСЯ
+[1:55–2:05] ЧЕМ ОТЛИЧАЕМСЯ
 Прямых конкурентов в нашей нише нет. Зарубежные PBL-платформы — Riipen и Practera — сильны связкой «вуз ↔ компания», но это не рабочий контур команды внутри вуза: нет данных в РФ и нет сегмента событий. Российские аналоги — ProjectsSibsau и ПУТП — это маркетплейс проектов и госпрограмма, а не инструмент команды. Косвенные — универсальные трекеры (Trello, Notion), LMS (Moodle, Blackboard), GitHub Classroom и платформы событий (Devpost, HackerEarth): каждое закрывает лишь часть процесса. Детальная таблица — в приложении, на Q&A.
 -->
 
@@ -711,7 +783,7 @@ _Соединяем то, что у других разрозненно: ком�
 ---
 
 <!--
-[2:00–2:15] БИЗНЕС-МОДЕЛЬ · ПОТОКИ
+[2:05–2:20] БИЗНЕС-МОДЕЛЬ · ПОТОКИ
 Три потока выручки. Первый — подписка команд: расширенные лимиты и возможности. Второй — лицензии вузам: места, администрирование и оценивание. Третий — события: оплата за мероприятие. Конкретные цены не называю — валидируем на пилотах. Почему сразу три: бесплатный вход даёт трафик, B2B-лицензии — крупный чек, а события — быстрый первый платящий клиент.
 -->
 
@@ -737,25 +809,7 @@ _Соединяем то, что у других разрозненно: ком�
 ---
 
 <!--
-[2:15–2:25] БИЗНЕС-МОДЕЛЬ · ТАРИФЫ
-Тарифы упакованы в воронку. Free — пространства, проекты, канбан, ТЗ и вики. Team — расширенные лимиты и приватные пространства. Вуз — места, администрирование, оценивание и SSO. Событие — проект под мероприятие, роли жюри и дедлайны. Путь клиента: Free → Team → Вуз или Событие. Цены не называю — определим на пилотах.
--->
-
-## Бизнес-модель: тарифы
-
-| Пакет | Для кого | Что входит |
-| --- | --- | --- |
-| **Free** | команды, студенты | пространства, проекты, канбан, ТЗ, вики |
-| **Team** | руководители, продукт | расширенные лимиты, приватные пространства, приоритет |
-| **Вуз** | вуз, факультет | места, администрирование, оценивание, SSO |
-| **Событие** | хакатон, акселератор | проект на событие, роли жюри, дедлайны |
-
-_Воронка:_ **Free → Team (B2C) → Вуз / Событие (B2B).**
-
----
-
-<!--
-[2:25–2:35] СТАТУС
+[2:20–2:30] СТАТУС
 Это не идея, а работающий сервис. Продукт: регистрация и профиль с резюме, распределение с откликами и приглашениями, пространства, проекты с этапами, ТЗ и вики. Платформа: 49 таблиц, 181 эндпоинт, 52 права и 4 роли, FastAPI и React, мониторинг, CI и тесты. И главное — тракшн: четвёртый год в ФПИН ИТМО.
 -->
 
@@ -784,14 +838,14 @@ _Воронка:_ **Free → Team (B2C) → Вуз / Событие (B2B).**
 <li>React 18 + TypeScript + Vite, Docker-деплой</li>
 <li>Мониторинг Prometheus + Grafana, CI и тесты</li>
 </ul>
-Тракшн: уже четвёртый год в ФПИН ИТМО (с 2022) — «Введение в профессиональную деятельность» (бакалавры) и «Курсовой проект» (магистранты). Магистрант набирает команду, пишет ТЗ и ведёт проект, бакалавры реализуют.
+Тракшн: уже четвёртый год в ФПИН ИТМО (с 2023) — «Введение в профессиональную деятельность» (бакалавры) и «Курсовой проект» (магистранты). Магистрант набирает команду, пишет ТЗ и ведёт проект, бакалавры реализуют.
 </div>
 </div>
 
 ---
 
 <!--
-[2:35–2:42] РОАДМАП
+[2:30–2:37] РОАДМАП
 Три линии. Продукт: стабильность после обновления, публичные пространства, архивирование рабочих пространств и оценивание в реальном времени на защите работ. B2B и платформа: интеграции GitHub и ITMO ID, поддомен и отдельное пространство для компании, лендинг под B2B, пилоты в вузах и биллинг. Оплата: подключение сервиса оплаты (RU/EN).
 -->
 
@@ -824,7 +878,7 @@ _Воронка:_ **Free → Team (B2C) → Вуз / Событие (B2B).**
 ---
 
 <!--
-[2:42–2:50] ЦЕЛЬ НА АКСЕЛЕРАТОР
+[2:37–2:45] ЦЕЛЬ НА АКСЕЛЕРАТОР
 Цель — 10 первых платящих клиентов. Тестирование и масштабирование: 3+ дисциплины ИТМО, 150+ студентов. B2B: 2–3 партнёра — например, другой вуз или 2–3 хакатона; можно начать с пилотного проекта до продажи. От акселератора нужны менторы по B2B-продажам, выход на вузы и организаторов, юридическая и финансовая упаковка.
 -->
 
@@ -886,7 +940,7 @@ _Воронка:_ **Free → Team (B2C) → Вуз / Событие (B2B).**
 ---
 
 <!--
-[2:50] ФИНАЛ
+[2:45] ФИНАЛ
 Спасибо! Мы — работающий продукт с четырёхлетним внедрением в ИТМО и понятной моделью монетизации. Готовы отвечать на вопросы.
 -->
 
