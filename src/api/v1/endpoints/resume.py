@@ -94,7 +94,12 @@ async def create_resume(
 ) -> ResumeFull:
     """Создать новое резюме"""
 
-    resume = await resume_service.create_resume(resume_data, current_user.id)
+    try:
+        resume = await resume_service.create_resume(resume_data, current_user.id)
+    except ValueError as e:
+        # Назначение на пространства: автор не состоял в указанном
+        # пространстве — сообщение сервиса уже годное для пользователя.
+        raise HTTPException(status_code=400, detail=str(e)) from e
     return ResumeFull.model_validate(resume)
 
 

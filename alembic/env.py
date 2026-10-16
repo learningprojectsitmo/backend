@@ -38,6 +38,7 @@ from src.model import (  # noqa: F401
     ResumeLanguage,
     ResumeLink,
     ResumeSkill,
+    ResumeWorkspace,
     Role,
     RolePermission,
     Session,

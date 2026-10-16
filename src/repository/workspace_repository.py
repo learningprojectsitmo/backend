@@ -16,7 +16,7 @@ from src.model.project import (
     StageTransition,
     project_tag,
 )
-from src.model.resume import Resume, ResumeInterest, ResumeSkill
+from src.model.resume import Resume, ResumeInterest, ResumeSkill, ResumeWorkspace
 from src.model.settings import SpaceSettings
 from src.model.user import Role, User
 from src.model.workspace import WorkSpace, WorkSpaceCategories, WorkSpaceParticipation
@@ -354,10 +354,10 @@ class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUp
             .join(Project, Project.id == ProjectParticipation.project_id)
             .where(
                 Project.workspace_id == workspace_id,
-                ProjectParticipation.participant_id == WorkSpaceParticipation.participant_id,
+                ProjectParticipation.participant_id == ResumeWorkspace.author_id,
             )
             .exists()
-            .correlate(WorkSpaceParticipation)
+            .correlate(ResumeWorkspace)
         )
 
         base_query = (
@@ -367,26 +367,27 @@ class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUp
                 skills_subq.c.skills,
                 interests_subq.c.interests,
                 user_name,
-                WorkSpaceParticipation.participant_id,
+                ResumeWorkspace.author_id.label("participant_id"),
                 in_team_expr.label("in_team"),
             )
-            .select_from(WorkSpaceParticipation)
-            .join(User, User.id == WorkSpaceParticipation.participant_id)
-            .join(Resume, Resume.author_id == WorkSpaceParticipation.participant_id)
+            .select_from(ResumeWorkspace)
+            .join(User, User.id == ResumeWorkspace.author_id)
+            .join(Resume, Resume.id == ResumeWorkspace.resume_id)
             .outerjoin(skills_subq, skills_subq.c.resume_id == Resume.id)
             .outerjoin(interests_subq, interests_subq.c.resume_id == Resume.id)
             .where(
-                WorkSpaceParticipation.workspace_id == workspace_id,
+                ResumeWorkspace.workspace_id == workspace_id,
                 Resume.is_visible.is_(True),
                 Resume.header != "",
             )
         )
 
         if default_only:
-            # JOIN по author_id даёт по строке на каждое резюме участника.
-            # Основное резюме ровно одно на автора (uq_resume_author_default),
-            # поэтому этот фильтр схлопывает участника в одну карточку.
-            base_query = base_query.where(Resume.is_default.is_(True))
+            # JOIN по resume_workspace даёт по строке на каждое резюме автора
+            # в пространстве. Основное резюме ровно одно на автора в каждом
+            # пространстве (uq_rw_author_workspace_default), поэтому фильтр
+            # схлопывает участника в одну карточку.
+            base_query = base_query.where(ResumeWorkspace.is_default.is_(True))
 
         # Фильтры
         if search:
@@ -479,13 +480,20 @@ class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUp
             .subquery()
         )
 
-        # Первое резюме автора — тот же приём, что в get_participants: брать
-        # is_default нельзя, у участника основного резюме может не быть вовсе,
-        # и тогда INNER JOIN выкинул бы его из списка целиком.
+        # Первое (основное) резюме автора в ЭТОМ пространстве — тот же приём,
+        # что в get_participants: брать только is_default нельзя, у участника
+        # основного резюме может не быть вовсе, и тогда INNER JOIN выкинул бы
+        # его из списка целиком.
         first_resume = (
-            select(Resume.author_id, Resume.id.label("resume_id"), Resume.header.label("resume_header"))
-            .distinct(Resume.author_id)
-            .order_by(Resume.author_id, Resume.id)
+            select(
+                ResumeWorkspace.author_id,
+                Resume.id.label("resume_id"),
+                Resume.header.label("resume_header"),
+            )
+            .join(Resume, Resume.id == ResumeWorkspace.resume_id)
+            .where(ResumeWorkspace.workspace_id == workspace_id)
+            .distinct(ResumeWorkspace.author_id)
+            .order_by(ResumeWorkspace.author_id, ResumeWorkspace.is_default.desc(), Resume.id)
             .subquery()
         )
 
@@ -610,9 +618,9 @@ class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUp
 
         visible_resume_ids = (
             select(Resume.id)
-            .join(WorkSpaceParticipation, WorkSpaceParticipation.participant_id == Resume.author_id)
+            .join(ResumeWorkspace, ResumeWorkspace.resume_id == Resume.id)
             .where(
-                WorkSpaceParticipation.workspace_id == workspace_id,
+                ResumeWorkspace.workspace_id == workspace_id,
                 Resume.is_visible.is_(True),
                 Resume.header != "",
             )

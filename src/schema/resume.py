@@ -201,6 +201,23 @@ class ResumeExperienceUpdate(BaseModel):
         return self
 
 
+class ResumeSpaceAssign(BaseModel):
+    """Назначение резюме на пространство в запросе (создание/обновление)."""
+
+    workspace_id: int
+    # Сделать резюме основным («показывать на странице пространства»)
+    # именно в этом пространстве — не более одного на автора в пространстве.
+    is_default: bool = False
+
+
+class ResumeSpaceOut(BaseModel):
+    """Пространство, на которое назначено резюме."""
+
+    workspace_id: int
+    workspace_name: str
+    is_default: bool = False
+
+
 class ResumeCreate(BaseModel):
     header: str = Field(..., min_length=1, max_length=MAX_HEADER_LENGTH)
     author_id: int | None = None
@@ -211,6 +228,9 @@ class ResumeCreate(BaseModel):
     has_experience: bool = True
     no_experience_description: str | None = Field(None, max_length=MAX_TEXT_LENGTH)
     is_visible: bool = False
+    # Пространства, на которые публикуется резюме. Назначение проверяет
+    # сервис: автор должен состоять в каждом указанном пространстве.
+    spaces: list[ResumeSpaceAssign] = Field(default_factory=list)
 
 
 class ResumeUpdate(BaseModel):
@@ -222,9 +242,9 @@ class ResumeUpdate(BaseModel):
     has_experience: bool | None = None
     no_experience_description: str | None = Field(None, max_length=MAX_TEXT_LENGTH)
     is_visible: bool | None = None
-    # Сделать резюме основным. Переключение снимает флаг с предыдущего
-    # основного резюме того же автора в той же транзакции.
-    is_default: bool | None = None
+    # Полный список назначений на пространства (replace-all): при передаче
+    # поля старые связи резюме заменяются новыми.
+    spaces: list[ResumeSpaceAssign] | None = None
 
 
 class ResumeFull(ResumeCreate):
@@ -232,11 +252,11 @@ class ResumeFull(ResumeCreate):
     author_id: int
     views_count: int = 0
     invitations_count: int = 0
-    # В ResumeCreate поля нет намеренно: какое резюме станет основным,
-    # решает сервис (первое созданное), а не клиент.
-    is_default: bool = False
     created_at: datetime | None = None
     updated_at: datetime | None = None
+    # Пространства заполняет сервис (нужно имя пространства); при
+    # model_validate из ORM без загруженных связей остаётся пустым списком.
+    spaces: list[ResumeSpaceOut] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)
 
