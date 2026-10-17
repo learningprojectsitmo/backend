@@ -427,7 +427,7 @@ ol.roadmap > li > ol > li::before { content: counter(rm) "." counter(sub); posit
 <span class="ui-btn ui-btn-dark">Попробовать бесплатно</span>
 <span class="ui-btn ui-btn-outline">Войти</span>
 </div>
-<div class="hero-author">Афанасьев Антон · orderkworinaa@gmail.com</div>
+<div class="hero-author">Афанасьев Антон · orderkworinaa@gmail.com · Telegram: @TimeWork_N0W</div>
 <em class="hero-goal">Цель на акселератор — первые платящие клиенты: команды, вузы, организаторы событий</em>
 </div>
 </div>
@@ -959,7 +959,7 @@ _Соединяем то, что у других разрозненно: ком�
 <span class="ui-btn ui-btn-outline">Связаться с командой</span>
 </div>
 
-<em class="hero-goal">Демо: lp.fpin-projects.ru · Telegram: @parse_ny · Готовы к вопросам</em>
+<em class="hero-goal">Демо: lp.fpin-projects.ru · Telegram: @TimeWork_N0W · Готовы к вопросам</em>
 
 </div>
 
