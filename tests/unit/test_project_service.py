@@ -725,6 +725,62 @@ class TestProjectService:
         assert result.items == []
         assert result.total == 0
 
+    @pytest.mark.asyncio
+    async def test_should_include_authored_project_in_profile_union(self):
+        # given — проект есть только в авторской выборке (нет строки участия)
+        mock_repository = self._setup_mock_repo()
+        published = Project(
+            id=2, name="Authored", author_id=5, current_stage_id=12, project_type=self._make_type_with_stages()
+        )
+        mock_repository.get_projects_by_participant_id.return_value = []
+        mock_repository.get_by_author_id.return_value = [published]
+
+        project_service = ProjectService(mock_repository)
+
+        # when
+        result = await project_service.get_my_projects(user_id=5)
+
+        # then
+        assert [item.id for item in result.items] == [2]
+
+    @pytest.mark.asyncio
+    async def test_should_deduplicate_project_present_in_both_sources(self):
+        # given — автор автоматически участник: проект приходит из обеих выборок
+        mock_repository = self._setup_mock_repo()
+        published = Project(
+            id=2, name="Authored", author_id=5, current_stage_id=12, project_type=self._make_type_with_stages()
+        )
+        mock_repository.get_projects_by_participant_id.return_value = [published]
+        mock_repository.get_by_author_id.return_value = [published]
+
+        project_service = ProjectService(mock_repository)
+
+        # when
+        result = await project_service.get_my_projects(user_id=5)
+
+        # then
+        assert len(result.items) == 1
+        assert result.items[0].id == 2
+
+    @pytest.mark.asyncio
+    async def test_should_hide_owner_draft_from_other_viewer(self):
+        # given — черновик принадлежит владельцу профиля, смотрит другой пользователь
+        mock_repository = self._setup_mock_repo()
+        draft = Project(
+            id=1, name="Draft", author_id=5, current_stage_id=11, project_type=self._make_type_with_stages()
+        )
+        mock_repository.get_projects_by_participant_id.return_value = [draft]
+        mock_repository.get_by_author_id.return_value = []
+
+        project_service = ProjectService(mock_repository)
+
+        # when — viewer_id — сторонний наблюдатель
+        result = await project_service.get_my_projects(user_id=5, viewer_id=1)
+
+        # then
+        assert result.items == []
+        assert result.total == 0
+
     @staticmethod
     def _criteria_sql(call_args) -> str:
         visible = call_args.kwargs["visible"]

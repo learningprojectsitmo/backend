@@ -20,6 +20,7 @@ class UserBase(BaseModel):
     phone: str | None = None
     vk_nickname: str | None = None
     show_my_contacts: bool = False
+    show_decorations: bool = True
     lang: str = "ru"
 
 
@@ -71,6 +72,7 @@ class UserUpdate(BaseModel):
     vk_nickname: str | None = None
     role_id: int | None = None
     show_my_contacts: bool | None = None
+    show_decorations: bool | None = None
     lang: str | None = None
 
     @field_validator("tg_nickname")

@@ -242,7 +242,7 @@ async def fetch_public_profile(
         raise HTTPException(status_code=404, detail=str(e)) from e
 
     spaces_data, _ = await workspace_service.get_workspaces_menu_data(user_id, 0, 100)
-    projects = await project_service.get_my_created_projects(user_id)
+    projects = await project_service.get_my_projects(user_id, viewer_id=current_user.id)
 
     return PublicProfileResponse(
         **profile.model_dump(),

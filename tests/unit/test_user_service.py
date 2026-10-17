@@ -134,6 +134,39 @@ class TestUserService:
         mock_repository.update.assert_called_once_with(1, update_data)
 
     @pytest.mark.asyncio
+    async def test_should_toggle_show_decorations_for_self(self):
+        # given — персональный тумблер украшений обновляется как обычное поле
+        mock_repository = Mock(spec=UserRepository)
+        updated_user = User(
+            id=1,
+            email="test@example.com",
+            first_name="Test",
+            middle_name="User",
+            show_decorations=False,
+        )
+        mock_repository.update.return_value = updated_user
+
+        user_service = UserService(
+            mock_repository,
+            Mock(),
+            Mock(),
+            Mock(),
+            Mock(),
+            Mock(),
+        )
+
+        update_data = UserUpdate(show_decorations=False)
+
+        # when
+        result = await user_service.update(1, update_data)
+
+        # then
+        assert result.show_decorations is False
+        # exclude_unset: патч ровно с одним полем не трогает остальные
+        assert update_data.model_dump(exclude_unset=True) == {"show_decorations": False}
+        mock_repository.update.assert_called_once_with(1, update_data)
+
+    @pytest.mark.asyncio
     async def test_should_delete_user_successfully(self):
         # given
         mock_repository = Mock(spec=UserRepository)
@@ -232,6 +265,19 @@ class TestUserService:
         assert result.total_pages == 1
         mock_repository.get_multi_with_role.assert_called_once_with(skip=0, limit=10)
         mock_repository.count.assert_called_once()
+
+    def test_should_default_new_user_to_showing_decorations(self):
+        # given / when — новый пользователь по умолчанию видит украшения
+        user_data = UserCreate(
+            email="test@example.com",
+            first_name="Test",
+            middle_name="User",
+            password="password",
+            role_id=1,
+        )
+
+        # then
+        assert user_data.show_decorations is True
 
     def test_should_generate_six_digit_code(self):
         # when

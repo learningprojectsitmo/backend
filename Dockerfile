@@ -1,4 +1,4 @@
-FROM python:3.13-slim-bullseye
+FROM python:3.14-slim-bookworm
 ENV PYTHONUNBUFFERED=1
 
 RUN apt-get update && apt-get install -y procps && rm -rf /var/lib/apt/lists/*
