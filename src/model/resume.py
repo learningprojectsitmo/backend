@@ -216,6 +216,7 @@ class ResumeLanguage(Base):
     resume_id: Mapped[int] = mapped_column(ForeignKey("resume.id"), nullable=False)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     level: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    flag: Mapped[str] = mapped_column(String(10), nullable=False, server_default="🌐")
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
 
     resume: Mapped[Resume] = relationship(back_populates="languages")

@@ -87,6 +87,7 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
             select(Project)
             .where(Project.author_id == author_id)
             .options(
+                selectinload(Project.project_type).selectinload(ProjectType.stages),
                 selectinload(Project.participants).selectinload(ProjectParticipation.participant),
                 selectinload(Project.tags),
                 selectinload(Project.status),

@@ -9,6 +9,7 @@ MAX_HEADER_LENGTH = 200
 MAX_NAME_LENGTH = 100
 MAX_ROLE_LENGTH = 100
 MAX_LEVEL_LENGTH = 50
+MAX_FLAG_LENGTH = 10
 MAX_YEARS_LENGTH = 50
 MAX_UNIVERSITY_LENGTH = 200
 MAX_PLATFORM_LENGTH = 100
@@ -130,6 +131,7 @@ class ResumeLanguageFull(BaseModel):
     id: int
     name: str
     level: str | None = None
+    flag: str = "🌐"
     sort_order: int = 0
 
     model_config = ConfigDict(from_attributes=True)
@@ -154,12 +156,14 @@ class ResumeEducationUpdate(BaseModel):
 class ResumeLanguageCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=MAX_NAME_LENGTH)
     level: str | None = Field(None, max_length=MAX_LEVEL_LENGTH)
+    flag: str = Field("🌐", max_length=MAX_FLAG_LENGTH)
     sort_order: int = 0
 
 
 class ResumeLanguageUpdate(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=MAX_NAME_LENGTH)
     level: str | None = Field(None, max_length=MAX_LEVEL_LENGTH)
+    flag: str | None = Field(None, max_length=MAX_FLAG_LENGTH)
     sort_order: int | None = None
 
 

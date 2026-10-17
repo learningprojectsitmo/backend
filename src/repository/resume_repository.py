@@ -6,6 +6,8 @@ from sqlalchemy.orm import selectinload
 from src.core.uow import IUnitOfWork
 from src.model.resume import (
     Resume,
+    ResumeInterest,
+    ResumeSkill,
     ResumeWorkspace,
 )
 from src.model.user import User
@@ -190,6 +192,34 @@ class ResumeRepository(BaseRepository[Resume, ResumeCreate, ResumeUpdate]):
         """Получить резюме автора с пагинацией."""
         result = await self.uow.session.execute(
             select(Resume).where(Resume.author_id == author_id).offset(skip).limit(limit)
+        )
+        return list(result.scalars().all())
+
+    # ─── Словарь навыков/интересов (автодополнение) ─────────────────────────
+
+    async def get_distinct_skill_names(self, query: str, limit: int) -> list[str]:
+        """Уникальные названия навыков по всем резюме (для подсказок).
+
+        Названия схлопываются без учёта регистра (NumPy/Numpy → одно).
+        """
+        stmt = select(func.min(ResumeSkill.name)).group_by(func.lower(ResumeSkill.name))
+        if query:
+            stmt = stmt.where(ResumeSkill.name.ilike(f"%{query}%"))
+        result = await self.uow.session.execute(
+            stmt.order_by(func.lower(ResumeSkill.name)).limit(limit),
+        )
+        return list(result.scalars().all())
+
+    async def get_distinct_interest_names(self, query: str, limit: int) -> list[str]:
+        """Уникальные названия интересов по всем резюме (для подсказок).
+
+        Названия схлопываются без учёта регистра (NumPy/Numpy → одно).
+        """
+        stmt = select(func.min(ResumeInterest.name)).group_by(func.lower(ResumeInterest.name))
+        if query:
+            stmt = stmt.where(ResumeInterest.name.ilike(f"%{query}%"))
+        result = await self.uow.session.execute(
+            stmt.order_by(func.lower(ResumeInterest.name)).limit(limit),
         )
         return list(result.scalars().all())
 

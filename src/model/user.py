@@ -95,6 +95,9 @@ class User(Base):
         cascade="all, delete-orphan",
     )
     lang: Mapped[str] = mapped_column(String(10), nullable=False, server_default="ru")
+    # Персональный тумблер украшений: администратор включает праздничный декор
+    # глобально, но пользователь может отключить его у себя. По умолчанию показываем.
+    show_decorations: Mapped[bool] = mapped_column(default=True, nullable=False, server_default=text("true"))
     push_token: Mapped[str | None] = mapped_column(String(255), nullable=True, comment="FCM/APNs push token for mobile")
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

@@ -185,6 +185,7 @@ class ResumeService(BaseService[Resume, ResumeCreate, ResumeUpdate]):
                         resume_id=resume_id,
                         name=item.name,
                         level=item.level,
+                        flag=item.flag,
                         sort_order=0,
                     )
                 )
@@ -608,6 +609,16 @@ class ResumeService(BaseService[Resume, ResumeCreate, ResumeUpdate]):
         await session.delete(obj)
         await session.flush()
         return True
+
+    # ─── Словарь навыков/интересов (автодополнение) ─────────────────────────
+
+    async def get_skill_suggestions(self, query: str, limit: int = 20) -> list[str]:
+        """Уникальные навыки по всем резюме, отфильтрованные по подстроке."""
+        return await self._resume_repository.get_distinct_skill_names(query.strip(), limit)
+
+    async def get_interest_suggestions(self, query: str, limit: int = 20) -> list[str]:
+        """Уникальные интересы по всем резюме, отфильтрованные по подстроке."""
+        return await self._resume_repository.get_distinct_interest_names(query.strip(), limit)
 
     async def _check_ownership(self, resume_id: int, current_user_id: int) -> Resume:
         """Проверить, что пользователь является автором резюме"""
