@@ -10,6 +10,7 @@ from src.core.app_settings_registry import (
     InvalidSettingValueError,
     UnknownSettingError,
     default_values,
+    public_defaults,
     validate_patch,
 )
 from src.model.app_setting import AppSetting
@@ -17,6 +18,7 @@ from src.repository.app_setting_repository import AppSettingRepository
 from src.services.app_setting_service import AppSettingService
 
 DECORATIONS_KEY = "new_year_decorations_enabled"
+HALLOWEEN_KEY = "halloween_decorations_enabled"
 
 
 def make_repository(rows: list[AppSetting] | None = None) -> Mock:
@@ -40,6 +42,7 @@ class TestAppSettingRegistry:
 
         # then
         assert defaults[DECORATIONS_KEY] is False
+        assert defaults[HALLOWEEN_KEY] is False
 
     def test_should_register_every_key_as_public_and_bool(self):
         """Все настройки реестра — булевы и публичные (иначе фронт их не увидит)"""
@@ -120,7 +123,10 @@ class TestAppSettingServiceReads:
         values = await service.get_public_values()
 
         # then
-        assert values == {DECORATIONS_KEY: False}
+        assert values == public_defaults()
+        assert values[DECORATIONS_KEY] is False
+        assert values[HALLOWEEN_KEY] is False
+        assert "legacy_flag" not in values
 
     @pytest.mark.asyncio
     async def test_should_report_settings_not_touched_yet(self):

@@ -13,6 +13,7 @@ from src.model.resume import (
     ResumeLanguage,
     ResumeLink,
     ResumeSkill,
+    ResumeWorkspace,
 )
 from src.schema.resume import (
     ResumeCreate,
@@ -36,6 +37,8 @@ from src.schema.resume import (
     ResumeSkillCreate,
     ResumeSkillFull,
     ResumeSkillUpdate,
+    ResumeSpaceAssign,
+    ResumeSpaceOut,
     ResumeUpdate,
     ResumeUserInfo,
 )
@@ -79,8 +82,17 @@ class ResumeService(BaseService[Resume, ResumeCreate, ResumeUpdate]):
                 await self._resume_repository.uow.session.refresh(resume)
 
         user = resume.user
+        resume_full = ResumeFull.model_validate(resume)
+        resume_full.spaces = [
+            ResumeSpaceOut(
+                workspace_id=link.workspace_id,
+                workspace_name=link.workspace.name if link.workspace else "",
+                is_default=link.is_default,
+            )
+            for link in resume.workspaces
+        ]
         return ResumeDetail(
-            resume=ResumeFull.model_validate(resume),
+            resume=resume_full,
             user=ResumeUserInfo(
                 id=user.id,
                 first_name=user.first_name,
@@ -124,16 +136,15 @@ class ResumeService(BaseService[Resume, ResumeCreate, ResumeUpdate]):
         """Создать новое резюме с копированием данных из профиля"""
         if not resume_data.author_id:
             resume_data.author_id = author_id
-        # Первое резюме автора автоматически становится основным, иначе в
-        # пространстве у него не будет ни одной карточки. Флаг выставляется
-        # явно, а не через ResumeCreate, чтобы клиент не мог его подделать.
-        is_first_resume = await self._resume_repository.count_by_author_id(author_id) == 0
-        resume = await self._resume_repository.create(resume_data)
-        if is_first_resume:
-            await self._resume_repository.set_default(resume.id)
-            resume.is_default = True
+        spaces = list(resume_data.spaces)
+        # spaces — не колонка resume: назначения на пространства создаёт
+        # _apply_spaces отдельными строками resume_workspace.
+        payload = resume_data.model_dump(exclude_unset=True, exclude={"spaces"})
+        resume = await self._resume_repository.create(payload)
         await self._copy_profile_data_to_resume(resume.id, author_id)
         await self._resume_repository.uow.session.flush()
+        if spaces:
+            await self._apply_spaces(resume, spaces, visible=resume.is_visible)
         return resume
 
     async def _copy_profile_data_to_resume(self, resume_id: int, user_id: int) -> None:
@@ -174,6 +185,7 @@ class ResumeService(BaseService[Resume, ResumeCreate, ResumeUpdate]):
                         resume_id=resume_id,
                         name=item.name,
                         level=item.level,
+                        flag=item.flag,
                         sort_order=0,
                     )
                 )
@@ -187,61 +199,157 @@ class ResumeService(BaseService[Resume, ResumeCreate, ResumeUpdate]):
         if resume.author_id != current_user_id:
             raise PermissionError("Only author can update resume")
 
-        if resume_data.is_default:
-            # Снимаем флаг с предыдущего основного до записи нового: обе
-            # операции попадают в одну транзакцию, а partial unique index
-            # uq_resume_author_default не даст записать два is_default = true.
-            await self._resume_repository.unset_other_defaults(resume.author_id, resume.id)
-            resume.is_default = True
-        elif resume_data.is_default is False and resume.is_default:
-            # Снять признак с основного нельзя — «основное» должно остаться
-            # ровно одно, иначе в пространстве у автора не будет карточки.
-            await self._move_default_away_from(
-                resume,
-                reason="снять признак основного",
-                fallback_hint="сделайте основным другое видимое резюме",
-            )
-            resume.is_default = False
+        if resume_data.spaces is not None:
+            visible = resume.is_visible if resume_data.is_visible is None else resume_data.is_visible
+            await self._apply_spaces(resume, resume_data.spaces, visible=visible)
 
-        if resume_data.is_visible is False and resume.is_default:
-            # Скрытие основного переносит признак на другое видимое резюме.
-            await self._move_default_away_from(resume, reason="скрыть основное резюме")
-            resume.is_default = False
+        if resume_data.is_visible is False:
+            # Скрытие основного резюме переносит признак на другое видимое
+            # резюме того же пространства; если заменить нечего — запрещаем.
+            await self._move_space_defaults_away_on_hide(resume)
 
-        # is_default не отдаём в update(): признак уже выставлен мутацией ORM-
-        # объекта, а попытка записать False нарушила бы инвариант «ровно одно».
-        payload = resume_data.model_dump(exclude_unset=True, exclude={"is_default"})
+        payload = resume_data.model_dump(exclude_unset=True, exclude={"spaces"})
         return await self._resume_repository.update(resume_id, payload)
 
-    async def _move_default_away_from(
+    async def _apply_spaces(
         self,
         resume: Resume,
+        spaces: list[ResumeSpaceAssign],
         *,
-        reason: str = "скрыть основное резюме",
-        fallback_hint: str = "сначала создайте или покажите другое резюме",
-    ) -> int:
-        """Перенести признак основного с резюме на другое видимое.
+        visible: bool,
+    ) -> None:
+        """Заменить назначения резюме на пространства (replace-all).
 
-        Вызывается, когда основное резюме перестаёт подходить для показа в
-        пространстве: его скрывают или с него снимают признак. Если видимых
-        резюме больше нет, операция запрещается — иначе у автора не останется
-        ни одного основного.
+        Инварианты:
+        - автор должен состоять в каждом указанном пространстве;
+        - «основное» не больше одного на автора в пространстве — при явном
+          переключении флаг снимается с остальных немедленно (частичный
+          уникальный индекс uq_rw_author_workspace_default);
+        - если в пространстве не осталось основного резюме автора, признак
+          достаётся видимому кандидату, а при его отсутствии — самому
+          назначаемому резюме (если оно видимое).
         """
+        repo = self._resume_repository
+        session = repo.uow.session
 
-        candidate_id = await self._resume_repository.get_next_default_candidate_id(
-            resume.author_id,
-            exclude_id=resume.id,
-            visible_only=True,
-        )
-        if candidate_id is None:
-            raise ValueError(f"Нельзя {reason}: у вас нет другого видимого резюме. {fallback_hint.capitalize()}.")
-        # Порядок критичен: оба UPDATE'а выполняются немедленно, тогда как
-        # сброс флага через мутацию ORM-объекта ушёл бы в flush на commit. Если
-        # сначала поставить кандидату, у автора окажется два is_default = true и
-        # uq_resume_author_default упадёт.
-        await self._resume_repository.clear_default(resume.id)
-        await self._resume_repository.set_default(candidate_id)
-        return candidate_id
+        # Дедупликация: для каждого пространства побеждает последнее назначение.
+        dedup: dict[int, ResumeSpaceAssign] = {}
+        for assign in spaces:
+            dedup[assign.workspace_id] = assign
+
+        member_names = await repo.get_member_workspace_names(resume.author_id, list(dedup))
+        missing = [ws_id for ws_id in dedup if ws_id not in member_names]
+        if missing:
+            names = await repo.get_workspace_names(missing)
+            missing_titles = ", ".join(str(names.get(ws_id, ws_id)) for ws_id in missing)
+            raise ValueError(
+                f"Нельзя назначить резюме на пространства: вы не являетесь их участником: {missing_titles}."
+            )
+
+        existing = await repo.get_space_links(resume.id)
+
+        affected: set[int] = set()
+        for ws_id, link in existing.items():
+            if ws_id not in dedup:
+                if link.is_default:
+                    affected.add(ws_id)
+                await session.delete(link)
+        await session.flush()
+
+        for ws_id, assign in dedup.items():
+            link = existing.get(ws_id)
+            if link is None:
+                link = ResumeWorkspace(
+                    resume_id=resume.id,
+                    workspace_id=ws_id,
+                    author_id=resume.author_id,
+                    is_default=False,
+                )
+                session.add(link)
+                await session.flush()
+                existing[ws_id] = link
+            if assign.is_default:
+                await repo.unset_other_space_defaults(resume.author_id, ws_id, keep_resume_id=resume.id)
+                link.is_default = True
+                affected.discard(ws_id)
+                continue
+            if link.is_default:
+                await repo.clear_space_default(resume.id, ws_id)
+                link.is_default = False
+            affected.add(ws_id)
+
+        await self._ensure_space_defaults(resume, affected, existing, visible=visible)
+
+    async def _ensure_space_defaults(
+        self,
+        resume: Resume,
+        affected: set[int],
+        existing: dict[int, ResumeWorkspace],
+        *,
+        visible: bool,
+    ) -> None:
+        """Восстановить «основное» в пространствах, где его не осталось.
+
+        Если в пространстве нет основного резюме автора, признак достаётся
+        видимому кандидату, а при его отсутствии — самому назначаемому
+        резюме (если оно видимое), иначе у участника не будет карточки.
+        """
+        repo = self._resume_repository
+        for ws_id in affected:
+            if await repo.has_space_default(resume.author_id, ws_id):
+                continue
+            candidate_id = await repo.get_space_default_candidate_id(
+                resume.author_id,
+                ws_id,
+                exclude_id=resume.id,
+                visible_only=True,
+            )
+            if candidate_id is not None:
+                await repo.set_space_default(candidate_id, ws_id)
+                continue
+            link = existing.get(ws_id)
+            if link is not None and visible and resume.header:
+                await repo.set_space_default(resume.id, ws_id)
+
+    async def _move_space_defaults_away_on_hide(self, resume: Resume) -> None:
+        """Перенести «основное» с резюме во всех пространствах при скрытии.
+
+        Если хотя бы в одном пространстве нет другого видимого резюме —
+        операция запрещается: сообщение уже готово для показа пользователю.
+        """
+        repo = self._resume_repository
+        links = await repo.get_default_space_links(resume.id)
+        if not links:
+            return
+
+        names = await repo.get_workspace_names([link.workspace_id for link in links])
+        moves: list[tuple[int, int]] = []
+        blocked: list[int] = []
+        for link in links:
+            candidate_id = await repo.get_space_default_candidate_id(
+                resume.author_id,
+                link.workspace_id,
+                exclude_id=resume.id,
+                visible_only=True,
+            )
+            if candidate_id is None:
+                blocked.append(link.workspace_id)
+            else:
+                moves.append((link.workspace_id, candidate_id))
+
+        if blocked:
+            blocked_titles = ", ".join(str(names.get(ws_id, ws_id)) for ws_id in blocked)
+            raise ValueError(
+                "Нельзя скрыть резюме: оно является основным в пространствах: "
+                f"{blocked_titles}. Сначала сделайте основным другое видимое резюме в этих пространствах."
+            )
+
+        for workspace_id, candidate_id in moves:
+            # Порядок критичен: сначала снять флаг с текущего основного,
+            # затем поставить кандидату — иначе в пространстве окажется
+            # два основных и uq_rw_author_workspace_default упадёт.
+            await repo.clear_space_default(resume.id, workspace_id)
+            await repo.set_space_default(candidate_id, workspace_id)
 
     async def delete_resume(self, resume_id: int, current_user_id: int) -> bool:
         """Удалить резюме (только автор может удалять)"""
@@ -252,33 +360,34 @@ class ResumeService(BaseService[Resume, ResumeCreate, ResumeUpdate]):
         if resume.author_id != current_user_id:
             raise PermissionError("Only author can delete resume")
 
-        was_default = resume.is_default
+        default_links = await self._resume_repository.get_default_space_links(resume_id)
         deleted = await self._resume_repository.delete(resume_id)
-        if deleted and was_default:
-            # Удаление основного не должно оставлять автора без основного
-            # резюме, иначе в пространстве у него не будет карточки.
-            # Сначала ищем видимое (оно и попадёт в карточку), но если
-            # видимых не осталось — берём любое: лучше скрытое основное,
-            # чем автор вообще без признака. Скрытым основным можно сделать
-            # резюме напрямую через API, поэтому этот случай реален.
-            candidate_id = await self._resume_repository.get_next_default_candidate_id(
-                resume.author_id,
-                exclude_id=resume_id,
-                visible_only=True,
-            )
-            if candidate_id is None:
-                candidate_id = await self._resume_repository.get_next_default_candidate_id(
+        if deleted and default_links:
+            # Удаление основного в пространстве не должно оставлять автора
+            # без карточки на странице пространства. Сначала ищем видимое
+            # (оно и попадёт в карточку), но если видимых не осталось — берём
+            # любое: лучше скрытое основное, чем автор вообще без признака.
+            session = self._resume_repository.uow.session
+            # session.delete() только помечает объект, а DELETE уходит на
+            # flush; без него кандидат получил бы is_default = true при ещё
+            # существующей строке основного и уникальный индекс упал бы.
+            await session.flush()
+            for link in default_links:
+                candidate_id = await self._resume_repository.get_space_default_candidate_id(
                     resume.author_id,
+                    link.workspace_id,
                     exclude_id=resume_id,
-                    visible_only=False,
+                    visible_only=True,
                 )
-            if candidate_id is not None:
-                # session.delete() только помечает объект, а DELETE уходит на
-                # flush. Без явного flush кандидат получил бы is_default = true
-                # при ещё существующей строке основного, и уникальный индекс
-                # упал бы.
-                await self._resume_repository.uow.session.flush()
-                await self._resume_repository.set_default(candidate_id)
+                if candidate_id is None:
+                    candidate_id = await self._resume_repository.get_space_default_candidate_id(
+                        resume.author_id,
+                        link.workspace_id,
+                        exclude_id=resume_id,
+                        visible_only=False,
+                    )
+                if candidate_id is not None:
+                    await self._resume_repository.set_space_default(candidate_id, link.workspace_id)
         return deleted
 
     # ─── ResumeLink CRUD ────────────────────────────────────────────────────
@@ -500,6 +609,16 @@ class ResumeService(BaseService[Resume, ResumeCreate, ResumeUpdate]):
         await session.delete(obj)
         await session.flush()
         return True
+
+    # ─── Словарь навыков/интересов (автодополнение) ─────────────────────────
+
+    async def get_skill_suggestions(self, query: str, limit: int = 20) -> list[str]:
+        """Уникальные навыки по всем резюме, отфильтрованные по подстроке."""
+        return await self._resume_repository.get_distinct_skill_names(query.strip(), limit)
+
+    async def get_interest_suggestions(self, query: str, limit: int = 20) -> list[str]:
+        """Уникальные интересы по всем резюме, отфильтрованные по подстроке."""
+        return await self._resume_repository.get_distinct_interest_names(query.strip(), limit)
 
     async def _check_ownership(self, resume_id: int, current_user_id: int) -> Resume:
         """Проверить, что пользователь является автором резюме"""

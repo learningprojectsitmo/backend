@@ -38,6 +38,15 @@ APP_SETTINGS: tuple[SettingDefinition, ...] = (
         description="Снег, гирлянда и ёлочные шары на всех страницах сайта",
         public=True,
     ),
+    SettingDefinition(
+        key="halloween_decorations_enabled",
+        kind="bool",
+        # Выключено по умолчанию: отсутствие строки в таблице = выключено.
+        default=False,
+        title="Хэллоуинские украшения",
+        description="Паутина, летучие мыши и тыквы на всех страницах сайта",
+        public=True,
+    ),
 )
 
 APP_SETTINGS_BY_KEY: dict[str, SettingDefinition] = {item.key: item for item in APP_SETTINGS}

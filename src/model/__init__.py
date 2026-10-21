@@ -18,6 +18,7 @@ from src.model.resume import (
     ResumeLanguage,
     ResumeLink,
     ResumeSkill,
+    ResumeWorkspace,
 )
 from src.model.settings import SettingsType, SpaceSettings
 from src.model.user import Permission, Role, RolePermission, User, UserPermission
@@ -53,6 +54,7 @@ __all__ = [
     "ResumeLanguage",
     "ResumeLink",
     "ResumeSkill",
+    "ResumeWorkspace",
     "Role",
     "RolePermission",
     "Session",

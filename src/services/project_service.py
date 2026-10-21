@@ -485,26 +485,12 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
     async def get_my_created_projects(self, user_id: int) -> MyProjectListResponse:
         """Получить проекты, созданные пользователем"""
         projects = await self.get_projects_by_author(user_id)
-        items = [
-            MyProjectItem(
-                id=p.id,
-                title=p.name,
-                description=p.description,
-                status=p.status.name if p.status else "not_started",
-                progress=p.progress or 0,
-                start_date=p.created_at.isoformat() if p.created_at else "",
-                members_count=len(p.participants or []),
-                roles=[v.title for v in (p.vacancies or []) if not v.archived],
-            )
-            for p in projects
-        ]
+        items = self._to_my_project_items(projects)
         return MyProjectListResponse(items=items, total=len(items))
 
-    async def get_my_projects(self, user_id: int) -> MyProjectListResponse:
-        """Получить проекты, в которых участвует пользователь (черновики — только свои)"""
-        projects = await self._project_repository.get_projects_by_participant_id(user_id)
-        projects = await self._visible_projects(projects, user_id)
-        items = [
+    @staticmethod
+    def _to_my_project_items(projects: list[Project]) -> list[MyProjectItem]:
+        return [
             MyProjectItem(
                 id=p.id,
                 title=p.name,
@@ -517,6 +503,21 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
             )
             for p in projects
         ]
+
+    async def get_my_projects(self, user_id: int, viewer_id: int | None = None) -> MyProjectListResponse:
+        """Проекты пользователя: где он участник (включая созданные им).
+
+        ``viewer_id`` — от чьего лица применяется фильтр видимости (черновики
+        скрыты от всех, кроме автора и редакторов пространства). По умолчанию
+        совпадает с владельцем профиля; при просмотре чужого профиля сюда
+        передаётся текущий пользователь.
+        """
+        participant_projects = await self._project_repository.get_projects_by_participant_id(user_id)
+        merged: dict[int, Project] = {p.id: p for p in participant_projects}
+        for project in await self.get_projects_by_author(user_id):
+            merged.setdefault(project.id, project)
+        projects = await self._visible_projects(list(merged.values()), viewer_id or user_id)
+        items = self._to_my_project_items(projects)
         return MyProjectListResponse(items=items, total=len(items))
 
     async def withdraw_response(self, response_id: int, user_id: int) -> Response:

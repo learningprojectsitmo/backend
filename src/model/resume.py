@@ -19,6 +19,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.core.database import Base
+from src.model.workspace import WorkSpace
 
 if TYPE_CHECKING:
     from src.model.user import User
@@ -27,19 +28,9 @@ if TYPE_CHECKING:
 class Resume(Base):
     __tablename__ = "resume"
 
-    # Partial unique index: «основное резюме» не больше одного на автора.
-    # Объявлен именно здесь, а не только в миграции, иначе autogenerate считает
-    # его посторонним и предлагает удалить (проверяется `alembic check`).
     __table_args__ = (
-        Index(
-            "uq_resume_author_default",
-            "author_id",
-            unique=True,
-            postgresql_where=text("is_default"),
-        ),
         # Резюме пользователя и `DISTINCT(author_id) ORDER BY id` в выборке
-        # workspace. Partial-индекс выше для этих запросов непригоден: он
-        # видит только строки с is_default.
+        # workspace.
         Index("ix_resume_author_id", "author_id", "id"),
     )
 
@@ -53,10 +44,6 @@ class Resume(Base):
     has_experience: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     no_experience_description: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_visible: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    # Основное резюме автора: ровно одно на пользователя (гарантируется
-    # partial unique index uq_resume_author_default). Именно оно показывается
-    # в списке резюме пространства, чтобы у участника была одна карточка.
-    is_default: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     views_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
@@ -64,6 +51,9 @@ class Resume(Base):
     )
 
     user: Mapped[User] = relationship(back_populates="resumes")
+    workspaces: Mapped[list[ResumeWorkspace]] = relationship(
+        back_populates="resume", cascade="all, delete-orphan", order_by="ResumeWorkspace.id"
+    )
     experiences: Mapped[list[ResumeExperience]] = relationship(
         back_populates="resume", cascade="all, delete-orphan", order_by="ResumeExperience.sort_order"
     )
@@ -85,6 +75,47 @@ class Resume(Base):
 
     def __repr__(self) -> str:
         return f"Resume(id={self.id!r}, author_id={self.author_id!r}, header={self.header!r})"
+
+
+class ResumeWorkspace(Base):
+    """Связь резюме с пространством: резюме назначено («разделено») на пространство."""
+
+    __tablename__ = "resume_workspace"
+
+    # Одно резюме можно разделить на несколько пространств; в каждом
+    # пространстве у автора ровно одно основное резюме (частичный уникальный
+    # индекс ниже). author_id денормализован: частичный индекс не может
+    # ссылаться на resume.author_id через JOIN.
+    __table_args__ = (
+        Index("uq_rw_resume_workspace", "resume_id", "workspace_id", unique=True),
+        Index(
+            "uq_rw_author_workspace_default",
+            "author_id",
+            "workspace_id",
+            unique=True,
+            postgresql_where=text("is_default"),
+        ),
+        Index("ix_rw_workspace_id", "workspace_id"),
+        Index("ix_rw_author_id", "author_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    resume_id: Mapped[int] = mapped_column(ForeignKey("resume.id"), nullable=False)
+    workspace_id: Mapped[int] = mapped_column(ForeignKey("workspace.id"), nullable=False)
+    author_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
+    # Основное резюме автора ИМЕННО в этом пространстве — именно оно
+    # показывается карточкой участника на странице пространства.
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    resume: Mapped[Resume] = relationship(back_populates="workspaces")
+    workspace: Mapped[WorkSpace] = relationship()
+
+    def __repr__(self) -> str:
+        return (
+            f"ResumeWorkspace(id={self.id!r}, resume_id={self.resume_id!r}, "
+            f"workspace_id={self.workspace_id!r}, is_default={self.is_default!r})"
+        )
 
 
 class ResumeExperience(Base):
@@ -185,6 +216,7 @@ class ResumeLanguage(Base):
     resume_id: Mapped[int] = mapped_column(ForeignKey("resume.id"), nullable=False)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     level: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    flag: Mapped[str] = mapped_column(String(10), nullable=False, server_default="🌐")
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
 
     resume: Mapped[Resume] = relationship(back_populates="languages")

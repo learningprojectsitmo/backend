@@ -5,9 +5,9 @@ from unittest.mock import AsyncMock, Mock, call
 import pytest
 
 from src.core.exceptions import PermissionError
-from src.model.resume import Resume
+from src.model.resume import Resume, ResumeWorkspace
 from src.repository.resume_repository import ResumeRepository
-from src.schema.resume import ResumeCreate, ResumeUpdate
+from src.schema.resume import ResumeCreate, ResumeSpaceAssign, ResumeUpdate
 from src.services.resume_service import ResumeService
 
 # Константы для тестов
@@ -20,11 +20,17 @@ def _make_repo() -> Mock:
     repo.uow = Mock()
     repo.uow.session = Mock()
     repo.uow.session.flush = AsyncMock()
+    repo.uow.session.delete = Mock()
     repo.count_by_author_id = AsyncMock(return_value=EXPECTED_RESUMES_COUNT)
-    repo.set_default = AsyncMock()
-    repo.unset_other_defaults = AsyncMock(return_value=0)
-    repo.clear_default = AsyncMock()
-    repo.get_next_default_candidate_id = AsyncMock(return_value=None)
+    repo.get_member_workspace_names = AsyncMock(return_value={})
+    repo.get_workspace_names = AsyncMock(return_value={})
+    repo.get_space_links = AsyncMock(return_value={})
+    repo.get_default_space_links = AsyncMock(return_value=[])
+    repo.has_space_default = AsyncMock(return_value=False)
+    repo.unset_other_space_defaults = AsyncMock(return_value=0)
+    repo.clear_space_default = AsyncMock()
+    repo.set_space_default = AsyncMock()
+    repo.get_space_default_candidate_id = AsyncMock(return_value=None)
     repo.get_by_id = AsyncMock()
     repo.create = AsyncMock()
     repo.update = AsyncMock()
@@ -43,8 +49,6 @@ class TestResumeService:
         mock_repository.uow = Mock()
         mock_repository.uow.session = Mock()
         mock_repository.uow.session.flush = AsyncMock()
-        mock_repository.count_by_author_id = AsyncMock(return_value=EXPECTED_RESUMES_COUNT)
-        mock_repository.set_default = AsyncMock()
         mock_resume = Resume(id=1, header="Senior Developer", resume_text="Experienced Python developer", author_id=1)
         mock_repository.create = AsyncMock(return_value=mock_resume)
 
@@ -57,28 +61,61 @@ class TestResumeService:
 
         # then
         assert result == mock_resume
-        mock_repository.create.assert_called_once_with(resume_data)
-        # У автора уже есть резюме — новое не становится основным.
-        mock_repository.set_default.assert_not_awaited()
+        # В репозиторий уходит dict: поле spaces не является колонкой resume.
+        payload = mock_repository.create.await_args.args[0]
+        assert isinstance(payload, dict)
+        assert payload["header"] == "Senior Developer"
+        assert "spaces" not in payload
 
     @pytest.mark.asyncio
-    async def test_should_make_first_resume_default(self):
-        """Первое резюме автора должно автоматически стать основным"""
+    async def test_should_assign_spaces_on_create(self):
+        """Резюме при создании назначается на пространства автора"""
         # given
         mock_repository = _make_repo()
-        mock_repository.count_by_author_id = AsyncMock(return_value=0)
-        mock_resume = Resume(id=7, header="Junior", author_id=1)
+        mock_resume = Resume(id=7, header="Junior", author_id=1, is_visible=True)
         mock_repository.create = AsyncMock(return_value=mock_resume)
+        mock_repository.get_member_workspace_names = AsyncMock(return_value={1: "Альфа"})
 
         resume_service = ResumeService(mock_repository)
-        resume_data = ResumeCreate(header="Junior", author_id=1)
+        resume_data = ResumeCreate(
+            header="Junior",
+            author_id=1,
+            is_visible=True,
+            spaces=[ResumeSpaceAssign(workspace_id=1, is_default=True)],
+        )
 
         # when
         result = await resume_service.create_resume(resume_data, author_id=1)
 
         # then
-        mock_repository.set_default.assert_awaited_once_with(7)
-        assert result.is_default is True
+        assert result == mock_resume
+        mock_repository.get_member_workspace_names.assert_awaited_once_with(1, [1])
+        # Переключение «основное» снимает флаг с остальных резюме автора
+        # в пространстве ДО записи нового (uq_rw_author_workspace_default).
+        mock_repository.unset_other_space_defaults.assert_awaited_once_with(1, 1, keep_resume_id=7)
+
+    @pytest.mark.asyncio
+    async def test_should_reject_spaces_where_author_is_not_member(self):
+        """Назначение резюме в пространство без членства запрещено"""
+        # given
+        mock_repository = _make_repo()
+        mock_resume = Resume(id=7, header="Junior", author_id=1, is_visible=True)
+        mock_repository.create = AsyncMock(return_value=mock_resume)
+        mock_repository.get_member_workspace_names = AsyncMock(return_value={})
+        mock_repository.get_workspace_names = AsyncMock(return_value={99: "Чужое"})
+
+        resume_service = ResumeService(mock_repository)
+        resume_data = ResumeCreate(
+            header="Junior",
+            author_id=1,
+            spaces=[ResumeSpaceAssign(workspace_id=99)],
+        )
+
+        # when & then
+        with pytest.raises(ValueError, match="не являетесь их участником: Чужое"):
+            await resume_service.create_resume(resume_data, author_id=1)
+
+        mock_repository.set_space_default.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_should_get_resume_by_id(self):
@@ -119,9 +156,7 @@ class TestResumeService:
         # given
         mock_repository = _make_repo()
         # Мокаем резюме с правильным author_id для проверки авторства
-        mock_resume = Resume(
-            id=1, header="Senior Developer", resume_text="Experienced Python developer", author_id=1, is_default=False
-        )
+        mock_resume = Resume(id=1, header="Senior Developer", resume_text="Experienced Python developer", author_id=1)
         mock_repository.get_by_id.return_value = mock_resume
 
         updated_resume = Resume(id=1, header="Updated Senior Developer", resume_text="Updated description", author_id=1)
@@ -137,41 +172,85 @@ class TestResumeService:
         # then
         assert result == updated_resume
         mock_repository.get_by_id.assert_called_once_with(1)
-        # В репозиторий уходит dict без is_default: признак «основное»
-        # меняется мутацией ORM-объекта, а не полем payload.
         mock_repository.update.assert_called_once_with(
             1, {"header": "Updated Senior Developer", "resume_text": "Updated description"}
         )
-        mock_repository.set_default.assert_not_awaited()
+        # Без spaces и is_visible менять назначения пространств не нужно.
+        mock_repository.get_space_links.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_should_switch_default_to_another_resume(self):
-        """Установка is_default должна снимать признак с остальных резюме автора"""
+    async def test_should_switch_space_default_when_assigning(self):
+        """Явное назначение is_default снимает признак с остальных резюме автора в пространстве"""
         # given
         mock_repository = _make_repo()
-        mock_resume = Resume(id=5, header="Backend", author_id=1, is_default=False)
+        mock_resume = Resume(id=5, header="Backend", author_id=1, is_visible=True)
         mock_repository.get_by_id.return_value = mock_resume
         mock_repository.update.return_value = mock_resume
+        mock_repository.get_member_workspace_names = AsyncMock(return_value={1: "Альфа"})
+        link = ResumeWorkspace(id=10, resume_id=5, workspace_id=1, author_id=1, is_default=False)
+        mock_repository.get_space_links = AsyncMock(return_value={1: link})
 
         resume_service = ResumeService(mock_repository)
 
         # when
-        await resume_service.update_resume(5, ResumeUpdate(is_default=True), current_user_id=1)
+        await resume_service.update_resume(
+            5,
+            ResumeUpdate(spaces=[ResumeSpaceAssign(workspace_id=1, is_default=True)]),
+            current_user_id=1,
+        )
 
         # then
         # Порядок критичен: снять чужие флаги нужно до записи нового, иначе
-        # uq_resume_author_default увидит два is_default = true у автора.
-        mock_repository.unset_other_defaults.assert_awaited_once_with(1, 5)
-        assert mock_resume.is_default is True
+        # uq_rw_author_workspace_default увидит две строки is_default = true.
+        mock_repository.unset_other_space_defaults.assert_awaited_once_with(1, 1, keep_resume_id=5)
+        assert link.is_default is True
+        # Явно назначили основное — восстановление основного не требуется.
+        mock_repository.has_space_default.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_should_reassign_space_default_when_unassigning(self):
+        """Снятие is_default переносит признак на другое видимое резюме пространства"""
+        # given
+        mock_repository = _make_repo()
+        mock_resume = Resume(id=5, header="Backend", author_id=1, is_visible=True)
+        mock_repository.get_by_id.return_value = mock_resume
+        mock_repository.update.return_value = mock_resume
+        mock_repository.get_member_workspace_names = AsyncMock(return_value={1: "Альфа"})
+        link = ResumeWorkspace(id=10, resume_id=5, workspace_id=1, author_id=1, is_default=True)
+        mock_repository.get_space_links = AsyncMock(return_value={1: link})
+        mock_repository.get_space_default_candidate_id = AsyncMock(return_value=3)
+
+        resume_service = ResumeService(mock_repository)
+
+        # when
+        await resume_service.update_resume(
+            5,
+            ResumeUpdate(spaces=[ResumeSpaceAssign(workspace_id=1, is_default=False)]),
+            current_user_id=1,
+        )
+
+        # then
+        # Именно clear_space_default, а не unset_other_space_defaults: тот
+        # исключает keep_resume_id и оставил бы флаг на снимаемом резюме.
+        mock_repository.clear_space_default.assert_awaited_once_with(5, 1)
+        mock_repository.unset_other_space_defaults.assert_not_awaited()
+        mock_repository.has_space_default.assert_awaited_once_with(1, 1)
+        mock_repository.get_space_default_candidate_id.assert_awaited_once_with(1, 1, exclude_id=5, visible_only=True)
+        mock_repository.set_space_default.assert_awaited_once_with(3, 1)
+        assert link.is_default is False
 
     @pytest.mark.asyncio
     async def test_should_move_default_when_hiding_default_resume(self):
-        """Скрытие основного резюме должно перенести признак на другое видимое"""
+        """Скрытие основного резюме переносит признак на другое видимое в пространстве"""
         # given
         mock_repository = _make_repo()
-        mock_resume = Resume(id=5, header="Backend", author_id=1, is_default=True, is_visible=True)
+        mock_resume = Resume(id=5, header="Backend", author_id=1, is_visible=True)
         mock_repository.get_by_id.return_value = mock_resume
-        mock_repository.get_next_default_candidate_id.return_value = 3
+        mock_repository.get_default_space_links = AsyncMock(
+            return_value=[ResumeWorkspace(id=10, resume_id=5, workspace_id=1, author_id=1, is_default=True)]
+        )
+        mock_repository.get_workspace_names = AsyncMock(return_value={1: "Альфа"})
+        mock_repository.get_space_default_candidate_id = AsyncMock(return_value=3)
         mock_repository.update.return_value = mock_resume
 
         resume_service = ResumeService(mock_repository)
@@ -180,18 +259,10 @@ class TestResumeService:
         await resume_service.update_resume(5, ResumeUpdate(is_visible=False), current_user_id=1)
 
         # then
-        mock_repository.get_next_default_candidate_id.assert_awaited_once_with(1, exclude_id=5, visible_only=True)
-        # Именно clear_default, а не unset_other_defaults: тот исключает
-        # keep_id, то есть оставил бы флаг на скрываемом резюме — и тогда
-        # кандидат получил бы второй is_default = true, что ломает
-        # uq_resume_author_default (проверено на реальной PostgreSQL).
-        mock_repository.clear_default.assert_awaited_once_with(5)
-        mock_repository.unset_other_defaults.assert_not_awaited()
-        mock_repository.set_default.assert_awaited_once_with(3)
-        assert mock_resume.is_default is False
-        # is_default не должен попадать в payload: запись False сломала бы индекс.
+        mock_repository.get_space_default_candidate_id.assert_awaited_once_with(1, 1, exclude_id=5, visible_only=True)
+        mock_repository.clear_space_default.assert_awaited_once_with(5, 1)
+        mock_repository.set_space_default.assert_awaited_once_with(3, 1)
         payload = mock_repository.update.await_args.args[1]
-        assert "is_default" not in payload
         assert payload == {"is_visible": False}
 
     @pytest.mark.asyncio
@@ -199,43 +270,36 @@ class TestResumeService:
         """Скрыть единственное видимое основное резюме нельзя — иначе карточка исчезнет"""
         # given
         mock_repository = _make_repo()
-        mock_resume = Resume(id=5, header="Backend", author_id=1, is_default=True, is_visible=True)
+        mock_resume = Resume(id=5, header="Backend", author_id=1, is_visible=True)
         mock_repository.get_by_id.return_value = mock_resume
-        mock_repository.get_next_default_candidate_id.return_value = None
+        mock_repository.get_default_space_links = AsyncMock(
+            return_value=[ResumeWorkspace(id=10, resume_id=5, workspace_id=1, author_id=1, is_default=True)]
+        )
+        mock_repository.get_workspace_names = AsyncMock(return_value={1: "Альфа"})
+        mock_repository.get_space_default_candidate_id = AsyncMock(return_value=None)
 
         resume_service = ResumeService(mock_repository)
 
         # when & then
-        with pytest.raises(ValueError, match="Нельзя скрыть основное резюме"):
+        with pytest.raises(ValueError, match="Нельзя скрыть резюме: оно является основным в пространствах: Альфа"):
             await resume_service.update_resume(5, ResumeUpdate(is_visible=False), current_user_id=1)
 
-        mock_repository.set_default.assert_not_awaited()
+        # Ни один перенос не выполнен — сначала проверяем все пространства.
+        mock_repository.clear_space_default.assert_not_awaited()
+        mock_repository.set_space_default.assert_not_awaited()
         mock_repository.update.assert_not_awaited()
-
-    @pytest.mark.asyncio
-    async def test_should_not_allow_removing_the_last_default_flag(self):
-        """Снятие признака с основного запрещено: основное должно остаться ровно одно"""
-        # given
-        mock_repository = _make_repo()
-        mock_resume = Resume(id=5, header="Backend", author_id=1, is_default=True, is_visible=True)
-        mock_repository.get_by_id.return_value = mock_resume
-        mock_repository.get_next_default_candidate_id.return_value = None
-        mock_repository.update.return_value = mock_resume
-
-        resume_service = ResumeService(mock_repository)
-
-        # when & then
-        with pytest.raises(ValueError, match="Нельзя снять признак основного"):
-            await resume_service.update_resume(5, ResumeUpdate(is_default=False), current_user_id=1)
 
     @pytest.mark.asyncio
     async def test_should_promote_next_resume_after_deleting_default(self):
         """Удаление основного резюме не должно оставлять автора без основного"""
         # given
         mock_repository = _make_repo()
-        mock_resume = Resume(id=5, header="Backend", author_id=1, is_default=True)
+        mock_resume = Resume(id=5, header="Backend", author_id=1)
         mock_repository.get_by_id.return_value = mock_resume
-        mock_repository.get_next_default_candidate_id.return_value = 3
+        mock_repository.get_default_space_links = AsyncMock(
+            return_value=[ResumeWorkspace(id=10, resume_id=5, workspace_id=1, author_id=1, is_default=True)]
+        )
+        mock_repository.get_space_default_candidate_id = AsyncMock(return_value=3)
 
         resume_service = ResumeService(mock_repository)
 
@@ -247,7 +311,7 @@ class TestResumeService:
         # session.delete() только помечает объект, поэтому до выставления флага
         # кандидату DELETE должен быть отправлен в БД.
         mock_repository.uow.session.flush.assert_awaited()
-        mock_repository.set_default.assert_awaited_once_with(3)
+        mock_repository.set_space_default.assert_awaited_once_with(3, 1)
 
     @pytest.mark.asyncio
     async def test_should_promote_hidden_resume_after_deleting_default_if_no_visible_left(self):
@@ -255,9 +319,12 @@ class TestResumeService:
         # Видимых резюме не осталось — скрытым основным можно сделать резюме
         # напрямую через API, поэтому это не только теоретический случай.
         mock_repository = _make_repo()
-        mock_resume = Resume(id=5, header="Backend", author_id=1, is_default=True)
+        mock_resume = Resume(id=5, header="Backend", author_id=1)
         mock_repository.get_by_id.return_value = mock_resume
-        mock_repository.get_next_default_candidate_id.side_effect = [None, 9]
+        mock_repository.get_default_space_links = AsyncMock(
+            return_value=[ResumeWorkspace(id=10, resume_id=5, workspace_id=1, author_id=1, is_default=True)]
+        )
+        mock_repository.get_space_default_candidate_id = AsyncMock(side_effect=[None, 9])
 
         resume_service = ResumeService(mock_repository)
 
@@ -267,17 +334,17 @@ class TestResumeService:
         # then
         assert result is True
         # Сначала ищем видимого кандидата, и только потом — любого.
-        assert mock_repository.get_next_default_candidate_id.await_args_list == [
-            call(1, exclude_id=5, visible_only=True),
-            call(1, exclude_id=5, visible_only=False),
+        assert mock_repository.get_space_default_candidate_id.await_args_list == [
+            call(1, 1, exclude_id=5, visible_only=True),
+            call(1, 1, exclude_id=5, visible_only=False),
         ]
-        mock_repository.set_default.assert_awaited_once_with(9)
+        mock_repository.set_space_default.assert_awaited_once_with(9, 1)
 
     @pytest.mark.asyncio
     async def test_should_not_promote_resume_after_deleting_non_default(self):
         # given
         mock_repository = _make_repo()
-        mock_resume = Resume(id=5, header="Backend", author_id=1, is_default=False)
+        mock_resume = Resume(id=5, header="Backend", author_id=1)
         mock_repository.get_by_id.return_value = mock_resume
 
         resume_service = ResumeService(mock_repository)
@@ -286,7 +353,7 @@ class TestResumeService:
         await resume_service.delete_resume(5, current_user_id=1)
 
         # then
-        mock_repository.set_default.assert_not_awaited()
+        mock_repository.set_space_default.assert_not_awaited()
         mock_repository.uow.session.flush.assert_not_awaited()
 
     @pytest.mark.asyncio
@@ -314,6 +381,7 @@ class TestResumeService:
         # Мокаем резюме с правильным author_id для проверки авторства
         mock_resume = Resume(id=1, header="Senior Developer", resume_text="Experienced Python developer", author_id=1)
         mock_repository.get_by_id.return_value = mock_resume
+        mock_repository.get_default_space_links = AsyncMock(return_value=[])
         mock_repository.delete.return_value = True
 
         resume_service = ResumeService(mock_repository)

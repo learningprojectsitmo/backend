@@ -36,6 +36,28 @@ from src.services.resume_service import ResumeService
 resume_router = APIRouter(prefix="/resumes", tags=["resume"], dependencies=[Depends(setup_audit)])
 
 
+@resume_router.get("/suggestions/skills", response_model=list[str])
+async def fetch_skill_suggestions(
+    q: str = Query("", max_length=100, description="Поисковый запрос"),
+    limit: int = Query(20, ge=1, le=50, description="Сколько подсказок вернуть"),
+    resume_service: ResumeService = Depends(get_resume_service),
+    _current_user: User = Depends(permission_required("resume:read")),
+) -> list[str]:
+    """Словарь существующих навыков (по всем резюме) для автодополнения."""
+    return await resume_service.get_skill_suggestions(q, limit)
+
+
+@resume_router.get("/suggestions/interests", response_model=list[str])
+async def fetch_interest_suggestions(
+    q: str = Query("", max_length=100, description="Поисковый запрос"),
+    limit: int = Query(20, ge=1, le=50, description="Сколько подсказок вернуть"),
+    resume_service: ResumeService = Depends(get_resume_service),
+    _current_user: User = Depends(permission_required("resume:read")),
+) -> list[str]:
+    """Словарь существующих интересов (по всем резюме) для автодополнения."""
+    return await resume_service.get_interest_suggestions(q, limit)
+
+
 @resume_router.get("/{resume_id}", response_model=ResumeFull)
 async def fetch_resume(
     resume_id: int,
@@ -94,7 +116,12 @@ async def create_resume(
 ) -> ResumeFull:
     """Создать новое резюме"""
 
-    resume = await resume_service.create_resume(resume_data, current_user.id)
+    try:
+        resume = await resume_service.create_resume(resume_data, current_user.id)
+    except ValueError as e:
+        # Назначение на пространства: автор не состоял в указанном
+        # пространстве — сообщение сервиса уже годное для пользователя.
+        raise HTTPException(status_code=400, detail=str(e)) from e
     return ResumeFull.model_validate(resume)
 
 
