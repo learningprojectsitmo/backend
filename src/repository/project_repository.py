@@ -249,6 +249,36 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         result = await self.uow.session.execute(query)
         return list(result.scalars().all()), int(total)
 
+    async def get_project_neighbors(
+        self,
+        workspace_id: int,
+        project_id: int,
+        visible: ColumnElement[bool] | None = None,
+    ) -> tuple[Project | None, Project | None]:
+        """Соседние проекты в списке пространства.
+
+        Список проектов отсортирован по id убыванию, поэтому «предыдущий» в
+        списке — проект с меньшим id, а «следующий» — с большим. Критерий
+        видимости (черновики) тот же, что у списка: иначе кнопка «вперёд»
+        увела бы на проект, которого пользователь в списке не видит.
+
+        Возвращается ``(prev, next)`` — по одному проекту либо ``None``, если
+        это край списка.
+        """
+        prev_query = select(Project).where(Project.workspace_id == workspace_id, Project.id < project_id)
+        next_query = select(Project).where(Project.workspace_id == workspace_id, Project.id > project_id)
+
+        if visible is not None:
+            prev_query = prev_query.where(visible)
+            next_query = next_query.where(visible)
+
+        prev_query = prev_query.options(selectinload(Project.status)).order_by(Project.id.desc()).limit(1)
+        next_query = next_query.options(selectinload(Project.status)).order_by(Project.id.asc()).limit(1)
+
+        prev = (await self.uow.session.execute(prev_query)).scalar_one_or_none()
+        next_project = (await self.uow.session.execute(next_query)).scalar_one_or_none()
+        return prev, next_project
+
     async def get_project_filter_facets(self, workspace_id: int) -> dict[str, list[Any]]:
         """Справочники для фильтров списка проектов пространства.
 

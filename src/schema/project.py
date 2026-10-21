@@ -638,6 +638,33 @@ class ProjectListResponse(BaseModel):
     total_pages: int
 
 
+class ProjectNeighborItem(BaseModel):
+    """Соседний проект в списке пространства
+
+    Лёгкая версия :class:`ProjectListItem`: кнопки «назад/вперёд» на странице
+    проекта показывают только название и статус, а участников и теги грузить
+    для этого не нужно.
+    """
+
+    id: int
+    name: str
+    status: ProjectStatusItem
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ProjectNeighborsResponse(BaseModel):
+    """Соседи проекта в списке пространства
+
+    ``prev`` — проект ниже текущего в списке (меньший id), ``next`` — выше
+    (больший id). Список проектов отсортирован по id убыванию, поэтому
+    «вперёд» по списку — это больший id.
+    """
+
+    prev: ProjectNeighborItem | None = None
+    next: ProjectNeighborItem | None = None
+
+
 class ProjectFilterMember(BaseModel):
     """Участник проектов пространства — вариант фильтра «Участники»"""
 

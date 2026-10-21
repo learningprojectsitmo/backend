@@ -8,7 +8,15 @@ import pytest
 
 from src.core.exceptions import NotFoundError, PermissionError, ValidationError
 from src.model.notification import NotificationType
-from src.model.project import Project, ProjectParticipation, ProjectStage, ProjectType, ProjectVacancy, Response
+from src.model.project import (
+    Project,
+    ProjectParticipation,
+    ProjectStage,
+    ProjectStatus,
+    ProjectType,
+    ProjectVacancy,
+    Response,
+)
 from src.model.resume import Resume
 from src.model.settings import SpaceSettings
 from src.model.user import Role, User
@@ -629,6 +637,63 @@ class TestProjectService:
         assert kwargs["stages"] == ["Создание тз"]
         assert kwargs["tags"] == ["ml"]
         assert kwargs["member_ids"] == [3]
+
+    @pytest.mark.asyncio
+    async def test_should_return_project_neighbors(self):
+        # given — соседи в списке пространства: меньший id и больший id
+        mock_repository = self._setup_mock_repo()
+        prev_project = Project(id=27, name="Предыдущий", author_id=1, workspace_id=1)
+        prev_project.status = ProjectStatus(id=1, name="draft", color="#999999")
+        next_project = Project(id=29, name="Следующий", author_id=1, workspace_id=1)
+        next_project.status = ProjectStatus(id=1, name="draft", color="#999999")
+        mock_repository.get_project_neighbors = AsyncMock(return_value=(prev_project, next_project))
+
+        project_service = ProjectService(mock_repository)
+
+        # when
+        result = await project_service.get_project_neighbors(workspace_id=1, project_id=28, viewer_id=1)
+
+        # then
+        assert result.prev is not None
+        assert result.prev.id == 27
+        assert result.prev.name == "Предыдущий"
+        assert result.prev.status.name == "draft"
+        assert result.next is not None
+        assert result.next.id == 29
+        assert result.next.name == "Следующий"
+
+    @pytest.mark.asyncio
+    async def test_should_return_no_neighbor_at_the_edge_of_the_list(self):
+        # given — текущий проект последний в списке
+        mock_repository = self._setup_mock_repo()
+        mock_repository.get_project_neighbors = AsyncMock(return_value=(Project(id=27, name="P27"), None))
+
+        project_service = ProjectService(mock_repository)
+
+        # when
+        result = await project_service.get_project_neighbors(workspace_id=1, project_id=28, viewer_id=1)
+
+        # then
+        assert result.prev is not None
+        assert result.prev.id == 27
+        assert result.next is None
+
+    @pytest.mark.asyncio
+    async def test_should_pass_visibility_criterion_to_neighbors_query(self):
+        # given — черновики скрыты от участников, критерий видимости тот же, что у списка
+        mock_repository = self._setup_mock_repo()
+        mock_repository.get_project_neighbors = AsyncMock(return_value=(None, None))
+
+        project_service = ProjectService(mock_repository)
+
+        # when
+        await project_service.get_project_neighbors(workspace_id=1, project_id=28, viewer_id=1)
+
+        # then
+        _, kwargs = mock_repository.get_project_neighbors.call_args
+        assert kwargs["workspace_id"] == 1
+        assert kwargs["project_id"] == 28
+        assert kwargs["visible"] is not None
 
     @pytest.mark.asyncio
     async def test_should_hide_stage_one_draft_from_participant(self):

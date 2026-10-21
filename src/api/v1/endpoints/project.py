@@ -26,6 +26,7 @@ from src.schema.project import (
     ProjectFilterFacetsResponse,
     ProjectFull,
     ProjectListResponse,
+    ProjectNeighborsResponse,
     ProjectUpdate,
     ResponseListResponse,
     ResponseRejectRequest,
@@ -81,6 +82,23 @@ async def fetch_project_filters(
     return ProjectFilterFacetsResponse(**facets)
 
 
+@project_router.get("/neighbors", response_model=ProjectNeighborsResponse)
+async def fetch_project_neighbors(
+    workspace_id: int = Query(..., description="ID пространства"),
+    project_id: int = Query(..., description="ID текущего проекта"),
+    project_service: ProjectService = Depends(get_project_service),
+    current_user: User = Depends(get_current_user),
+) -> ProjectNeighborsResponse:
+    """Соседние проекты текущего в списке пространства.
+
+    Нужен кнопкам «назад/вперёд» на странице проекта: без него пришлось бы
+    выкачивать весь список пространства, чтобы найти позицию текущего проекта.
+    """
+    return await project_service.get_project_neighbors(workspace_id, project_id, current_user.id)
+
+
+# Маршрут объявлен до `/{project_id}`: иначе FastAPI принял бы «neighbors» за
+# id проекта и вернул 422 вместо соседей.
 @project_router.get("/{project_id}", response_model=ProjectFull)
 async def fetch_project(
     project_id: int,

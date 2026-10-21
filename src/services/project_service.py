@@ -23,6 +23,8 @@ from src.schema.project import (
     ProjectCreate,
     ProjectFull,
     ProjectListItem,
+    ProjectNeighborItem,
+    ProjectNeighborsResponse,
     ProjectStatusItem,
     ProjectUpdate,
     ResponseListItem,
@@ -759,6 +761,41 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         if viewer_id is None:
             return projects
         return await self._visible_projects(projects, viewer_id)
+
+    async def get_project_neighbors(
+        self,
+        workspace_id: int,
+        project_id: int,
+        viewer_id: int | None = None,
+    ) -> ProjectNeighborsResponse:
+        """Соседние проекты текущего в списке пространства.
+
+        Критерий видимости — тот же, что у списка проектов: черновик, скрытый
+        от пользователя, не должен попасть в соседи, иначе кнопка «вперёд»
+        увела бы на страницу, которой в списке нет.
+        """
+        visible = await self._visible_projects_criterion(viewer_id, {workspace_id})
+        prev_project, next_project = await self._project_repository.get_project_neighbors(
+            workspace_id=workspace_id,
+            project_id=project_id,
+            visible=visible,
+        )
+        return ProjectNeighborsResponse(
+            prev=self.to_project_neighbor_item(prev_project) if prev_project else None,
+            next=self.to_project_neighbor_item(next_project) if next_project else None,
+        )
+
+    def to_project_neighbor_item(self, project: Project) -> ProjectNeighborItem:
+        """Лёгкая карточка соседа: id, название и статус."""
+        status = project.status
+        return ProjectNeighborItem(
+            id=project.id,
+            name=project.name,
+            status=ProjectStatusItem(
+                name=status.name if status else "draft",
+                color=(status.color if status and status.color else "#999999"),
+            ),
+        )
 
     def to_project_list_item(self, project: Project) -> ProjectListItem:
         participants = project.participants or []
