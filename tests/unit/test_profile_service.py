@@ -4,8 +4,9 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from src.model.resume import Resume
+from src.model.resume import Resume, ResumeWorkspace
 from src.model.user import Role, User
+from src.model.workspace import WorkSpace
 from src.services.profile_service import ProfileService
 
 
@@ -35,6 +36,17 @@ def _resume(resume_id: int, *, is_visible: bool) -> Resume:
     )
 
 
+def _assign_space(resume: Resume, workspace_id: int, name: str, *, is_default: bool) -> None:
+    link = ResumeWorkspace(
+        resume_id=resume.id,
+        workspace_id=workspace_id,
+        author_id=resume.author_id,
+        is_default=is_default,
+    )
+    link.workspace = WorkSpace(id=workspace_id, name=name)
+    resume.workspaces.append(link)
+
+
 def _make_service(user: User | None) -> tuple[ProfileService, Mock, Mock]:
     user_repo = Mock()
     user_repo.get_by_id_with_role = AsyncMock(return_value=user)
@@ -52,6 +64,7 @@ def _make_service(user: User | None) -> tuple[ProfileService, Mock, Mock]:
     language_repo.get_by_user_id = AsyncMock(return_value=[])
 
     project_repo = Mock()
+    project_repo.count_invitations_by_user_id = AsyncMock(return_value=0)
 
     service = ProfileService(  # type: ignore[arg-type]
         user_repository=user_repo,
@@ -109,3 +122,42 @@ class TestPublicProfile:
         # when / then
         with pytest.raises(ValueError, match="User not found"):
             await service.get_public_profile(unknown_user_id)
+
+    @pytest.mark.asyncio
+    async def test_should_map_space_assignments_with_default_flag(self):
+        # given
+        service, _, resume_repo = _make_service(_user())
+        resume = _resume(1, is_visible=True)
+        _assign_space(resume, workspace_id=10, name="Учебное пространство", is_default=True)
+        _assign_space(resume, workspace_id=11, name="Стажировки", is_default=False)
+        resume_repo.get_by_author_id.return_value = [resume]
+
+        # when
+        result = await service.get_public_profile(1)
+
+        # then
+        spaces = result.resumes[0].spaces
+        assert [(s.workspace_id, s.workspace_name, s.is_default) for s in spaces] == [
+            (10, "Учебное пространство", True),
+            (11, "Стажировки", False),
+        ]
+
+
+class TestOwnProfile:
+    """Тесты ProfileService.get_profile (собственный профиль)"""
+
+    @pytest.mark.asyncio
+    async def test_should_include_space_assignments(self):
+        # given
+        service, _, resume_repo = _make_service(_user())
+        resume = _resume(1, is_visible=False)
+        _assign_space(resume, workspace_id=10, name="Учебное пространство", is_default=False)
+        resume_repo.get_by_author_id.return_value = [resume]
+
+        # when
+        result = await service.get_profile(1)
+
+        # then
+        assert [(s.workspace_id, s.workspace_name, s.is_default) for s in result.resumes[0].spaces] == [
+            (10, "Учебное пространство", False)
+        ]

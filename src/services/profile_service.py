@@ -3,9 +3,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from src.schema.profile import ProfileResponse
-from src.schema.resume import ResumeFull
+from src.schema.resume import ResumeFull, ResumeSpaceOut
 
 if TYPE_CHECKING:
+    from src.model.resume import Resume
     from src.repository.education_repository import EducationRepository
     from src.repository.language_repository import LanguageRepository
     from src.repository.portfolio_repository import PortfolioRepository
@@ -31,6 +32,20 @@ class ProfileService:
         self._language_repository = language_repository
         self._project_repository = project_repository
 
+    @staticmethod
+    def _to_resume_full(resume: Resume) -> ResumeFull:
+        """Собрать резюме с назначениями на пространства (для карточек профиля)."""
+        resume_full = ResumeFull.model_validate(resume)
+        resume_full.spaces = [
+            ResumeSpaceOut(
+                workspace_id=link.workspace_id,
+                workspace_name=link.workspace.name if link.workspace else "",
+                is_default=link.is_default,
+            )
+            for link in (resume.workspaces or [])
+        ]
+        return resume_full
+
     async def get_profile(self, user_id: int) -> ProfileResponse:
         user = await self._user_repository.get_by_id_with_role(user_id)
         if not user:
@@ -42,7 +57,7 @@ class ProfileService:
         languages = await self._language_repository.get_by_user_id(user_id)
 
         invitations_count = await self._project_repository.count_invitations_by_user_id(user_id)
-        resumes_full = [ResumeFull.model_validate(r) for r in resumes]
+        resumes_full = [self._to_resume_full(r) for r in resumes]
         for r in resumes_full:
             r.invitations_count = invitations_count
 
@@ -76,7 +91,7 @@ class ProfileService:
         education = await self._education_repository.get_by_user_id(user_id)
         languages = await self._language_repository.get_by_user_id(user_id)
 
-        resumes_full = [ResumeFull.model_validate(r) for r in resumes if r.is_visible]
+        resumes_full = [self._to_resume_full(r) for r in resumes if r.is_visible]
 
         return ProfileResponse(
             id=user.id,

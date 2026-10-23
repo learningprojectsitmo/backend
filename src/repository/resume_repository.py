@@ -25,7 +25,9 @@ class ResumeRepository(BaseRepository[Resume, ResumeCreate, ResumeUpdate]):
         """Получить резюме по автору"""
 
         result = await self.uow.session.execute(
-            select(Resume).where(Resume.author_id == author_id),
+            select(Resume)
+            .where(Resume.author_id == author_id)
+            .options(selectinload(Resume.workspaces).selectinload(ResumeWorkspace.workspace)),
         )
         return list(result.scalars().all())
 
