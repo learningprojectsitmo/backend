@@ -38,6 +38,7 @@ from src.util.urls import build_resume_url
 if TYPE_CHECKING:
     from src.repository.project_repository import ProjectRepository
     from src.repository.resume_repository import ResumeRepository
+    from src.services.avatar_service import AvatarService
     from src.services.mail_service import MailService
     from src.services.notification_service import NotificationService
 
@@ -63,12 +64,14 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         resume_repository: ResumeRepository | None = None,
         notification_service: NotificationService | None = None,
         mail_service: MailService | None = None,
+        avatar_service: AvatarService | None = None,
     ):
         super().__init__(project_repository)
         self._project_repository = project_repository
         self._resume_repository = resume_repository
         self._notification_service = notification_service
         self._mail_service = mail_service
+        self._avatar_service = avatar_service
 
     @staticmethod
     def is_draft(project: Project) -> bool:
@@ -194,7 +197,19 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
             if allow_multi
             else await self._project_repository.get_workspace_busy_participant_ids(project.workspace_id, project.id)
         )
-        return ProjectFull.from_orm(project, current_user_id, allow_multi, busy_user_ids)
+        result = ProjectFull.from_orm(project, current_user_id, allow_multi, busy_user_ids)
+
+        # `from_orm` синхронный и ORM-связи с аватаром у User нет, поэтому фото
+        # подставляем здесь одним запросом на команду проекта.
+        if self._avatar_service is not None:
+            user_ids = {member.user_id for member in result.members}
+            avatar_urls = await self._avatar_service.get_avatar_urls(user_ids)
+            for member in result.members:
+                member.avatar_url = avatar_urls.get(member.user_id)
+            for preview in result.participants_preview:
+                preview.avatar_url = avatar_urls.get(preview.id)
+
+        return result
 
     async def get_projects_by_author(self, author_id: int) -> list[Project]:
         """Получить проекты по автору"""

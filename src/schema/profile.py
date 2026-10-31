@@ -20,6 +20,8 @@ class ProfileResponse(BaseModel):
     tg_nickname: str | None
     vk_nickname: str | None
     role: str
+    #: Относительный путь (`/media/{id}/avatar?v=...`) или внешний URL.
+    avatar_url: str | None = None
     resumes: list[ResumeFull]
     portfolio: list[PortfolioFull]
     education: list[EducationFull]
@@ -37,3 +39,9 @@ class PublicProfileResponse(ProfileResponse):
 
     spaces: list[Space] = []
     projects: list[MyProjectItem] = []
+
+
+class AvatarResponse(BaseModel):
+    """Ответ после загрузки фото профиля."""
+
+    avatar_url: str

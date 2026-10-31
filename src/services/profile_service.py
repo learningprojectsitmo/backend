@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from src.repository.project_repository import ProjectRepository
     from src.repository.resume_repository import ResumeRepository
     from src.repository.user_repository import UserRepository
+    from src.services.avatar_service import AvatarService
 
 
 class ProfileService:
@@ -24,6 +25,7 @@ class ProfileService:
         education_repository: EducationRepository,
         language_repository: LanguageRepository,
         project_repository: ProjectRepository,
+        avatar_service: AvatarService | None = None,
     ):
         self._user_repository = user_repository
         self._resume_repository = resume_repository
@@ -31,6 +33,12 @@ class ProfileService:
         self._education_repository = education_repository
         self._language_repository = language_repository
         self._project_repository = project_repository
+        self._avatar_service = avatar_service
+
+    async def _get_avatar_url(self, user_id: int) -> str | None:
+        if self._avatar_service is None:
+            return None
+        return await self._avatar_service.get_avatar_url(user_id)
 
     @staticmethod
     def _to_resume_full(resume: Resume) -> ResumeFull:
@@ -71,6 +79,7 @@ class ProfileService:
             tg_nickname=user.tg_nickname,
             vk_nickname=user.vk_nickname,
             role=user.role.name if user.role else "member",
+            avatar_url=await self._get_avatar_url(user.id),
             resumes=resumes_full,
             portfolio=list(portfolio),
             education=list(education),
@@ -103,6 +112,7 @@ class ProfileService:
             tg_nickname=user.tg_nickname,
             vk_nickname=user.vk_nickname,
             role=user.role.name if user.role else "member",
+            avatar_url=await self._get_avatar_url(user.id),
             resumes=resumes_full,
             portfolio=list(portfolio),
             education=list(education),

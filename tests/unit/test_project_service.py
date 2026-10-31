@@ -1755,6 +1755,60 @@ class TestMultiProjectRestriction:
         # then
         mock_repository.get_workspace_busy_participant_ids.assert_not_called()
 
+    @staticmethod
+    def _make_project_with_member() -> Project:
+        """Проект с одним участником: нужен для подстановки аватаров."""
+        project = TestMultiProjectRestriction._make_project_with_stage()
+        user = User(id=11, first_name="Анна", last_name="Петрова", email="a@example.com")
+        participation = ProjectParticipation(
+            id=5,
+            project_id=project.id,
+            participant_id=user.id,
+            created_at=datetime(2026, 1, 1, tzinfo=UTC),
+        )
+        participation.participant = user
+        project.participants = [participation]
+        return project
+
+    @pytest.mark.asyncio
+    async def test_build_full_should_fill_avatar_urls_for_members_and_preview(self):
+        # given
+        mock_repository = Mock(spec=ProjectRepository)
+        mock_uow = Mock()
+        mock_session = AsyncMock()
+        mock_uow.session = mock_session
+        mock_repository.uow = mock_uow
+        mock_session.execute = AsyncMock(return_value=self._settings_result(True))
+        avatar_service = Mock()
+        avatar_service.get_avatar_urls = AsyncMock(return_value={11: "/media/11/avatar?v=42"})
+        project_service = ProjectService(mock_repository, avatar_service=avatar_service)
+
+        # when
+        full = await project_service.build_full(self._make_project_with_member(), 1)
+
+        # then
+        avatar_service.get_avatar_urls.assert_awaited_once_with({11})
+        assert full.members[0].avatar_url == "/media/11/avatar?v=42"
+        assert full.participants_preview[0].avatar_url == "/media/11/avatar?v=42"
+
+    @pytest.mark.asyncio
+    async def test_build_full_should_work_without_avatar_service(self):
+        # given: ProjectService создаётся и без аватаров (юнит-тесты, скрипты)
+        mock_repository = Mock(spec=ProjectRepository)
+        mock_uow = Mock()
+        mock_session = AsyncMock()
+        mock_uow.session = mock_session
+        mock_repository.uow = mock_uow
+        mock_session.execute = AsyncMock(return_value=self._settings_result(True))
+        project_service = ProjectService(mock_repository)
+
+        # when
+        full = await project_service.build_full(self._make_project_with_member(), 1)
+
+        # then
+        assert full.members[0].avatar_url is None
+        assert full.participants_preview[0].avatar_url is None
+
     @pytest.mark.asyncio
     async def test_invite_to_project_should_block_candidate_busy_in_another_project(self):
         # given

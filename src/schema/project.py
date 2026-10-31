@@ -50,6 +50,7 @@ class ParticipantFull(BaseModel):
     id: int
     user_id: int
     name: str
+    avatar_url: str | None = None
     role: str = ""
     contacts: str = ""
     resume_url: str = ""

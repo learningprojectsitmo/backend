@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 
 from src.core.container import (
     get_audit_service,
+    get_avatar_service,
     get_education_service,
     get_language_service,
     get_portfolio_service,
@@ -20,9 +21,10 @@ from src.schema.audit import ActivityResponse
 from src.schema.education import EducationCreate, EducationFull, EducationUpdate
 from src.schema.language import LanguageCreate, LanguageFull, LanguageUpdate
 from src.schema.portfolio import PortfolioCreate, PortfolioFull, PortfolioUpdate
-from src.schema.profile import ProfileResponse, PublicProfileResponse
+from src.schema.profile import AvatarResponse, ProfileResponse, PublicProfileResponse
 from src.schema.workspace import Space
 from src.services.audit_service import ACTIVITY_ITEMS_LIMIT, AuditService
+from src.services.avatar_service import MAX_AVATAR_BYTES, AvatarError, AvatarService
 from src.services.education_service import EducationService
 from src.services.language_service import LanguageService
 from src.services.portfolio_service import PortfolioService
@@ -43,6 +45,43 @@ async def fetch_profile(
         return await profile_service.get_profile(current_user.id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
+
+
+@profile_router.post("/avatar", response_model=AvatarResponse)
+async def upload_avatar(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    avatar_service: AvatarService = Depends(get_avatar_service),
+) -> AvatarResponse:
+    """Загрузить фото профиля.
+
+    Фронтенд присылает уже обрезанный квадрат (512×512 WebP), сервер лишь
+    проверяет размер и magic bytes. Читаем на байт больше лимита, чтобы
+    отличить «ровно лимит» от «больше», не загружая файл целиком в память.
+    """
+    try:
+        data = await file.read(MAX_AVATAR_BYTES + 1)
+        if len(data) > MAX_AVATAR_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=f"Файл больше {MAX_AVATAR_BYTES // (1024 * 1024)} МБ",
+            )
+        avatar_url = await avatar_service.upload(current_user.id, file.content_type, data)
+    except AvatarError as e:
+        raise HTTPException(status_code=e.status_code, detail=str(e)) from e
+    finally:
+        await file.close()
+
+    return AvatarResponse(avatar_url=avatar_url)
+
+
+@profile_router.delete("/avatar", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_avatar(
+    current_user: User = Depends(get_current_user),
+    avatar_service: AvatarService = Depends(get_avatar_service),
+) -> None:
+    """Удалить фото профиля (идемпотентно)."""
+    await avatar_service.delete(current_user.id)
 
 
 @profile_router.get("/{user_id}/activity", response_model=ActivityResponse)

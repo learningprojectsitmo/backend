@@ -7,6 +7,7 @@ from fastapi import Depends
 from src.core.uow import IUnitOfWork, SqlAlchemyUoW
 from src.repository.app_setting_repository import AppSettingRepository
 from src.repository.audit_repository import AuditRepository
+from src.repository.avatar_repository import AvatarRepository
 from src.repository.education_repository import EducationRepository
 from src.repository.ideas_repository import IdeaCommentRepository, IdeaRepository, IdeaTagRepository
 from src.repository.invitation_repository import InvitationRepository
@@ -33,6 +34,7 @@ from src.services.admin_service import AdminService
 from src.services.app_setting_service import AppSettingService
 from src.services.audit_service import AuditService
 from src.services.auth_service import AuthService
+from src.services.avatar_service import AvatarService
 from src.services.education_service import EducationService
 from src.services.fixtures_service import FixtureService
 from src.services.ideas_service import IdeaService, IdeaTagService
@@ -83,6 +85,16 @@ async def get_role_permission_repository(uow: IUnitOfWork = Depends(get_uow)) ->
 
 async def get_resume_repository(uow: IUnitOfWork = Depends(get_uow)) -> ResumeRepository:
     return ResumeRepository(uow)
+
+
+async def get_avatar_repository(uow: IUnitOfWork = Depends(get_uow)) -> AvatarRepository:
+    return AvatarRepository(uow)
+
+
+async def get_avatar_service(
+    avatar_repository: AvatarRepository = Depends(get_avatar_repository),
+) -> AvatarService:
+    return AvatarService(avatar_repository)
 
 
 async def get_user_repository(uow: IUnitOfWork = Depends(get_uow)) -> UserRepository:
@@ -214,12 +226,14 @@ async def get_project_service(
     resume_repository: ResumeRepository = Depends(get_resume_repository),
     notification_service: NotificationService = Depends(get_notification_service),
     mail_service: MailService = Depends(get_mail_service),
+    avatar_service: AvatarService = Depends(get_avatar_service),
 ) -> ProjectService:
     return ProjectService(
         project_repository,
         resume_repository=resume_repository,
         notification_service=notification_service,
         mail_service=mail_service,
+        avatar_service=avatar_service,
     )
 
 
@@ -391,6 +405,7 @@ async def get_profile_service(
     education_repository: EducationRepository = Depends(get_education_repository),
     language_repository: LanguageRepository = Depends(get_language_repository),
     project_repository: ProjectRepository = Depends(get_project_repository),
+    avatar_service: AvatarService = Depends(get_avatar_service),
 ) -> ProfileService:
     return ProfileService(
         user_repository,
@@ -399,6 +414,7 @@ async def get_profile_service(
         education_repository,
         language_repository,
         project_repository,
+        avatar_service,
     )
 
 

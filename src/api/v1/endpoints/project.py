@@ -8,6 +8,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from src.core.container import (
     get_audit_service,
     get_auth_service,
+    get_avatar_service,
     get_kanban_service,
     get_project_service,
 )
@@ -33,6 +34,7 @@ from src.schema.project import (
 )
 from src.services.audit_service import ACTIVITY_ITEMS_LIMIT, AuditService
 from src.services.auth_service import AuthService
+from src.services.avatar_service import AvatarService
 from src.services.kanban_service import KanbanService
 from src.services.project_service import RESPONSE_LIST_ROLES, ProjectService
 
@@ -161,6 +163,7 @@ async def fetch_projects(
     date_from: date | None = Query(None, description="Дедлайн не раньше даты (YYYY-MM-DD)"),
     date_to: date | None = Query(None, description="Дедлайн не позже даты (YYYY-MM-DD)"),
     project_service: ProjectService = Depends(get_project_service),
+    avatar_service: AvatarService = Depends(get_avatar_service),
     current_user: User = Depends(get_current_user),
 ) -> ProjectListResponse:
     """Получить список проектов с пагинацией и фильтрацией"""
@@ -182,6 +185,15 @@ async def fetch_projects(
         projects, total = await project_service.get_projects_paginated(page, limit, current_user.id, **filters)
 
     projects_list = [project_service.to_project_list_item(project) for project in projects]
+
+    # Превью участников строится синхронно (и без avatars), поэтому URL фото
+    # подставляем одним запросом на все карточки страницы.
+    preview_user_ids = {participant.id for project in projects_list for participant in project.participants_preview}
+    if preview_user_ids:
+        avatar_urls = await avatar_service.get_avatar_urls(preview_user_ids)
+        for project in projects_list:
+            for participant in project.participants_preview:
+                participant.avatar_url = avatar_urls.get(participant.id)
 
     total_pages = (total + limit - 1) // limit if total > 0 else 0
 

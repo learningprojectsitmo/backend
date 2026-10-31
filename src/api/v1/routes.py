@@ -6,6 +6,7 @@ from src.api.v1.endpoints.admin import admin_router
 from src.api.v1.endpoints.audit import audit_router
 from src.api.v1.endpoints.auth import auth_router
 from src.api.v1.endpoints.auth import router as signup_router
+from src.api.v1.endpoints.avatar import avatar_router
 from src.api.v1.endpoints.ideas import ideas_router
 from src.api.v1.endpoints.invitation import invitation_router
 from src.api.v1.endpoints.kanban import kanban_router
@@ -31,6 +32,7 @@ router_list = [
     role_router,
     resume_router,
     profile_router,
+    avatar_router,
     project_router,
     sessions_router,
     audit_router,

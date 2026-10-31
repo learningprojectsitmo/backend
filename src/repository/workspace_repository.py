@@ -19,11 +19,12 @@ from src.model.project import (
 from src.model.resume import Resume, ResumeInterest, ResumeSkill, ResumeWorkspace
 from src.model.settings import SpaceSettings
 from src.model.user import Role, User
+from src.model.user_avatar import UserAvatar
 from src.model.workspace import WorkSpace, WorkSpaceCategories, WorkSpaceParticipation
 from src.model.workspace_invitation import WorkspaceInvitation
 from src.repository.base_repository import BaseRepository
 from src.schema.workspace import WorkSpaceCreate, WorkSpaceUpdate
-from src.util.urls import build_resume_url
+from src.util.urls import build_avatar_url, build_resume_url
 
 
 class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUpdate]):
@@ -242,12 +243,14 @@ class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUp
                 user_projects.c.project_names,
                 first_resume.c.resume_id,
                 Role.name.label("role_name"),
+                UserAvatar.updated_at.label("avatar_updated_at"),
                 WorkSpaceParticipation.created_at,
             )
             .join(User, User.id == WorkSpaceParticipation.participant_id)
             .outerjoin(Role, Role.id == WorkSpaceParticipation.role_id)
             .outerjoin(user_projects, user_projects.c.participant_id == WorkSpaceParticipation.participant_id)
             .outerjoin(first_resume, first_resume.c.author_id == WorkSpaceParticipation.participant_id)
+            .outerjoin(UserAvatar, UserAvatar.user_id == WorkSpaceParticipation.participant_id)
             .where(WorkSpaceParticipation.workspace_id == workspace_id)
         )
 
@@ -301,7 +304,11 @@ class WorkSpaceRepository(BaseRepository[WorkSpace, WorkSpaceCreate, WorkSpaceUp
                     "id": row["id"],
                     "user_id": row["user_id"],
                     "name": row["name"] or "",
-                    "avatar_url": None,
+                    "avatar_url": (
+                        build_avatar_url(row["user_id"], row["avatar_updated_at"])
+                        if row["avatar_updated_at"]
+                        else None
+                    ),
                     "projects": projects_list,
                     "role": row["role_name"] or "",
                     "workspace_role": row["role_name"] or "",
