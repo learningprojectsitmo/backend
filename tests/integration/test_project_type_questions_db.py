@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from copy import deepcopy
 
 import httpx
 import pytest
 import pytest_asyncio
 from fastapi import FastAPI
-from sqlalchemy import create_engine, inspect, null, select, text
+from sqlalchemy import create_engine, event, inspect, null, select, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import DBAPIError, IntegrityError
 
@@ -424,3 +425,55 @@ async def test_http_commit_failure_never_reports_success(seeded):
     assert response.status_code == 500
     async with make_uow() as u:
         assert await service(u).get_questions(spaces[0], types[0], users["teacher"]) == initial
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("change", ["clear", "edit"])
+async def test_get_keeps_one_snapshot_during_concurrent_replace(seeded, change):
+    engine, make_uow, users, spaces, types = seeded
+    async with make_uow() as u:
+        initial = await service(u).apply_template(spaces[0], types[0], "product", users["teacher"])
+    writer = create_engine(engine.url.set(drivername="postgresql+psycopg2"))
+    changed = []
+
+    def replace_after_question_select(conn, cursor, statement, parameters, context, executemany):
+        if changed or not re.search(r"\bFROM project_type_question\b", statement):
+            return
+        changed.append(True)
+        with writer.begin() as transaction:
+            transaction.execute(text("SELECT id FROM project_type WHERE id=:tid FOR UPDATE"), {"tid": types[0]})
+            if change == "clear":
+                transaction.execute(
+                    text("DELETE FROM project_type_question WHERE project_type_id=:tid"), {"tid": types[0]}
+                )
+            else:
+                qid = initial.questions[0].id
+                transaction.execute(
+                    text("UPDATE project_type_question SET text='concurrent edit' WHERE id=:qid"), {"qid": qid}
+                )
+                transaction.execute(
+                    text(
+                        "UPDATE project_type_question_level SET description='concurrent explanation' WHERE question_id=:qid AND score=1"
+                    ),
+                    {"qid": qid},
+                )
+
+    try:
+        async with make_uow() as reader:
+            connection = await reader.session.connection()
+            event.listen(connection.sync_connection, "after_cursor_execute", replace_after_question_select)
+            try:
+                result = await service(reader).get_questions(spaces[0], types[0], users["teacher"])
+            finally:
+                event.remove(connection.sync_connection, "after_cursor_execute", replace_after_question_select)
+        assert changed
+        assert result == initial
+        async with make_uow() as u:
+            fresh = await service(u).get_questions(spaces[0], types[0], users["teacher"])
+        if change == "clear":
+            assert fresh.questions == []
+        else:
+            assert fresh.questions[0].text == "concurrent edit"
+            assert fresh.questions[0].levels[0].description == "concurrent explanation"
+    finally:
+        writer.dispose()

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from sqlalchemy import select
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import joinedload
 
 from src.core.exceptions import NotFoundError
 from src.core.uow import IUnitOfWork
@@ -41,11 +41,11 @@ class ProjectTypeQuestionRepository:
         query = (
             select(ProjectTypeQuestion)
             .where(ProjectTypeQuestion.project_type_id == type_id)
-            .options(selectinload(ProjectTypeQuestion.levels))
+            .options(joinedload(ProjectTypeQuestion.levels))
             .order_by(ProjectTypeQuestion.position)
             .execution_options(populate_existing=True)
         )
-        return list((await self.uow.session.execute(query)).scalars().all())
+        return list((await self.uow.session.execute(query)).unique().scalars().all())
 
     async def replace_questions(self, type_id: int, data: QuestionListReplace) -> list[ProjectTypeQuestion]:
         """Replace under the caller's scoped parent lock; commit belongs to its UoW."""
