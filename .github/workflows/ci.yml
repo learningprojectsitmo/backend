@@ -78,6 +78,7 @@ jobs:
 
     env:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/ci_db
+      RUBRIC_TEST_DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/ci_db
       SECRET_KEY: ci-secret-key-not-used-for-crypto
       ENVIRONMENT: ci
       AUTO_CREATE_TABLES: "false"
@@ -107,6 +108,9 @@ jobs:
           alembic downgrade base
           alembic upgrade head
           alembic check
+
+      - name: Verify rubric mapping on a disposable database
+        run: pytest tests/integration/test_rubric_mapping_db.py --no-cov
 
   test:
     name: Tests

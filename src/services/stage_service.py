@@ -98,6 +98,7 @@ class ProjectStageService(BaseService[Project, dict, dict]):
                 id=t.id,
                 name=t.name,
                 description=t.description,
+                assessment_kind=t.assessment_kind,
                 stages=[self._stage_info(s) for s in (t.stages or [])],
             )
             for t in types
@@ -111,6 +112,7 @@ class ProjectStageService(BaseService[Project, dict, dict]):
             id=ptype.id,
             name=ptype.name,
             description=ptype.description,
+            assessment_kind=ptype.assessment_kind,
             stages=[self._stage_info(s) for s in (ptype.stages or [])],
         )
 
@@ -132,7 +134,13 @@ class ProjectStageService(BaseService[Project, dict, dict]):
         if not await self._can_manage_workspace(workspace_id, user_id):
             raise PermissionError("Only admin/teacher can manage project types")
         saved = await self._type_repository.create(data)
-        return ProjectTypeFull(id=saved.id, name=saved.name, description=saved.description, stages=[])
+        return ProjectTypeFull(
+            id=saved.id,
+            name=saved.name,
+            description=saved.description,
+            assessment_kind=saved.assessment_kind,
+            stages=[],
+        )
 
     async def update_project_type(
         self, type_id: int, workspace_id: int | None, data: ProjectTypeUpdate, user_id: int

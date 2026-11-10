@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import (
     JSON,
     Boolean,
+    CheckConstraint,
     DateTime,
     ForeignKey,
     Index,
@@ -250,12 +251,19 @@ class ProjectVacancy(Base):
 
 class ProjectType(Base):
     __tablename__ = "project_type"
-    __table_args__ = (UniqueConstraint("workspace_id", "name", name="uq_project_type_workspace_name"),)
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "name", name="uq_project_type_workspace_name"),
+        CheckConstraint(
+            "assessment_kind IS NULL OR assessment_kind IN ('product', 'technical_integration', 'research')",
+            name="ck_project_type_assessment_kind",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     workspace_id: Mapped[int | None] = mapped_column(ForeignKey("workspace.id"), nullable=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     description: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    assessment_kind: Mapped[str | None] = mapped_column(String(32), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False

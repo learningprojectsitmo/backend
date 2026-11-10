@@ -673,6 +673,7 @@ class TestProjectTypeCRUDWorkspaceScoped:
         types = await service.list_project_types(workspace_id=None)
 
         # then
+        assert types[0].assessment_kind is None
         assert types[0].stages[0].duration_days == 10
         assert types[0].stages[0].visible_to_participants is True
 

@@ -81,6 +81,7 @@ class ProjectTypeRepository(BaseRepository[ProjectType, ProjectTypeCreate, Proje
                 workspace_id=workspace_id,
                 name=st.name,
                 description=st.description,
+                assessment_kind=st.assessment_kind,
             )
             self.uow.session.add(new_type)
             await self.uow.session.flush()

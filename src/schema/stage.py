@@ -4,12 +4,15 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
 
+from src.schema.rubric import AssessmentKind
+
 
 class ProjectTypeCreate(BaseModel):
     """Схема для создания типа проекта"""
 
     name: str
     description: str | None = None
+    assessment_kind: AssessmentKind | None = None
     workspace_id: int | None = None
 
 
@@ -18,6 +21,7 @@ class ProjectTypeUpdate(BaseModel):
 
     name: str | None = None
     description: str | None = None
+    assessment_kind: AssessmentKind | None = None
 
 
 class ProjectStageCreate(BaseModel):
@@ -55,6 +59,7 @@ class ProjectTypeFull(BaseModel):
     id: int
     name: str
     description: str | None = None
+    assessment_kind: AssessmentKind | None = None
     stages: list[ProjectStageItem] = []
 
     model_config = ConfigDict(from_attributes=True)
