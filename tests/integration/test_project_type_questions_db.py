@@ -24,7 +24,6 @@ from src.repository.project_type_question_repository import ProjectTypeQuestionR
 from src.schema.project_type_question import QuestionListReplace
 from src.services.project_type_question_service import ProjectTypeQuestionService
 from src.services.question_template_service import QuestionTemplateService
-from tests.integration.conftest import migrate
 
 pytestmark = pytest.mark.integration
 
@@ -285,11 +284,11 @@ async def test_concurrent_writes_wait_for_parent_lock_and_keep_whole_list(seeded
     assert [q.position for q in result.questions] == [0, 1, 2]
 
 
-def test_migration_preserves_existing_types_and_stages(question_database_url):
+def test_migration_preserves_existing_types_and_stages(question_database_url, run_migrations):
     url = question_database_url
     engine = create_engine(make_url(url).set(drivername="postgresql+psycopg2"))
     try:
-        migrate(url, "upgrade", "b2c3d4e5f6a7")
+        run_migrations(url, "upgrade", "b2c3d4e5f6a7")
         with engine.begin() as conn:
             tid = conn.execute(
                 text("INSERT INTO project_type(name) VALUES ('Курсовой проект') RETURNING id")
@@ -311,14 +310,14 @@ def test_migration_preserves_existing_types_and_stages(question_database_url):
                 .values(name="Существующий проект", author_id=user_id, project_type_id=tid)
                 .returning(Project.id)
             ).scalar_one()
-        migrate(url, "upgrade", "head")
-        migrate(url, "check")
+        run_migrations(url, "upgrade", "head")
+        run_migrations(url, "check")
         with engine.connect() as conn:
             assert conn.execute(text("SELECT count(*) FROM project_type_question")).scalar_one() == 0
-        migrate(url, "downgrade", "b2c3d4e5f6a7")
+        run_migrations(url, "downgrade", "b2c3d4e5f6a7")
         assert "project_type_question" not in inspect(engine).get_table_names()
-        migrate(url, "upgrade", "head")
-        migrate(url, "check")
+        run_migrations(url, "upgrade", "head")
+        run_migrations(url, "check")
         with engine.connect() as conn:
             assert conn.execute(text("SELECT id,name FROM project_type")).one() == (tid, "Курсовой проект")
             assert conn.execute(text("SELECT id,name,project_type_id FROM project")).one() == (
@@ -327,9 +326,9 @@ def test_migration_preserves_existing_types_and_stages(question_database_url):
                 tid,
             )
             assert conn.execute(text("SELECT id,name FROM project_stage")).one() == (sid, "Защита")
-        migrate(url, "downgrade", "base")
-        migrate(url, "upgrade", "head")
-        migrate(url, "check")
+        run_migrations(url, "downgrade", "base")
+        run_migrations(url, "upgrade", "head")
+        run_migrations(url, "check")
     finally:
         engine.dispose()
 

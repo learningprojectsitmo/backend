@@ -31,6 +31,11 @@ def migrate(url: str, *args: str) -> None:
 
 
 @pytest.fixture
+def run_migrations():
+    return migrate
+
+
+@pytest.fixture
 def question_database_url() -> Iterator[str]:
     explicit = os.environ.get("QUESTION_TEST_DATABASE_URL")
     if not explicit:
