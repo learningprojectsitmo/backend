@@ -190,3 +190,10 @@ dev = [
     "pytest>=8.4.2",
     "pytest-asyncio>=1.2.0",
 ]
+
+[tool.setuptools.package-data]
+"src.data.assessment" = ["question_templates.json"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src", "src.*"]
