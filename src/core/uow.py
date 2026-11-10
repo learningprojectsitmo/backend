@@ -25,12 +25,13 @@ class SqlAlchemyUoW:
         return self
 
     async def __aexit__(self, _exc_type: object, exc: object, _tb: object) -> None:  # type: ignore[override]
-        if exc:
-            await self.session.rollback()
-        else:
-            await self.session.commit()
-
-        await self.session.close()
+        try:
+            if exc:
+                await self.session.rollback()
+            else:
+                await self.session.commit()
+        finally:
+            await self.session.close()
 
     async def commit(self) -> None:
         await self.session.commit()

@@ -1,13 +1,19 @@
 from __future__ import annotations
 
 import asyncio
+from copy import deepcopy
 
+import httpx
 import pytest
 import pytest_asyncio
+from fastapi import FastAPI
 from sqlalchemy import create_engine, inspect, null, select, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import DBAPIError, IntegrityError
 
+from src.api.v1.routes import routers
+from src.core.container import get_uow
+from src.core.dependencies import get_current_user
 from src.core.exceptions import NotFoundError, PermissionError
 from src.model.project import Project, ProjectStage, ProjectType
 from src.model.project_type_question import ProjectTypeQuestion, ProjectTypeQuestionLevel
@@ -335,3 +341,86 @@ async def test_local_admin_has_no_access_to_other_workspace(seeded):
             await service(u).replace_questions(
                 spaces[1], types[1], QuestionListReplace(questions=[]), users["local_admin"]
             )
+
+
+def http_app(make_uow, user):
+    app = FastAPI()
+    app.include_router(routers)
+    app.state.test_user = user
+    app.dependency_overrides[get_current_user] = lambda: app.state.test_user
+
+    async def transaction():
+        async with make_uow() as u:
+            yield u
+
+    app.dependency_overrides[get_uow] = transaction
+    return app
+
+
+@pytest.mark.asyncio
+async def test_http_copy_update_scope_and_validation_persist_correctly(seeded):
+    _, make_uow, users, spaces, types = seeded
+    app = http_app(make_uow, users["teacher"])
+    path = f"/v1/workspaces/{spaces[0]}/project-types/{types[0]}/questions"
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(path + "/apply-template", json={"template_code": "product"})
+        assert response.status_code == 200
+        initial = response.json()
+        assert len(initial["questions"]) == 5
+        assert (await client.get(path)).json() == initial
+        invalid = deepcopy(initial["questions"])
+        invalid[-1]["levels"].pop()
+        for q in invalid:
+            q.pop("position")
+        assert (await client.put(path, json={"questions": invalid})).status_code == 422
+        assert (await client.get(path)).json() == initial
+        for name, status in [
+            ("member", 403),
+            ("manager", 403),
+            ("null_member", 403),
+            ("other_teacher", 404),
+            ("outsider", 404),
+        ]:
+            app.state.test_user = users[name]
+            assert (await client.put(path, json={"questions": []})).status_code == status
+        app.state.test_user = users["local_teacher"]
+        items = deepcopy(initial["questions"])
+        for q in items:
+            q.pop("position")
+        items[0]["levels"][0]["description"] = "Изменено через API"
+        items.append(custom("Свой вопрос API"))
+        result = await client.put(path, json={"questions": items})
+        assert result.status_code == 200
+        assert len(result.json()["questions"]) == 6
+        assert result.json()["questions"][0]["id"] == initial["questions"][0]["id"]
+        assert result.json()["questions"][0]["levels"][0]["description"] == "Изменено через API"
+        assert (await client.get(path)).json() == result.json()
+        assert (await client.get(f"/v1/workspaces/{spaces[0]}/project-types/{types[1]}/questions")).status_code == 404
+        assert (await client.get(f"/v1/workspaces/{spaces[0]}/project-types/{types[2]}/questions")).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_http_commit_failure_never_reports_success(seeded):
+    engine, make_uow, users, spaces, types = seeded
+    async with make_uow() as u:
+        initial = await service(u).apply_template(spaces[0], types[0], "product", users["teacher"])
+    async with engine.begin() as conn:
+        await conn.execute(
+            text(
+                "CREATE FUNCTION reject_question_commit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.text = 'commit failure' THEN RAISE EXCEPTION 'deferred test failure'; END IF; RETURN NEW; END $$"
+            )
+        )
+        await conn.execute(
+            text(
+                "CREATE CONSTRAINT TRIGGER reject_question_commit AFTER INSERT OR UPDATE ON project_type_question DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION reject_question_commit()"
+            )
+        )
+    app = http_app(make_uow, users["teacher"])
+    path = f"/v1/workspaces/{spaces[0]}/project-types/{types[0]}/questions"
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app, raise_app_exceptions=False), base_url="http://test"
+    ) as client:
+        response = await client.put(path, json={"questions": [custom("commit failure")]})
+    assert response.status_code == 500
+    async with make_uow() as u:
+        assert await service(u).get_questions(spaces[0], types[0], users["teacher"]) == initial

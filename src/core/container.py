@@ -17,6 +17,7 @@ from src.repository.password_reset_repository import PasswordResetRepository
 from src.repository.permission_repository import PermissionRepository
 from src.repository.portfolio_repository import PortfolioRepository
 from src.repository.project_repository import ProjectRepository
+from src.repository.project_type_question_repository import ProjectTypeQuestionRepository
 from src.repository.resume_repository import ResumeRepository
 from src.repository.role_repository import RolePermissionRepository, RoleRepository
 from src.repository.session_repository import SessionRepository
@@ -45,6 +46,8 @@ from src.services.permission_service import PermissionService
 from src.services.portfolio_service import PortfolioService
 from src.services.profile_service import ProfileService
 from src.services.project_service import ProjectService
+from src.services.project_type_question_service import ProjectTypeQuestionService
+from src.services.question_template_service import QuestionTemplateService
 from src.services.resume_service import ResumeService
 from src.services.role_service import RoleService
 from src.services.search_service import SearchService
@@ -510,3 +513,20 @@ async def seed_fixtures_on_startup() -> None:
             workspace_service,
         )
         await fixtures_service.create_fixtures()
+
+
+async def get_question_template_service() -> QuestionTemplateService:
+    return QuestionTemplateService()
+
+
+async def get_project_type_question_repository(
+    uow: IUnitOfWork = Depends(get_uow, scope="function"),
+) -> ProjectTypeQuestionRepository:
+    return ProjectTypeQuestionRepository(uow)
+
+
+async def get_project_type_question_service(
+    repository: ProjectTypeQuestionRepository = Depends(get_project_type_question_repository),
+    templates: QuestionTemplateService = Depends(get_question_template_service),
+) -> ProjectTypeQuestionService:
+    return ProjectTypeQuestionService(repository, templates)
