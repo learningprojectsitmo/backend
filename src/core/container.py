@@ -47,6 +47,7 @@ from src.services.profile_service import ProfileService
 from src.services.project_service import ProjectService
 from src.services.resume_service import ResumeService
 from src.services.role_service import RoleService
+from src.services.rubric_catalog_service import RubricCatalogService
 from src.services.search_service import SearchService
 from src.services.session_service import SessionService
 from src.services.settings_service import SpaceSettingsService
@@ -510,3 +511,7 @@ async def seed_fixtures_on_startup() -> None:
             workspace_service,
         )
         await fixtures_service.create_fixtures()
+
+
+async def get_rubric_catalog_service() -> RubricCatalogService:
+    return RubricCatalogService()
