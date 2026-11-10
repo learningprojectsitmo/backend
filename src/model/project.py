@@ -24,6 +24,7 @@ from src.core.database import Base
 
 if TYPE_CHECKING:
     from src.model.kanban_models import Column
+    from src.model.project_type_question import ProjectTypeQuestion
     from src.model.resume import Resume
     from src.model.user import User
     from src.model.wiki import WikiPage
@@ -266,6 +267,12 @@ class ProjectType(Base):
         back_populates="project_type",
         cascade="all, delete-orphan",
         order_by="ProjectStage.order",
+    )
+    questions: Mapped[list[ProjectTypeQuestion]] = relationship(
+        back_populates="project_type",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="ProjectTypeQuestion.position",
     )
     projects: Mapped[list[Project]] = relationship(back_populates="project_type")
 

@@ -10,6 +10,7 @@ from src.model.language import Language
 from src.model.notification import Notification, NotificationType
 from src.model.portfolio import Portfolio
 from src.model.project import Project, ProjectParticipation, ProjectStatus, ProjectVacancy, Response, Tag
+from src.model.project_type_question import ProjectTypeQuestion, ProjectTypeQuestionLevel
 from src.model.resume import (
     Resume,
     ResumeEducation,
@@ -45,6 +46,8 @@ __all__ = [
     "Project",
     "ProjectParticipation",
     "ProjectStatus",
+    "ProjectTypeQuestion",
+    "ProjectTypeQuestionLevel",
     "ProjectVacancy",
     "Response",
     "Resume",
