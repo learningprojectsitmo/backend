@@ -78,6 +78,7 @@ jobs:
 
     env:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/ci_db
+      EXAM_TEST_DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/ci_db
       QUESTION_TEST_DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/ci_db
       SECRET_KEY: ci-secret-key-not-used-for-crypto
       ENVIRONMENT: ci
@@ -108,6 +109,9 @@ jobs:
           alembic downgrade base
           alembic upgrade head
           alembic check
+
+      - name: Verify exams on disposable PostgreSQL
+        run: pytest tests/integration/test_exams_db.py --no-cov
 
       - name: Verify project type questions on disposable PostgreSQL
         run: pytest tests/integration/test_project_type_questions_db.py --no-cov

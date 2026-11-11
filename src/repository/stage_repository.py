@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import exists, or_, select
 from sqlalchemy.orm import selectinload
 
 from src.core.uow import IUnitOfWork
+from src.model.exam import ExamSettingsProjectType
 from src.model.project import ProjectStage, ProjectType, StageTransition
+from src.model.project_type_question import ProjectTypeQuestionLock
 from src.repository.base_repository import BaseRepository
 from src.schema.stage import ProjectStageCreate, ProjectStageUpdate, ProjectTypeCreate, ProjectTypeUpdate
 
@@ -13,6 +15,20 @@ class ProjectTypeRepository(BaseRepository[ProjectType, ProjectTypeCreate, Proje
     def __init__(self, uow: IUnitOfWork) -> None:
         super().__init__(uow)
         self._model = ProjectType
+
+    async def get_by_id_for_update(self, type_id: int) -> ProjectType | None:
+        return (
+            await self.uow.session.execute(select(ProjectType).where(ProjectType.id == type_id).with_for_update())
+        ).scalar_one_or_none()
+
+    async def is_used_by_exam(self, type_id: int) -> bool:
+        query = select(
+            or_(
+                exists().where(ExamSettingsProjectType.project_type_id == type_id),
+                exists().where(ProjectTypeQuestionLock.project_type_id == type_id),
+            )
+        )
+        return bool((await self.uow.session.execute(query)).scalar())
 
     async def get_by_id_with_stages(self, id: int) -> ProjectType | None:
         query = select(ProjectType).where(ProjectType.id == id).options(selectinload(ProjectType.stages))

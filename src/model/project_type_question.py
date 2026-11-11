@@ -3,7 +3,16 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, String, UniqueConstraint, func
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    ForeignKeyConstraint,
+    Integer,
+    String,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.core.database import Base
@@ -58,3 +67,25 @@ class ProjectTypeQuestionLevel(Base):
     score: Mapped[int] = mapped_column(Integer, primary_key=True)
     description: Mapped[str] = mapped_column(String(4000), nullable=False)
     question: Mapped[ProjectTypeQuestion] = relationship(back_populates="levels")
+
+
+class ProjectTypeQuestionLock(Base):
+    __tablename__ = "project_type_question_lock"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["project_type_id", "workspace_id"],
+            ["project_type.id", "project_type.workspace_id"],
+            name="fk_ptql_type_scope",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["first_exam_id", "workspace_id"],
+            ["exam.id", "exam.workspace_id"],
+            name="fk_ptql_exam_scope",
+            ondelete="RESTRICT",
+        ),
+    )
+    project_type_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    workspace_id: Mapped[int] = mapped_column(Integer)
+    first_exam_id: Mapped[int] = mapped_column(Integer)
+    locked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

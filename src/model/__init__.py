@@ -4,13 +4,14 @@ from src.model.app_setting import AppSetting
 from src.model.audit import AuditLog
 from src.model.auth import NewUser, PasswordReset, Session
 from src.model.education import Education
+from src.model.exam import Exam, ExamSettingsProjectType, ExamSettingsRevision
 from src.model.ideas import Idea, IdeaComment, IdeaTag, IdeaVote
 from src.model.kanban_models import Column, Subtask, Task, TaskAssignee, TaskHistory
 from src.model.language import Language
 from src.model.notification import Notification, NotificationType
 from src.model.portfolio import Portfolio
 from src.model.project import Project, ProjectParticipation, ProjectStatus, ProjectVacancy, Response, Tag
-from src.model.project_type_question import ProjectTypeQuestion, ProjectTypeQuestionLevel
+from src.model.project_type_question import ProjectTypeQuestion, ProjectTypeQuestionLevel, ProjectTypeQuestionLock
 from src.model.resume import (
     Resume,
     ResumeEducation,
@@ -32,6 +33,9 @@ __all__ = [
     "AuditLog",
     "Column",
     "Education",
+    "Exam",
+    "ExamSettingsProjectType",
+    "ExamSettingsRevision",
     "Idea",
     "IdeaComment",
     "IdeaTag",
@@ -48,6 +52,7 @@ __all__ = [
     "ProjectStatus",
     "ProjectTypeQuestion",
     "ProjectTypeQuestionLevel",
+    "ProjectTypeQuestionLock",
     "ProjectVacancy",
     "Response",
     "Resume",

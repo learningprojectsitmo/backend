@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, ClassVar
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from src.core.exceptions import NotFoundError, PermissionError, ValidationError
+from src.core.exceptions import BusinessLogicError, NotFoundError, PermissionError, ValidationError
 from src.model.notification import NotificationType
 from src.model.project import (
     Project,
@@ -65,7 +65,7 @@ class ProjectStageService(BaseService[Project, dict, dict]):
 
     async def _can_manage_workspace(self, workspace_id: int | None, user_id: int) -> bool:
         """Может ли пользователь управлять типами проектов в данном пространстве."""
-        user = await self._type_repository.uow.session.get(User, user_id)
+        user = await self._type_repository.uow.session.get(User, user_id, options=[selectinload(User.role)])
         if not user:
             return False
         role_name = user.role.name if user.role else ""
@@ -153,6 +153,12 @@ class ProjectStageService(BaseService[Project, dict, dict]):
         if not await self._can_manage_workspace(ptype.workspace_id, user_id):
             raise PermissionError("Only admin/teacher can manage project types")
         self._ensure_type_belongs(ptype, workspace_id)
+        if await self._type_repository.get_by_id_for_update(type_id) is None:
+            return False
+        if await self._type_repository.is_used_by_exam(type_id):
+            raise BusinessLogicError(
+                {"code": "project_type_in_use", "message": "Project type is referenced by an exam"}
+            )
         await self._type_repository.delete(type_id)
         return True
 
@@ -266,7 +272,7 @@ class ProjectStageService(BaseService[Project, dict, dict]):
         await self._type_repository.uow.session.flush()
 
     async def _is_teacher(self, project: Project, user_id: int) -> bool:
-        user = await self._type_repository.uow.session.get(User, user_id)
+        user = await self._type_repository.uow.session.get(User, user_id, options=[selectinload(User.role)])
         if not user:
             return False
         role_name = user.role.name if user.role else ""

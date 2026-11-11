@@ -6,6 +6,8 @@ from typing import Annotated, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, StrictInt, field_validator, model_validator
 
+PERCENT_TOTAL = 100
+
 PositiveId = Annotated[StrictInt, Field(ge=1)]
 Minute = Annotated[StrictInt, Field(ge=0, le=1440)]
 PositiveMinute = Annotated[StrictInt, Field(ge=1, le=1440)]
@@ -22,7 +24,7 @@ class ExamWeights(ExamDTO):
 
     @model_validator(mode="after")
     def total(self) -> Self:
-        if self.teacher + self.manager + self.member != 100:
+        if self.teacher + self.manager + self.member != PERCENT_TOTAL:
             raise ValueError("Weights must sum to 100")
         return self
 
@@ -51,7 +53,7 @@ class ExamConfiguration(ExamDTO):
     @classmethod
     def decimal_input(cls, value):
         if isinstance(value, bool):
-            raise ValueError("Boolean is not a score")
+            raise ValueError("Boolean is not a score")  # noqa: TRY004 -- Pydantic requires ValueError for 422
         return value
 
     @field_validator("max_score")
@@ -77,8 +79,8 @@ class ExamConfiguration(ExamDTO):
 
     @model_validator(mode="after")
     def registration_order(self) -> Self:
-        a, b = self.registration_opens_at, self.registration_closes_at
-        if (a and a > self.starts_at) or (b and b > self.starts_at) or (a and b and a >= b):
+        a, b = (self.registration_opens_at, self.registration_closes_at)
+        if (a and a > self.starts_at) or (b and b > self.starts_at) or (a and b and (a >= b)):
             raise ValueError("Invalid registration period")
         return self
 

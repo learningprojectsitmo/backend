@@ -29,6 +29,7 @@ from src.services.question_template_service import QuestionTemplateService
 @pytest.mark.asyncio
 async def test_write_scope_and_role_matrix(global_role, membership, local_role, author, status):
     repo = SimpleNamespace(
+        get_question_lock=AsyncMock(return_value=None),
         get_workspace=AsyncMock(return_value=SimpleNamespace(author_id=7 if author else 8)),
         get_type=AsyncMock(return_value=SimpleNamespace(id=42, workspace_id=3)),
         get_membership_role=AsyncMock(return_value=(membership, local_role)),
@@ -52,6 +53,7 @@ async def test_write_scope_and_role_matrix(global_role, membership, local_role, 
 @pytest.mark.asyncio
 async def test_null_role_member_can_read_but_foreign_type_is_not_found():
     repo = SimpleNamespace(
+        get_question_lock=AsyncMock(return_value=None),
         get_workspace=AsyncMock(return_value=SimpleNamespace(author_id=8)),
         get_type=AsyncMock(return_value=SimpleNamespace(id=42, workspace_id=3)),
         get_membership_role=AsyncMock(return_value=(True, None)),

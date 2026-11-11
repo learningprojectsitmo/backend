@@ -53,7 +53,7 @@ def _mock_project_fetch(session, project: Project | None) -> None:
 def _mock_teacher(session, teacher: Mock, model_cls_name: str = "User") -> None:
     """Пользователь-преподаватель достаётся через session.get(User, user_id)."""
     session.get = AsyncMock(
-        side_effect=lambda model_cls, _user_id: teacher if model_cls.__name__ == model_cls_name else None
+        side_effect=lambda model_cls, _user_id, **_kwargs: teacher if model_cls.__name__ == model_cls_name else None
     )
 
 
@@ -492,7 +492,7 @@ class TestProjectTypeCRUDWorkspaceScoped:
 
     async def _mock_session_user(self, type_repo, user: Mock) -> None:
         type_repo.uow.session.get = AsyncMock(
-            side_effect=lambda model_cls, _user_id: user if model_cls.__name__ == "User" else None
+            side_effect=lambda model_cls, _user_id, **_kwargs: user if model_cls.__name__ == "User" else None
         )
 
     @pytest.mark.asyncio

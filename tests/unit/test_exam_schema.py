@@ -13,26 +13,26 @@ def create_payload():
 
 
 def complete_configuration():
-    return dict(
-        title="Защита",
-        description=None,
-        starts_at="2026-11-30T07:00:00Z",
-        connection_url=None,
-        project_type_ids=[42],
-        registration_opens_at=None,
-        registration_closes_at=None,
-        weights=dict(teacher=60, manager=30, member=10),
-        max_score="25.00",
-        presentation_minutes=7,
-        questions_minutes=7,
-        transition_minutes=1,
-        assessment_window_minutes=3,
-    )
+    return {
+        "title": "Защита",
+        "description": None,
+        "starts_at": "2026-11-30T07:00:00Z",
+        "connection_url": None,
+        "project_type_ids": [42],
+        "registration_opens_at": None,
+        "registration_closes_at": None,
+        "weights": {"teacher": 60, "manager": 30, "member": 10},
+        "max_score": "25.00",
+        "presentation_minutes": 7,
+        "questions_minutes": 7,
+        "transition_minutes": 1,
+        "assessment_window_minutes": 3,
+    }
 
 
 def test_create_expands_confirmed_defaults():
     c = ExamCreate.model_validate(create_payload()).to_configuration()
-    assert c.weights.model_dump() == dict(teacher=60, manager=30, member=10)
+    assert c.weights.model_dump() == {"teacher": 60, "manager": 30, "member": 10}
     assert c.max_score == Decimal("25.00")
     assert (c.presentation_minutes, c.questions_minutes, c.transition_minutes, c.assessment_window_minutes) == (
         7,
@@ -80,7 +80,7 @@ def test_weights_and_registration_order():
     data["weights"]["teacher"] = 59
     with pytest.raises(ValidationError):
         ExamConfiguration.model_validate(data)
-    data["weights"] = dict(teacher=0, manager=100, member=0)
+    data["weights"] = {"teacher": 0, "manager": 100, "member": 0}
     assert ExamConfiguration.model_validate(data).weights.manager == 100
     data["registration_opens_at"] = "2026-12-01T00:00:00Z"
     with pytest.raises(ValidationError):

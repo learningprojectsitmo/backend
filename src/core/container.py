@@ -8,6 +8,7 @@ from src.core.uow import IUnitOfWork, SqlAlchemyUoW
 from src.repository.app_setting_repository import AppSettingRepository
 from src.repository.audit_repository import AuditRepository
 from src.repository.education_repository import EducationRepository
+from src.repository.exam_repository import ExamRepository
 from src.repository.ideas_repository import IdeaCommentRepository, IdeaRepository, IdeaTagRepository
 from src.repository.invitation_repository import InvitationRepository
 from src.repository.kanban_repository import KanbanColumnRepository, KanbanSubtaskRepository, KanbanTaskRepository
@@ -35,6 +36,7 @@ from src.services.app_setting_service import AppSettingService
 from src.services.audit_service import AuditService
 from src.services.auth_service import AuthService
 from src.services.education_service import EducationService
+from src.services.exam_service import ExamService
 from src.services.fixtures_service import FixtureService
 from src.services.ideas_service import IdeaService, IdeaTagService
 from src.services.invitation_service import InvitationService
@@ -530,3 +532,13 @@ async def get_project_type_question_service(
     templates: QuestionTemplateService = Depends(get_question_template_service),
 ) -> ProjectTypeQuestionService:
     return ProjectTypeQuestionService(repository, templates)
+
+
+async def get_exam_repository(uow: IUnitOfWork = Depends(get_uow, scope="function")):
+    return ExamRepository(uow)
+
+
+async def get_exam_service(
+    repository=Depends(get_exam_repository), questions=Depends(get_project_type_question_repository)
+):
+    return ExamService(repository, questions)
