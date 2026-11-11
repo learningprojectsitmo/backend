@@ -98,3 +98,13 @@ def test_replace_requires_reason_and_strict_version():
     for version, reason in [(True, "change"), (1, " "), ("1", "change")]:
         with pytest.raises(ValidationError):
             ExamSettingsReplace(expected_version=version, reason=reason, configuration=complete_configuration())
+
+
+@pytest.mark.parametrize("field", ["starts_at", "registration_opens_at", "registration_closes_at"])
+@pytest.mark.parametrize("value", ["0001-01-01T00:00:00+03:00", "9999-12-31T23:59:59-03:00"])
+@pytest.mark.parametrize("dto", [ExamCreate, ExamConfiguration])
+def test_utc_overflow_is_validation_error(field, value, dto):
+    data = complete_configuration()
+    data[field] = value
+    with pytest.raises(ValidationError):
+        dto.model_validate(data)

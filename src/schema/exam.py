@@ -67,7 +67,10 @@ class ExamConfiguration(ExamDTO):
         if value is not None:
             if value.tzinfo is None or value.utcoffset() is None:
                 raise ValueError("Timezone is required")
-            return value.astimezone(UTC)
+            try:
+                return value.astimezone(UTC)
+            except OverflowError as error:
+                raise ValueError("Timestamp is outside the supported UTC range") from error
         return value
 
     @field_validator("project_type_ids")

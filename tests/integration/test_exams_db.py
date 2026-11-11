@@ -556,3 +556,150 @@ def test_migration_cycle_preserves_existing_questions(exam_database_url, run_mig
         run_migrations(exam_database_url, "check")
     finally:
         engine.dispose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("count", [1, 6])
+async def test_publish_custom_question_counts(seeded, count):
+    _, make_uow, users, spaces, types = seeded
+    async with make_uow() as u:
+        await service(u).replace_questions(
+            spaces[0], types[0], QuestionListReplace(questions=[custom(str(n)) for n in range(count)]), users["teacher"]
+        )
+        a = await exams(u).create(
+            spaces[0],
+            ExamCreate(title="Custom", starts_at="2026-11-30T07:00:00Z", project_type_ids=[types[0]]),
+            users["teacher"],
+        )
+        assert (
+            await exams(u).publish(spaces[0], a.id, ExamPublish(expected_version=1), users["teacher"])
+        ).status == "published"
+
+
+@pytest.mark.asyncio
+async def test_noop_and_explicit_registration_boundaries(seeded):
+    _, make_uow, users, spaces, types = seeded
+    a = await ready(make_uow, users, spaces, types)
+    async with make_uow() as u:
+        same = await exams(u).replace_settings(
+            spaces[0],
+            a.id,
+            ExamSettingsReplace(expected_version=1, reason="No change", configuration=a.configuration),
+            users["teacher"],
+        )
+        assert same.current_settings_version == 1
+        config = a.configuration.model_copy(
+            update={
+                "registration_opens_at": datetime(2026, 11, 29, 10, tzinfo=UTC),
+                "registration_closes_at": datetime(2026, 11, 29, 12, tzinfo=UTC),
+            }
+        )
+        await exams(u).replace_settings(
+            spaces[0],
+            a.id,
+            ExamSettingsReplace(expected_version=1, reason="Period", configuration=config),
+            users["teacher"],
+        )
+        await exams(u).publish(spaces[0], a.id, ExamPublish(expected_version=2), users["teacher"])
+    for hour, allowed in [(9, False), (10, True), (11, True), (12, False), (13, False)]:
+        if allowed:
+            async with make_uow() as u:
+                assert (
+                    await exams(u).require_self_registration_open(
+                        spaces[0], a.id, users["manager"], now=datetime(2026, 11, 29, hour, tzinfo=UTC)
+                    )
+                ).version == 2
+        else:
+            with pytest.raises(BusinessLogicError) as error:
+                async with make_uow() as u:
+                    await exams(u).require_self_registration_open(
+                        spaces[0], a.id, users["manager"], now=datetime(2026, 11, 29, hour, tzinfo=UTC)
+                    )
+            assert error.value.detail["code"] == "registration_closed"
+
+
+@pytest.mark.asyncio
+async def test_lock_preserved_across_exams_and_later_rollback(seeded):
+    _, make_uow, users, spaces, types = seeded
+    a = await published(make_uow, users, spaces, types)
+    async with make_uow() as u:
+        first = await exams(u).prepare_assessment_window(
+            spaces[0], a.id, types[0], expected_version=1, opened_at=datetime(2026, 11, 30, 10, tzinfo=UTC)
+        )
+    async with make_uow() as u:
+        b = await exams(u).create(
+            spaces[0],
+            ExamCreate(title="Second", starts_at="2026-12-01T07:00:00Z", project_type_ids=[types[0]]),
+            users["teacher"],
+        )
+        await exams(u).publish(spaces[0], b.id, ExamPublish(expected_version=1), users["teacher"])
+    with pytest.raises(RuntimeError):
+        async with make_uow() as u:
+            await exams(u).prepare_assessment_window(
+                spaces[0], b.id, types[0], expected_version=1, opened_at=datetime(2026, 12, 1, 10, tzinfo=UTC)
+            )
+            raise RuntimeError("rollback later window")
+    async with make_uow() as u:
+        marker = await ProjectTypeQuestionRepository(u).get_question_lock(types[0])
+        assert (marker.first_exam_id, marker.locked_at) == (a.id, first.opened_at)
+
+
+@pytest.mark.asyncio
+async def test_list_order_pagination_and_hidden_draft_filter(seeded):
+    _, make_uow, users, spaces, _types = seeded
+    ids = []
+    async with make_uow() as u:
+        for day in [30, 29, 29]:
+            a = await exams(u).create(
+                spaces[0], ExamCreate(title="Exam", starts_at=f"2026-11-{day}T07:00:00Z"), users["teacher"]
+            )
+            ids.append(a.id)
+    async with make_uow() as u:
+        first = await exams(u).list(spaces[0], users["teacher"], status=None, limit=1, offset=0)
+        second = await exams(u).list(spaces[0], users["teacher"], status=None, limit=2, offset=1)
+        hidden = await exams(u).list(spaces[0], users["manager"], status="draft", limit=50, offset=0)
+    assert [r.id for r in first.items] == [ids[1]] and first.has_more
+    assert [r.id for r in second.items] == [ids[2], ids[0]] and (not second.has_more)
+    assert hidden.items == [] and (not hidden.has_more)
+
+
+@pytest.mark.asyncio
+async def test_deferred_update_commit_rolls_back_current_revision(seeded):
+    engine, make_uow, users, spaces, types = seeded
+    a = await ready(make_uow, users, spaces, types)
+    async with engine.begin() as connection:
+        await connection.execute(
+            text(
+                "CREATE FUNCTION fail_exam_update() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'late update failure'; RETURN NEW; END $$"
+            )
+        )
+        await connection.execute(
+            text(
+                "CREATE CONSTRAINT TRIGGER exam_update_failure AFTER UPDATE ON exam DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION fail_exam_update()"
+            )
+        )
+    app = FastAPI()
+    app.include_router(routers)
+
+    async def dependency():
+        async with make_uow() as u:
+            yield u
+
+    app.dependency_overrides[get_uow] = dependency
+    app.dependency_overrides[get_current_user] = lambda: users["teacher"]
+    config = a.configuration.model_dump(mode="json")
+    config["assessment_window_minutes"] = 5
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app, raise_app_exceptions=False), base_url="http://test"
+    ) as client:
+        result = await client.put(
+            f"/v1/workspaces/{spaces[0]}/exams/{a.id}/settings",
+            json={"expected_version": 1, "reason": "Change", "configuration": config},
+        )
+    assert result.status_code == 500, result.text
+    async with make_uow() as u:
+        current = await exams(u).get(spaces[0], a.id, users["teacher"])
+        history = await exams(u).list_settings(spaces[0], a.id, users["teacher"], limit=50, offset=0)
+    assert current.current_settings_version == 1 and current.configuration.assessment_window_minutes == 3
+    assert len(history.items) == 1
+    assert engine.pool.checkedout() == 0
