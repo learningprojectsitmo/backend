@@ -7,7 +7,9 @@ from src.core.dependencies import get_current_user, setup_audit
 from src.model.user import User
 from src.schema.exam_attempt import (
     PG_INTEGER_MAX,
+    AttemptCommand,
     AttemptEventListRead,
+    AttemptPause,
     AttemptRead,
     AttemptStart,
     CurrentAttemptRead,
@@ -54,6 +56,42 @@ async def get_attempt(
     service: ExamAttemptService = Depends(get_exam_attempt_service),
 ):
     return await service.get(workspace_id, exam_id, attempt_id, user)
+
+
+@exam_attempt_router.post("/{attempt_id}/questions", response_model=AttemptRead)
+async def questions_attempt(
+    data: AttemptCommand,
+    workspace_id: int = Path(ge=1, le=PG_INTEGER_MAX),
+    exam_id: int = Path(ge=1, le=PG_INTEGER_MAX),
+    attempt_id: int = Path(ge=1, le=PG_INTEGER_MAX),
+    user: User = Depends(get_current_user),
+    service: ExamAttemptService = Depends(get_exam_attempt_service),
+):
+    return await service.questions(workspace_id, exam_id, attempt_id, data, user)
+
+
+@exam_attempt_router.post("/{attempt_id}/pause", response_model=AttemptRead)
+async def pause_attempt(
+    data: AttemptPause,
+    workspace_id: int = Path(ge=1, le=PG_INTEGER_MAX),
+    exam_id: int = Path(ge=1, le=PG_INTEGER_MAX),
+    attempt_id: int = Path(ge=1, le=PG_INTEGER_MAX),
+    user: User = Depends(get_current_user),
+    service: ExamAttemptService = Depends(get_exam_attempt_service),
+):
+    return await service.pause(workspace_id, exam_id, attempt_id, data, user)
+
+
+@exam_attempt_router.post("/{attempt_id}/resume", response_model=AttemptRead)
+async def resume_attempt(
+    data: AttemptCommand,
+    workspace_id: int = Path(ge=1, le=PG_INTEGER_MAX),
+    exam_id: int = Path(ge=1, le=PG_INTEGER_MAX),
+    attempt_id: int = Path(ge=1, le=PG_INTEGER_MAX),
+    user: User = Depends(get_current_user),
+    service: ExamAttemptService = Depends(get_exam_attempt_service),
+):
+    return await service.resume(workspace_id, exam_id, attempt_id, data, user)
 
 
 @exam_attempt_router.get("/{attempt_id}/events", response_model=AttemptEventListRead)

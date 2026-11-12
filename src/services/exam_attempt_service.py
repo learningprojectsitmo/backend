@@ -11,8 +11,10 @@ from src.model.user import User
 from src.repository.exam_attempt_repository import ExamAttemptRepository
 from src.repository.exam_repository import ExamRepository
 from src.schema.exam_attempt import (
+    AttemptCommand,
     AttemptEventListRead,
     AttemptEventRead,
+    AttemptPause,
     AttemptRead,
     AttemptStart,
     AttemptTiming,
@@ -80,7 +82,7 @@ class ExamAttemptService:
     def _remaining(attempt: ExamAttempt, now: datetime) -> int:
         if attempt.status == "finished":
             return 0
-        return int(((attempt.paused_at or now) - attempt.phase_deadline).total_seconds())
+        return int((attempt.phase_deadline - (attempt.paused_at or now)).total_seconds())
 
     async def _read(self, attempt: ExamAttempt) -> AttemptRead:
         now = self._clock()
@@ -187,6 +189,68 @@ class ExamAttemptService:
         attempt = await self._repository.get(workspace_id, exam_id, attempt_id)
         if attempt is None:
             raise NotFoundError("Attempt not found")
+        return await self._read(attempt)
+
+    async def questions(
+        self, workspace_id: int, exam_id: int, attempt_id: int, data: AttemptCommand, user: User
+    ) -> AttemptRead:
+        _, attempt = await self._lock_attempt(workspace_id, exam_id, attempt_id, user)
+        if attempt.status == "finished":
+            self._conflict("attempt_finished")
+        if attempt.paused_at is not None:
+            self._conflict("attempt_paused")
+        if attempt.status == "questions":
+            return await self._read(attempt)
+        if attempt.version != data.expected_version:
+            self._conflict("attempt_version_conflict")
+        now = self._clock()
+        timing = await self._timing(attempt.exam_id, attempt.settings_version)
+        attempt.status = "questions"
+        attempt.phase_started_at = now
+        attempt.phase_deadline = now + timedelta(minutes=timing.questions_minutes)
+        attempt.version += 1
+        attempt.updated_at = now
+        self._event(attempt, action="questions", user=user, now=now)
+        await self._repository.uow.session.flush()
+        return await self._read(attempt)
+
+    async def pause(
+        self, workspace_id: int, exam_id: int, attempt_id: int, data: AttemptPause, user: User
+    ) -> AttemptRead:
+        _, attempt = await self._lock_attempt(workspace_id, exam_id, attempt_id, user)
+        if attempt.status == "finished":
+            self._conflict("attempt_finished")
+        if attempt.paused_at is not None:
+            return await self._read(attempt)
+        if attempt.version != data.expected_version:
+            self._conflict("attempt_version_conflict")
+        now = self._clock()
+        attempt.paused_at = now
+        attempt.version += 1
+        attempt.updated_at = now
+        self._event(attempt, action="paused", user=user, now=now, reason=data.reason)
+        await self._repository.uow.session.flush()
+        return await self._read(attempt)
+
+    async def resume(
+        self, workspace_id: int, exam_id: int, attempt_id: int, data: AttemptCommand, user: User
+    ) -> AttemptRead:
+        _, attempt = await self._lock_attempt(workspace_id, exam_id, attempt_id, user)
+        if attempt.status == "finished":
+            self._conflict("attempt_finished")
+        if attempt.paused_at is None:
+            return await self._read(attempt)
+        if attempt.version != data.expected_version:
+            self._conflict("attempt_version_conflict")
+        now = self._clock()
+        delta = now - attempt.paused_at
+        attempt.phase_deadline = attempt.phase_deadline + delta
+        attempt.paused_seconds = attempt.paused_seconds + int(delta.total_seconds())
+        attempt.paused_at = None
+        attempt.version += 1
+        attempt.updated_at = now
+        self._event(attempt, action="resumed", user=user, now=now)
+        await self._repository.uow.session.flush()
         return await self._read(attempt)
 
     async def events(
