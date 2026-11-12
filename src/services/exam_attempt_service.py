@@ -170,10 +170,6 @@ class ExamAttemptService:
             constraint = getattr(cause, "constraint_name", None)
             if constraint == "uq_attempt_running_exam":
                 self._conflict("another_defense_active")
-            if constraint == "uq_attempt_registration":
-                existing = await self._repository.by_registration(exam_id, data.registration_id)
-                if existing is not None:
-                    return await self._read(existing), False
             raise
         self._event(attempt, action="started", user=user, now=now)
         await self._repository.uow.session.flush()
