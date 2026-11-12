@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy.exc import IntegrityError
 
 from src.core.exceptions import BusinessLogicError, NotFoundError
-from src.model.exam_attempt import AttemptEvent, ExamAttempt
+from src.model.exam_attempt import AssessmentWindow, AttemptEvent, ExamAttempt
 from src.model.user import User
 from src.repository.exam_attempt_repository import ExamAttemptRepository
 from src.repository.exam_repository import ExamRepository
@@ -250,6 +250,44 @@ class ExamAttemptService:
         attempt.version += 1
         attempt.updated_at = now
         self._event(attempt, action="resumed", user=user, now=now)
+        await self._repository.uow.session.flush()
+        return await self._read(attempt)
+
+    async def finish(
+        self, workspace_id: int, exam_id: int, attempt_id: int, data: AttemptCommand, user: User
+    ) -> AttemptRead:
+        exam, attempt = await self._lock_attempt(workspace_id, exam_id, attempt_id, user)
+        if attempt.status == "finished":
+            return await self._read(attempt)
+        if attempt.version != data.expected_version:
+            self._conflict("attempt_version_conflict")
+        now = self._clock()
+        settings = await self._exam_service.prepare_assessment_window(
+            workspace_id,
+            exam_id,
+            attempt.project_type_id,
+            expected_version=exam.current_settings_version,
+            opened_at=now,
+        )
+        self._repository.uow.session.add(
+            AssessmentWindow(
+                workspace_id=workspace_id,
+                exam_id=exam_id,
+                attempt_id=attempt.id,
+                project_type_id=attempt.project_type_id,
+                settings_version=settings.settings_version,
+                opened_at=settings.opened_at,
+                closes_at=settings.closes_at,
+                created_by=user.id,
+                created_at=now,
+            )
+        )
+        attempt.status = "finished"
+        attempt.finished_at = now
+        attempt.paused_at = None
+        attempt.version += 1
+        attempt.updated_at = now
+        self._event(attempt, action="finished", user=user, now=now)
         await self._repository.uow.session.flush()
         return await self._read(attempt)
 

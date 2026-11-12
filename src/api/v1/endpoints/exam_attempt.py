@@ -94,6 +94,18 @@ async def resume_attempt(
     return await service.resume(workspace_id, exam_id, attempt_id, data, user)
 
 
+@exam_attempt_router.post("/{attempt_id}/finish", response_model=AttemptRead)
+async def finish_attempt(
+    data: AttemptCommand,
+    workspace_id: int = Path(ge=1, le=PG_INTEGER_MAX),
+    exam_id: int = Path(ge=1, le=PG_INTEGER_MAX),
+    attempt_id: int = Path(ge=1, le=PG_INTEGER_MAX),
+    user: User = Depends(get_current_user),
+    service: ExamAttemptService = Depends(get_exam_attempt_service),
+):
+    return await service.finish(workspace_id, exam_id, attempt_id, data, user)
+
+
 @exam_attempt_router.get("/{attempt_id}/events", response_model=AttemptEventListRead)
 async def attempt_events(
     workspace_id: int = Path(ge=1, le=PG_INTEGER_MAX),
