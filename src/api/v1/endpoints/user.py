@@ -87,6 +87,14 @@ async def update_user(
                 detail="Not enough permissions",
             )
 
+    if "role_id" in user_data.model_fields_set and not await user_service.can_update_role(
+        current_user.id, user_id, user_data.role_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only a current global admin can change a user's role",
+        )
+
     def _check_user_exists_or_raise_not_found() -> None:
         if not user:
             raise HTTPException(status_code=404, detail="User not found")

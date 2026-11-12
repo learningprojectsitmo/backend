@@ -9,7 +9,7 @@ from src.core.exceptions import NotFoundError
 from src.core.uow import IUnitOfWork
 from src.model.project import ProjectType
 from src.model.project_type_question import ProjectTypeQuestion, ProjectTypeQuestionLevel, ProjectTypeQuestionLock
-from src.model.user import Role
+from src.model.user import Role, User
 from src.model.workspace import WorkSpace, WorkSpaceParticipation
 from src.schema.project_type_question import QuestionListReplace
 
@@ -25,6 +25,11 @@ class ProjectTypeQuestionRepository:
         query = select(ProjectType).where(ProjectType.id == type_id, ProjectType.workspace_id == workspace_id)
         if lock:
             query = query.with_for_update()
+        return (await self.uow.session.execute(query)).scalar_one_or_none()
+
+    async def get_global_role(self, user_id: int) -> str | None:
+        # Scalar SQL deliberately bypasses a cached authentication User/Role.
+        query = select(Role.name).select_from(User).outerjoin(Role, Role.id == User.role_id).where(User.id == user_id)
         return (await self.uow.session.execute(query)).scalar_one_or_none()
 
     async def get_membership_role(self, workspace_id: int, user_id: int) -> tuple[bool, str | None]:

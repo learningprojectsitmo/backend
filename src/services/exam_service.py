@@ -31,7 +31,7 @@ class ExamService:
         workspace = await self._questions.get_workspace(workspace_id)
         if workspace is None:
             raise NotFoundError("Workspace not found")
-        role = user.role.name if user.role else None
+        role = await self._questions.get_global_role(user.id)
         if role == "admin":
             return True
         member, local = await self._questions.get_membership_role(workspace_id, user.id)

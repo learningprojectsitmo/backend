@@ -117,7 +117,7 @@ class ExamRegistrationService:
             if project.author_id != user.id:
                 raise NotFoundError("Own project not found")
             member, local = await self._questions.get_membership_role(workspace_id, user.id)
-            effective = local if local is not None else (user.role.name if user.role else None)
+            effective = local if local is not None else await self._questions.get_global_role(user.id)
             if not member or effective != "manager":
                 raise PermissionError("Only the team's manager can change its registration")
         return project

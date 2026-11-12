@@ -74,7 +74,7 @@ async def seeded(registration_db, monkeypatch):
             name: User(
                 first_name=name,
                 middle_name="Test",
-                email=f"{name}@example.test",
+                email=f"{name}@example.com",
                 password_hashed="test",
                 role=roles[role],
             )
@@ -1049,3 +1049,127 @@ async def test_slot_writer_role_revoked_while_waiting_is_denied(seeded):
             raise
     assert await asyncio.wait_for(task, 10) == "forbidden"
     assert await count(s, "exam_slot") == 0
+
+
+@pytest.mark.parametrize("actor", ["teacher", "admin", "null_manager"])
+async def test_global_role_revoked_while_waiting_is_denied(seeded, actor):
+    s = seeded
+    ready = asyncio.Event()
+    pids = []
+
+    async def waiting():
+        try:
+            async with s["uow"]() as u:
+                pids.append(await u.session.scalar(text("SELECT pg_backend_pid()")))
+                ready.set()
+                if actor == "null_manager":
+                    return await reg_service(u).create_self(
+                        s["workspace"],
+                        s["exams"][0],
+                        RegistrationCreate(project_id=s["projects"][actor]),
+                        s["users"][actor],
+                    )
+                return await reg_service(u).add_slots(s["workspace"], s["exams"][0], intervals(), s["users"][actor])
+        except (PermissionError, NotFoundError):
+            return "forbidden"
+
+    async with s["uow"]() as first:
+        await ExamRepository(first).get_scoped(s["workspace"], s["exams"][0], lock=True)
+        task = asyncio.create_task(waiting())
+        await asyncio.wait_for(ready.wait(), 5)
+        try:
+            await wait_until_blocked(s, pids[0])
+            await first.session.execute(
+                text("UPDATE public.user SET role_id=(SELECT id FROM role WHERE name='member') WHERE id=:id"),
+                {"id": s["users"][actor].id},
+            )
+        except BaseException:
+            task.cancel()
+            raise
+    assert await asyncio.wait_for(task, 10) == "forbidden"
+    assert await count(s, "exam_slot") == 0
+    assert await count(s, "exam_registration") == 0
+    assert await count(s, "registration_event") == 0
+
+
+async def profile_update(s, actor, body, *, ready=None, pids=None):
+    app = FastAPI()
+    app.include_router(routers)
+
+    async def test_uow():
+        async with s["uow"]() as u:
+            if ready is not None:
+                pids.append(await u.session.scalar(text("SELECT pg_backend_pid()")))
+                ready.set()
+            yield u
+
+    app.dependency_overrides[get_uow] = test_uow
+    app.dependency_overrides[get_current_user] = lambda: s["users"][actor]
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        return await client.put(f"/v1/users/{s['users'][actor].id}", json=body)
+
+
+async def saved_role(s, actor):
+    async with s["engine"].connect() as conn:
+        return await conn.scalar(text("SELECT role_id FROM public.user WHERE id=:id"), {"id": s["users"][actor].id})
+
+
+@pytest.mark.parametrize("actor", ["member", "manager", "teacher"])
+async def test_profile_cannot_promote_own_global_role(seeded, actor):
+    s = seeded
+    original = s["users"][actor].role_id
+    response = await profile_update(s, actor, {"role_id": s["users"]["admin"].role_id})
+    assert response.status_code == 403
+    assert await saved_role(s, actor) == original
+
+
+async def test_profile_allows_unchanged_role_echo_and_personal_fields(seeded):
+    s = seeded
+    response = await profile_update(s, "manager", {"role_id": s["users"]["manager"].role_id, "first_name": "Фёдор"})
+    assert response.status_code == 200
+    assert response.json()["first_name"] == "Фёдор"
+    assert await saved_role(s, "manager") == s["users"]["manager"].role_id
+
+
+async def test_profile_current_admin_can_change_role(seeded):
+    s = seeded
+    teacher_role = s["users"]["teacher"].role_id
+    response = await profile_update(s, "admin", {"role_id": teacher_role})
+    assert response.status_code == 200
+    assert await saved_role(s, "admin") == teacher_role
+
+
+async def test_profile_cached_admin_cannot_restore_revoked_role(seeded):
+    s = seeded
+    member_role = s["users"]["member"].role_id
+    async with s["uow"]() as u:
+        await u.session.execute(
+            text("UPDATE public.user SET role_id=:role WHERE id=:id"),
+            {"role": member_role, "id": s["users"]["admin"].id},
+        )
+    response = await profile_update(s, "admin", {"role_id": s["users"]["admin"].role_id})
+    assert response.status_code == 403
+    assert await saved_role(s, "admin") == member_role
+
+
+async def test_profile_admin_revoked_while_waiting_cannot_restore_role(seeded):
+    s = seeded
+    ready = asyncio.Event()
+    pids = []
+    admin = s["users"]["admin"]
+    async with s["uow"]() as first:
+        await first.session.execute(text("SELECT id FROM public.user WHERE id=:id FOR UPDATE"), {"id": admin.id})
+        task = asyncio.create_task(profile_update(s, "admin", {"role_id": admin.role_id}, ready=ready, pids=pids))
+        await asyncio.wait_for(ready.wait(), 5)
+        try:
+            await wait_until_blocked(s, pids[0])
+            await first.session.execute(
+                text("UPDATE public.user SET role_id=:role WHERE id=:id"),
+                {"role": s["users"]["member"].role_id, "id": admin.id},
+            )
+        except BaseException:
+            task.cancel()
+            raise
+    response = await asyncio.wait_for(task, 10)
+    assert response.status_code == 403
+    assert await saved_role(s, "admin") == s["users"]["member"].role_id
