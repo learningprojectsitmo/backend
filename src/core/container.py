@@ -8,6 +8,7 @@ from src.core.uow import IUnitOfWork, SqlAlchemyUoW
 from src.repository.app_setting_repository import AppSettingRepository
 from src.repository.audit_repository import AuditRepository
 from src.repository.education_repository import EducationRepository
+from src.repository.exam_attempt_repository import ExamAttemptRepository
 from src.repository.exam_registration_repository import ExamRegistrationRepository
 from src.repository.exam_repository import ExamRepository
 from src.repository.ideas_repository import IdeaCommentRepository, IdeaRepository, IdeaTagRepository
@@ -37,6 +38,7 @@ from src.services.app_setting_service import AppSettingService
 from src.services.audit_service import AuditService
 from src.services.auth_service import AuthService
 from src.services.education_service import EducationService
+from src.services.exam_attempt_service import ExamAttemptService
 from src.services.exam_registration_service import ExamRegistrationService
 from src.services.exam_service import ExamService
 from src.services.fixtures_service import FixtureService
@@ -556,3 +558,16 @@ async def get_exam_registration_service(
     questions=Depends(get_project_type_question_repository),
 ):
     return ExamRegistrationService(repository, exam_service, questions)
+
+
+async def get_exam_attempt_repository(uow: IUnitOfWork = Depends(get_uow, scope="function")):
+    return ExamAttemptRepository(uow)
+
+
+async def get_exam_attempt_service(
+    repository=Depends(get_exam_attempt_repository),
+    exams=Depends(get_exam_repository),
+    registrations=Depends(get_exam_registration_service),
+    exam_service=Depends(get_exam_service),
+):
+    return ExamAttemptService(repository, exams, registrations, exam_service)
