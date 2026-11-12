@@ -10,10 +10,16 @@ class ExamAttemptRepository:
     def __init__(self, uow: IUnitOfWork):
         self.uow = uow
 
-    async def by_registration(self, exam_id: int, registration_id: int, *, lock: bool = False) -> ExamAttempt | None:
+    async def by_registration(
+        self, workspace_id: int, exam_id: int, registration_id: int, *, lock: bool = False
+    ) -> ExamAttempt | None:
         query = (
             select(ExamAttempt)
-            .where(ExamAttempt.exam_id == exam_id, ExamAttempt.registration_id == registration_id)
+            .where(
+                ExamAttempt.workspace_id == workspace_id,
+                ExamAttempt.exam_id == exam_id,
+                ExamAttempt.registration_id == registration_id,
+            )
             .execution_options(populate_existing=True)
         )
         if lock:

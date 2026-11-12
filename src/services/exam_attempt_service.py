@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
@@ -50,6 +51,8 @@ class ExamAttemptService:
         exam = await self._exams.get_scoped(workspace_id, exam_id, lock=True)
         if exam is None:
             raise NotFoundError("Exam not found")
+        # Re-check the role from the database after the lock wait, like registrations do.
+        await self._exam_service.require_organizer(workspace_id, exam_id, user)
         return exam
 
     async def _lock_attempt(self, workspace_id: int, exam_id: int, attempt_id: int, user: User):
@@ -82,7 +85,7 @@ class ExamAttemptService:
     def _remaining(attempt: ExamAttempt, now: datetime) -> int:
         if attempt.status == "finished":
             return 0
-        return int((attempt.phase_deadline - (attempt.paused_at or now)).total_seconds())
+        return math.floor((attempt.phase_deadline - (attempt.paused_at or now)).total_seconds())
 
     async def _read(self, attempt: ExamAttempt) -> AttemptRead:
         now = self._clock()
@@ -126,10 +129,8 @@ class ExamAttemptService:
 
     async def start(self, workspace_id: int, exam_id: int, data: AttemptStart, user: User) -> tuple[AttemptRead, bool]:
         exam = await self._lock_exam(workspace_id, exam_id, user)
-        existing = await self._repository.by_registration(exam_id, data.registration_id)
+        existing = await self._repository.by_registration(workspace_id, exam_id, data.registration_id)
         if existing is not None:
-            if existing.workspace_id != workspace_id:
-                raise NotFoundError("Attempt not found")
             return await self._read(existing), False
         if await self._repository.running(exam_id) is not None:
             self._conflict("another_defense_active")
@@ -170,6 +171,7 @@ class ExamAttemptService:
             constraint = getattr(cause, "constraint_name", None)
             if constraint == "uq_attempt_running_exam":
                 self._conflict("another_defense_active")
+            # uq_attempt_registration is unreachable: every start holds the Exam row lock first.
             raise
         self._event(attempt, action="started", user=user, now=now)
         await self._repository.uow.session.flush()
@@ -278,6 +280,8 @@ class ExamAttemptService:
                 created_at=now,
             )
         )
+        if attempt.paused_at is not None:
+            attempt.paused_seconds += int((now - attempt.paused_at).total_seconds())
         attempt.status = "finished"
         attempt.finished_at = now
         attempt.paused_at = None
@@ -290,7 +294,7 @@ class ExamAttemptService:
     async def events(
         self, workspace_id: int, exam_id: int, attempt_id: int, user: User, *, limit: int, offset: int
     ) -> AttemptEventListRead:
-        await self._lock_exam(workspace_id, exam_id, user)
+        await self._exam_service.require_organizer(workspace_id, exam_id, user)
         if await self._repository.get(workspace_id, exam_id, attempt_id) is None:
             raise NotFoundError("Attempt not found")
         rows = await self._repository.events(attempt_id, limit=limit, offset=offset)

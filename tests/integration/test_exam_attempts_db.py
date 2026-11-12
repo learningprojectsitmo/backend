@@ -337,7 +337,7 @@ async def test_repeat_pause_resume_and_questions_are_noop(seeded):
             s["workspace"], s["exams"][0], attempt.id, AttemptCommand(expected_version=1), s["users"]["teacher"]
         )
         repeated = await attempt_service(u, clock).questions(
-            s["workspace"], s["exams"][0], attempt.id, AttemptCommand(expected_version=1), s["users"]["teacher"]
+            s["workspace"], s["exams"][0], attempt.id, AttemptCommand(expected_version=99), s["users"]["teacher"]
         )
     assert (repeated.version, repeated.phase_deadline) == (first.version, first.phase_deadline)
 
@@ -347,7 +347,7 @@ async def test_repeat_pause_resume_and_questions_are_noop(seeded):
             s["workspace"], s["exams"][0], attempt.id, AttemptPause(expected_version=2), s["users"]["teacher"]
         )
         paused_again = await attempt_service(u, clock).pause(
-            s["workspace"], s["exams"][0], attempt.id, AttemptPause(expected_version=2), s["users"]["teacher"]
+            s["workspace"], s["exams"][0], attempt.id, AttemptPause(expected_version=99), s["users"]["teacher"]
         )
     assert (paused_again.version, paused_again.paused_at) == (paused.version, paused.paused_at)
 
@@ -357,7 +357,7 @@ async def test_repeat_pause_resume_and_questions_are_noop(seeded):
             s["workspace"], s["exams"][0], attempt.id, AttemptCommand(expected_version=3), s["users"]["teacher"]
         )
         resumed_again = await attempt_service(u, clock).resume(
-            s["workspace"], s["exams"][0], attempt.id, AttemptCommand(expected_version=3), s["users"]["teacher"]
+            s["workspace"], s["exams"][0], attempt.id, AttemptCommand(expected_version=99), s["users"]["teacher"]
         )
     assert (resumed_again.version, resumed_again.paused_seconds) == (resumed.version, resumed.paused_seconds)
     assert await count(s, "attempt_event") == 4
@@ -493,6 +493,7 @@ async def test_finish_from_paused_ends_pause(seeded):
     finished = await finish(s, attempt, version=paused.version, now=NOW + timedelta(minutes=5))
     assert finished.status == "finished"
     assert finished.paused_at is None
+    assert finished.paused_seconds == 120
     assert finished.finished_at == NOW + timedelta(minutes=5)
 
 
@@ -732,3 +733,131 @@ async def test_database_constraints_require_finished_timestamp(seeded):
                 ),
                 values,
             )
+
+
+async def test_attempt_is_scoped_to_registration_exam_and_workspace(seeded):
+    s = seeded
+    registration = await organized(s)
+    attempt, _ = await start(s, registration)
+
+    with pytest.raises(NotFoundError):
+        async with s["uow"]() as u:
+            await attempt_service(u).start(
+                s["workspace"],
+                s["exams"][1],
+                AttemptStart(registration_id=registration.id, expected_version=2),
+                s["users"]["teacher"],
+            )
+    with pytest.raises(NotFoundError):
+        async with s["uow"]() as u:
+            await attempt_service(u).start(
+                s["foreign_workspace"],
+                s["exams"][0],
+                AttemptStart(registration_id=registration.id, expected_version=2),
+                s["users"]["teacher"],
+            )
+    with pytest.raises(NotFoundError):
+        async with s["uow"]() as u:
+            await attempt_service(u).get(s["workspace"], s["exams"][1], attempt.id, s["users"]["member"])
+    assert await count(s, "exam_attempt") == 1
+
+
+async def test_draft_exam_attempt_is_hidden_from_member(seeded):
+    s = seeded
+    with pytest.raises(NotFoundError):
+        async with s["uow"]() as u:
+            await attempt_service(u).current(s["workspace"], s["draft"], s["users"]["member"])
+
+
+async def test_finish_frees_exam_for_next_team(seeded):
+    s = seeded
+    first = await organized(s, project="manager")
+    second = await organized(s, project="manager2")
+    attempt, _ = await start(s, first)
+    await finish(s, attempt, now=NOW + timedelta(minutes=10))
+
+    next_attempt, created = await start(s, second)
+    assert created is True
+    assert next_attempt.id != attempt.id
+    assert next_attempt.registration_id == second.id
+    assert await count(s, "exam_attempt") == 2
+
+
+async def test_start_does_not_create_window_or_question_lock(seeded):
+    s = seeded
+    registration = await organized(s)
+    await start(s, registration)
+    assert await count(s, "assessment_window") == 0
+    async with s["engine"].connect() as connection:
+        locked = await connection.scalar(text("SELECT count(*) FROM project_type_question_lock"))
+    assert locked == 0
+
+
+async def test_events_are_ordered_and_restricted_to_organizer(seeded):
+    s = seeded
+    registration = await organized(s)
+    attempt, _ = await start(s, registration)
+    async with s["uow"]() as u:
+        await attempt_service(u, Clock(NOW + timedelta(minutes=1))).questions(
+            s["workspace"], s["exams"][0], attempt.id, AttemptCommand(expected_version=1), s["users"]["teacher"]
+        )
+    async with s["uow"]() as u:
+        await attempt_service(u, Clock(NOW + timedelta(minutes=2))).pause(
+            s["workspace"], s["exams"][0], attempt.id, AttemptPause(expected_version=2), s["users"]["teacher"]
+        )
+    async with s["uow"]() as u:
+        page = await attempt_service(u).events(
+            s["workspace"], s["exams"][0], attempt.id, s["users"]["teacher"], limit=2, offset=0
+        )
+    assert [row.action for row in page.items] == ["started", "questions"]
+    assert [row.version for row in page.items] == [1, 2]
+    assert page.has_more is True
+
+    with pytest.raises((PermissionError, NotFoundError)):
+        async with s["uow"]() as u:
+            await attempt_service(u).events(
+                s["workspace"], s["exams"][0], attempt.id, s["users"]["member"], limit=50, offset=0
+            )
+
+
+@pytest.mark.parametrize("command", ["pause", "questions", "finish"])
+async def test_stale_version_conflicts_for_every_transition(seeded, command):
+    s = seeded
+    registration = await organized(s)
+    attempt, _ = await start(s, registration)
+    with pytest.raises(BusinessLogicError) as error:
+        async with s["uow"]() as u:
+            service = attempt_service(u, Clock(NOW + timedelta(minutes=1)))
+            if command == "pause":
+                await service.pause(
+                    s["workspace"], s["exams"][0], attempt.id, AttemptPause(expected_version=9), s["users"]["teacher"]
+                )
+            elif command == "questions":
+                await service.questions(
+                    s["workspace"], s["exams"][0], attempt.id, AttemptCommand(expected_version=9), s["users"]["teacher"]
+                )
+            else:
+                await service.finish(
+                    s["workspace"], s["exams"][0], attempt.id, AttemptCommand(expected_version=9), s["users"]["teacher"]
+                )
+    assert error.value.detail["code"] == "attempt_version_conflict"
+    async with s["uow"]() as u:
+        row = await u.session.get(ExamAttempt, attempt.id)
+    assert (row.status, row.version, row.finished_at) == ("speaking", 1, None)
+    assert await count(s, "assessment_window") == 0
+
+
+async def test_stale_version_conflicts_for_resume(seeded):
+    s = seeded
+    registration = await organized(s)
+    attempt, _ = await start(s, registration)
+    async with s["uow"]() as u:
+        await attempt_service(u, Clock(NOW + timedelta(minutes=1))).pause(
+            s["workspace"], s["exams"][0], attempt.id, AttemptPause(expected_version=1), s["users"]["teacher"]
+        )
+    with pytest.raises(BusinessLogicError) as error:
+        async with s["uow"]() as u:
+            await attempt_service(u, Clock(NOW + timedelta(minutes=2))).resume(
+                s["workspace"], s["exams"][0], attempt.id, AttemptCommand(expected_version=9), s["users"]["teacher"]
+            )
+    assert error.value.detail["code"] == "attempt_version_conflict"

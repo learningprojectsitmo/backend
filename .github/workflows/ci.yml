@@ -111,8 +111,8 @@ jobs:
           alembic upgrade head
           alembic check
 
-      - name: Verify registrations on disposable PostgreSQL
-        run: pytest tests/integration/test_exam_registrations_db.py tests/integration/test_exam_organizer_db.py --no-cov
+      - name: Verify registrations and attempts on disposable PostgreSQL
+        run: pytest tests/integration/test_exam_registrations_db.py tests/integration/test_exam_organizer_db.py tests/integration/test_exam_attempts_db.py --no-cov
 
       - name: Verify exams on disposable PostgreSQL
         run: pytest tests/integration/test_exams_db.py --no-cov

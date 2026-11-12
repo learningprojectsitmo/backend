@@ -23,7 +23,9 @@ exam_attempt_router = APIRouter(
 )
 
 
-@exam_attempt_router.post("", response_model=AttemptRead)
+@exam_attempt_router.post(
+    "", response_model=AttemptRead, responses={201: {"model": AttemptRead, "description": "Attempt created"}}
+)
 async def start_attempt(
     data: AttemptStart,
     response: Response,
