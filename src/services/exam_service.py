@@ -204,3 +204,9 @@ class ExamService:
             opened_at=opened_at,
             closes_at=opened_at + timedelta(minutes=config.assessment_window_minutes),
         )
+
+    async def require_read_access(self, workspace_id: int, exam_id: int, user: User) -> None:
+        await self._exam(workspace_id, exam_id, user)
+
+    async def require_organizer(self, workspace_id: int, exam_id: int, user: User) -> None:
+        await self._exam(workspace_id, exam_id, user, write=True)
