@@ -183,6 +183,9 @@ class ExamService:
             self._conflict("registration_closed")
         return await self._revision_read(revision)
 
+    async def require_questions_ready(self, workspace_id: int, project_type_id: int) -> None:
+        await self._types(workspace_id, [project_type_id], ready=True)
+
     async def prepare_assessment_window(
         self, workspace_id: int, exam_id: int, project_type_id: int, *, expected_version: int, opened_at: datetime
     ) -> AssessmentWindowSettings:

@@ -110,7 +110,7 @@ class ExamAttemptService:
             updated_at=attempt.updated_at,
             remaining_seconds=self._remaining(attempt, now),
             server_now=now,
-            assessment_window=await self._window_read(attempt.id),
+            assessment_window=await self._window_read(attempt.id) if attempt.status == "finished" else None,
         )
 
     def _event(self, attempt: ExamAttempt, *, action: str, user: User, now: datetime, reason: str | None = None):
@@ -143,6 +143,7 @@ class ExamAttemptService:
             actor=user,
             started_at=now,
         )
+        await self._exam_service.require_questions_ready(workspace_id, binding.project_type_id)
         timing = await self._timing(exam_id, exam.current_settings_version)
         attempt = ExamAttempt(
             workspace_id=workspace_id,
@@ -241,7 +242,7 @@ class ExamAttemptService:
         if attempt.version != data.expected_version:
             self._conflict("attempt_version_conflict")
         now = self._clock()
-        delta = now - attempt.paused_at
+        delta = max(now - attempt.paused_at, timedelta(0))
         attempt.phase_deadline = attempt.phase_deadline + delta
         attempt.paused_seconds = attempt.paused_seconds + int(delta.total_seconds())
         attempt.paused_at = None
@@ -281,7 +282,7 @@ class ExamAttemptService:
             )
         )
         if attempt.paused_at is not None:
-            attempt.paused_seconds += int((now - attempt.paused_at).total_seconds())
+            attempt.paused_seconds += int(max(now - attempt.paused_at, timedelta(0)).total_seconds())
         attempt.status = "finished"
         attempt.finished_at = now
         attempt.paused_at = None
