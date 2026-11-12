@@ -49,7 +49,7 @@ PUT `/{exam_id}/settings` принимает expected_version, непустую 
 
 ## Интеграция записи и окна
 
-`ExamService.require_self_registration_open(workspace_id, exam_id, user, now=server_time)` проверяет доступ, published и период от max(published_at,opens) до min(starts_at,closes), правая граница исключена. #102 вызывает его в одной транзакции с созданием/отменой/переносом самостоятельной регистрации и отдельно проверяет manager/проект/тип/слот/уникальность. Сам guard эти проверки не выполняет. Организатор по решению пользователя управляет записью вне периода до фактического начала защиты; его registration API относится к #103.
+`ExamService.require_self_registration_open(workspace_id, exam_id, user, now=server_time)` проверяет доступ, published и период от max(published_at,opens) до min(starts_at,closes), правая граница исключена. #102 вызывает его в одной транзакции с созданием/отменой/переносом самостоятельной регистрации и отдельно проверяет manager/проект/тип/слот/уникальность. Сам guard эти проверки не выполняет. Организатор по решению пользователя управляет записью вне периода до фактического начала защиты; его registration API реализован в #103; пути и trusted claim для будущей107 — в инструкции записи.
 
 `prepare_assessment_window(workspace_id, exam_id, project_type_id, expected_version=..., opened_at=server_time)` — внутренний доверенный вызов, без HTTP и самостоятельного commit. Проверяет опубликованный Exam, текущую редакцию, выбранный тип/готовность вопросов; блокирует весь список этого типа навсегда и возвращает frozen exam_id/workspace_id/project_type_id/settings_version/opened_at/closes_at.
 

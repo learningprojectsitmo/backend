@@ -81,11 +81,28 @@ Content-Type: application/json
 
 Автор/источник/статус/время не принимаются от клиента; лишние поля422. Целочисленные id/version положительны и не больше2147483647; boolean/string вместо body ID отклоняются. Offset ограничен0…2147483647. NUL в причине отклоняется422 до обращения к БД.
 
+## Назначение организатором
+
+Teacher/admin с правами Exam управляет любой командой его workspace. Права совпадают с Exam: globaladmin — все workspace; globalteacher — автор/участник пространства; localteacher/admin — своё пространство. Авторство workspace без teacher/admin и globalteacher без доступа запись не дают. Manager/member не получают организационные операции.
+
+- POST `.../exams/{exam_id}/registrations` — `{project_id,slot_id:null}`, ответ201 RegistrationRead.
+- GET той же базы — все регистрации Exam, optional project_id/status и обычная пагинация.
+- POST `.../registrations/{id}/cancel` — `{expected_version,reason}`, ответ200 RegistrationRead.
+- POST `.../registrations/{id}/move` — `{expected_version,target_exam_id,target_slot_id:null,reason}`, ответ200 `{source,target}`.
+
+Общие правила workspace/type/published/slot/одной active записи/версии/истории те же, что у manager. **Исключение периода:** организатор может назначать, отменять и переносить после закрытия записи и планового starts_at, пока защита команды фактически не началась. При переносе ему не нужно открытие периодов обоих Exam. Это явное серверное правило; клиентский override/source/actor не принимаются. Будущие статусы завершённого/отменённого Exam потребуют дополнительных guards при их появлении; сейчас Exam имеет draft/published.
+
+Каждое организационное событие имеет source=organizer и actor_id текущего пользователя. Исходные created_source/created_by прежней регистрации сохраняются. В частности, manager-запись после организационного переноса остаётся manager-источником в старой moved строке; новая active строка создана организатором. Организационный перенос после начала защиты запрещён тем же permanent marker.
+
 ## Начало защиты и изменение проекта
 
 Регистрация не создаёт попытку, таймер, очередь или окно оценивания. Для будущей #107 зарезервирован постоянный started_at: после фактического начала обычные cancel/move запрещены409, включая завершённую защиту. Техническое откладывание и пересдача — отдельные сценарии, не перенос начатой записи. HTTP-операции старта защиты здесь нет.
 
 При active/started регистрации существующий Project CRUD запрещает менять workspace/type409 `project_registration_locked`. Название/описание и обычная смена автора не переписывают историю; право manager проверяется по текущему автору. После отмены всех не начатых записей смена типа/workspace снова возможна. Проект с любой историей регистраций удалять нельзя409 `project_has_registrations`.
+
+Внутренний `ExamRegistrationService.claim_for_attempt(workspace_id,exam_id,registration_id,expected_version=...,actor=...,started_at=server_time)` проверяет права организатора, published, активность/версию и текущий тип проекта. В общем UoW блокирует Exam→Project→Registration→Slot, устанавливает started_at, увеличивает version, добавляет defense_started и возвращает frozen binding с registration_id/workspace_id/exam_id/project_id/project_type_id/started_at(UTC). Время передаёт доверенный серверный вызывающий код, не HTTP-клиент. Naïve/UTC overflow и неверная версия не принимаются.
+
+#107 должна создать реальную Attempt с FK registration_id и соответствующими exam/project/workspace **в той же транзакции**. Ошибка вставки/commit попытки откатывает marker и событие. Повторный claim конфликтует; идемпотентность настоящего старта реализуется #107 через чтение уже созданной Attempt. Marker не очищается после завершения. Capture окна `prepare_assessment_window` вызывается отдельно при оценивании; регистрация/claim не блокируют вопросы и не открывают окно.
 
 Слоты — плановое время. Изменение записи само по себе не переставляет живую очередь и не меняет длительность/версии настроек Exam. Вопросы по-прежнему принадлежат существующему ProjectType workspace, без версий рубрик и снимков вопросов.
 
@@ -110,7 +127,7 @@ Content-Type: application/json
 
 ```sh
 pytest tests/unit/test_exam_registration_schema.py tests/unit/test_exam_registration_api.py --no-cov
-REGISTRATION_TEST_DATABASE_URL=... pytest tests/integration/test_exam_registrations_db.py --no-cov
+REGISTRATION_TEST_DATABASE_URL=... pytest tests/integration/test_exam_registrations_db.py tests/integration/test_exam_organizer_db.py --no-cov
 ruff check src/ tests/
 ruff format --check src/ tests/
 pytest --no-cov
