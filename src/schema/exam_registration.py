@@ -56,8 +56,11 @@ class RegistrationCreate(RegistrationDTO):
     slot_id: PositiveId | None = None
 
 
-class RegistrationCancel(RegistrationDTO):
+class RegistrationVersion(RegistrationDTO):
     expected_version: PositiveId
+
+
+class RegistrationCancel(RegistrationVersion):
     reason: Annotated[str, Field(min_length=1, max_length=1000)]
 
     @field_validator("reason", mode="before")
