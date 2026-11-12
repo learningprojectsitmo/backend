@@ -522,3 +522,48 @@ async def test_claim_rejects_inactive_registration_and_unpublished_exam(seeded, 
                 started_at=START,
             )
     assert error.value.detail["code"] == ("exam_not_published" if draft else "registration_not_active")
+
+
+@pytest.mark.parametrize("actor", ["teacher", "admin"])
+async def test_claim_global_role_revoked_while_waiting_is_denied(seeded, actor):
+    s = seeded
+    saved = await self_register(s)
+    ready = asyncio.Event()
+    pids = []
+
+    async def waiting():
+        try:
+            async with s["uow"]() as u:
+                pids.append(await u.session.scalar(text("SELECT pg_backend_pid()")))
+                ready.set()
+                return await reg_service(u).claim_for_attempt(
+                    s["workspace"],
+                    s["exams"][0],
+                    saved.id,
+                    expected_version=1,
+                    actor=s["users"][actor],
+                    started_at=START,
+                )
+        except (PermissionError, NotFoundError):
+            return "forbidden"
+
+    async with s["uow"]() as first:
+        await first.session.execute(text("SELECT id FROM exam WHERE id=:id FOR UPDATE"), {"id": s["exams"][0]})
+        task = asyncio.create_task(waiting())
+        await asyncio.wait_for(ready.wait(), 5)
+        try:
+            await wait_until_blocked(s, pids[0])
+            await first.session.execute(
+                text("UPDATE public.user SET role_id=(SELECT id FROM role WHERE name='member') WHERE id=:id"),
+                {"id": s["users"][actor].id},
+            )
+        except BaseException:
+            task.cancel()
+            raise
+    assert await asyncio.wait_for(task, 10) == "forbidden"
+    assert await count(s, "registration_event") == 1
+    async with s["engine"].connect() as conn:
+        row = (
+            await conn.execute(text("SELECT started_at,version FROM exam_registration WHERE id=:id"), {"id": saved.id})
+        ).one()
+    assert tuple(row) == (None, 1)
