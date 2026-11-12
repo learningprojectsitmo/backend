@@ -57,3 +57,30 @@ async def test_slot_paths_and_pagination_are_validated(client, path):
     async with client:
         response = await client.get(path)
     assert response.status_code == 422
+
+
+@pytest.mark.parametrize(
+    "method,path",
+    [
+        ("GET", "/registrations/self"),
+        ("POST", "/registrations/self"),
+        ("POST", "/registrations/1/self-cancel"),
+        ("POST", "/registrations/1/self-move"),
+        ("GET", "/registrations/1/history"),
+    ],
+)
+async def test_self_registration_routes_require_authentication(client, method, path):
+    async with client:
+        response = await client.request(
+            method, "/v1/workspaces/1/exams/1" + path, headers={"Authorization": "Bearer invalid"}
+        )
+    assert response.status_code == 401
+
+
+@pytest.mark.parametrize(
+    "body", [{"project_id": True}, {"project_id": 1, "source": "organizer"}, {"project_id": 1, "actor_id": 1}]
+)
+async def test_registration_http_rejects_spoofed_identity_and_boolean_id(client, body):
+    async with client:
+        response = await client.post("/v1/workspaces/1/exams/1/registrations/self", json=body)
+    assert response.status_code == 422

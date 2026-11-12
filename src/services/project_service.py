@@ -6,7 +6,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.sql.elements import ColumnElement
 
-from src.core.exceptions import NotFoundError, PermissionError, ValidationError
+from src.core.exceptions import BusinessLogicError, NotFoundError, PermissionError, ValidationError
 from src.model.notification import NotificationType
 from src.model.project import Project, ProjectParticipation, ProjectStage, ProjectStatus, ProjectVacancy, Response
 from src.model.settings import SpaceSettings
@@ -1148,7 +1148,7 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         current_user_id: int,
     ) -> Project | None:
         """Обновить проект (только автор может обновлять)"""
-        project = await self.get_project_by_id(project_id)
+        project = await self._project_repository.get_for_registration_update(project_id)
         if not project:
             return None
 
@@ -1156,6 +1156,15 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
             raise PermissionError("Only project author can update project")
 
         payload = project_data.model_dump(exclude_none=True)
+        if any(
+            key in payload and payload[key] != getattr(project, key) for key in ("workspace_id", "project_type_id")
+        ) and await self._project_repository.has_registration_history(project_id, active_only=True):
+            raise BusinessLogicError(
+                {
+                    "code": "project_registration_locked",
+                    "message": "Cancel or transfer the registration before changing project scope",
+                }
+            )
         tags_names = payload.pop("tags", None)
         vacancies_data = payload.pop("vacancies", None)
 
@@ -1511,11 +1520,15 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
 
     async def delete_project(self, project_id: int, is_admin: bool = False) -> bool:
         """Удалить проект (только при наличии права project:delete)"""
-        project = await self.get_project_by_id(project_id)
+        project = await self._project_repository.get_for_registration_update(project_id)
         if not project:
             return False
 
         if not is_admin:
             raise PermissionError("You don't have permission to delete this project")
 
+        if await self._project_repository.has_registration_history(project_id):
+            raise BusinessLogicError(
+                {"code": "project_has_registrations", "message": "Project registration history must be preserved"}
+            )
         return await self._project_repository.delete(project_id)
