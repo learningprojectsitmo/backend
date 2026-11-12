@@ -84,3 +84,17 @@ async def test_registration_http_rejects_spoofed_identity_and_boolean_id(client,
     async with client:
         response = await client.post("/v1/workspaces/1/exams/1/registrations/self", json=body)
     assert response.status_code == 422
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        f"/v1/workspaces/{2**65}/exams/1/slots",
+        f"/v1/workspaces/1/exams/1/slots?offset={2**65}",
+        f"/v1/workspaces/1/exams/1/registrations/{2**65}/history",
+    ],
+)
+async def test_http_rejects_database_integer_overflow(client, path):
+    async with client:
+        response = await client.get(path)
+    assert response.status_code == 422

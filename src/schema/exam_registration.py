@@ -4,9 +4,10 @@ from datetime import UTC, datetime
 from typing import Annotated, Literal, Self
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator, model_validator
 
-from src.schema.exam import PositiveId
+PG_INTEGER_MAX = 2**31 - 1
+PositiveId = Annotated[StrictInt, Field(ge=1, le=PG_INTEGER_MAX)]
 
 RegistrationStatus = Literal["active", "cancelled", "moved"]
 RegistrationSource = Literal["manager", "organizer"]
@@ -62,7 +63,11 @@ class RegistrationCancel(RegistrationDTO):
     @field_validator("reason", mode="before")
     @classmethod
     def trim_reason(cls, value):
-        return value.strip() if isinstance(value, str) else value
+        if isinstance(value, str):
+            if "\x00" in value:
+                raise ValueError("NUL is not allowed in a reason")
+            return value.strip()
+        return value
 
 
 class RegistrationMove(RegistrationCancel):

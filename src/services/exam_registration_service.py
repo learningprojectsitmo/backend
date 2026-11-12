@@ -59,6 +59,7 @@ class ExamRegistrationService:
         exam = await ExamRepository(self._repository.uow).get_scoped(workspace_id, exam_id, lock=True)
         if exam is None:
             raise NotFoundError("Exam not found")
+        await self._exam_service.require_organizer(workspace_id, exam_id, user)
         configuration = (await self._exam_service.get(workspace_id, exam_id, user)).configuration
         now = self._clock()
         if now >= configuration.starts_at:
@@ -135,10 +136,8 @@ class ExamRegistrationService:
         if project.project_type_id is None or project.project_type_id not in configuration.project_type_ids:
             self._conflict("project_type_not_allowed")
 
-    async def _slot(self, workspace_id, exam_id, slot_id, *, current=None):
-        ids = {i for i in [slot_id, current.slot_id if current is not None else None] if i is not None}
-        slots = await self._repository.slots_for_update(workspace_id, exam_id, ids)
-        if slot_id is not None and slot_id not in slots:
+    async def _slot(self, exam_id, slot_id, *, locked, current=None):
+        if slot_id is not None and (slot_id not in locked or locked[slot_id].exam_id != exam_id):
             raise NotFoundError("Slot not found in this exam")
         if slot_id is None:
             if await self._repository.has_slots(exam_id):
@@ -214,12 +213,17 @@ class ExamRegistrationService:
         await self._access(workspace_id, exam_id, user, organized=organized)
         await self._lock_exams(workspace_id, [exam_id])
         project = await self._project(workspace_id, data.project_id, user, organized=organized)
+        slots = await self._repository.slots_for_update(
+            workspace_id, {exam_id}, {data.slot_id} if data.slot_id is not None else set()
+        )
+        await self._access(workspace_id, exam_id, user, organized=organized)
+        project = await self._project(workspace_id, project.id, user, organized=organized)
         now = self._clock()
         configuration = await self._configuration(workspace_id, exam_id, user, now, organized=organized)
         self._project_type(project, configuration)
         if await self._repository.active_for_project(project.id) is not None:
             self._conflict("project_already_registered")
-        await self._slot(workspace_id, exam_id, data.slot_id)
+        await self._slot(exam_id, data.slot_id, locked=slots)
         source = "organizer" if organized else "manager"
         row = self._new(workspace_id, exam_id, project, data.slot_id, user, now, source)
         await self._flush()
@@ -240,7 +244,9 @@ class ExamRegistrationService:
         if row.status != "active":
             self._conflict("registration_not_active")
 
-    async def _change(self, workspace_id, exam_id, registration_id, data, user, *, organized, target_exam_id):
+    async def _change(
+        self, workspace_id, exam_id, registration_id, data, user, *, organized, target_exam_id, target_slot_id=None
+    ):
         for eid in sorted({exam_id, target_exam_id}):
             await self._access(workspace_id, eid, user, organized=organized)
         initial = await self._repository.registration(workspace_id, exam_id, registration_id)
@@ -250,11 +256,16 @@ class ExamRegistrationService:
         project = await self._project(workspace_id, initial.project_id, user, organized=organized)
         row = await self._repository.registration(workspace_id, exam_id, registration_id, lock=True)
         self._state(row, data.expected_version)
+        slot_ids = {i for i in (row.slot_id, target_slot_id) if i is not None}
+        slots = await self._repository.slots_for_update(workspace_id, {exam_id, target_exam_id}, slot_ids)
+        for eid in sorted({exam_id, target_exam_id}):
+            await self._access(workspace_id, eid, user, organized=organized)
+        project = await self._project(workspace_id, project.id, user, organized=organized)
         now = self._clock()
         for eid in sorted({exam_id, target_exam_id}):
             config = await self._configuration(workspace_id, eid, user, now, organized=organized)
             self._project_type(project, config)
-        return row, project, now
+        return row, project, now, slots
 
     @staticmethod
     def _touch(row, user, now):
@@ -263,7 +274,7 @@ class ExamRegistrationService:
         row.updated_at = now
 
     async def _cancel(self, workspace_id, exam_id, registration_id, data, user, *, organized):
-        row, _, now = await self._change(
+        row, _, now, _ = await self._change(
             workspace_id, exam_id, registration_id, data, user, organized=organized, target_exam_id=exam_id
         )
         row.status = "cancelled"
@@ -286,11 +297,18 @@ class ExamRegistrationService:
         return await self._cancel(workspace_id, exam_id, registration_id, data, user, organized=False)
 
     async def _move(self, workspace_id, exam_id, registration_id, data, user, *, organized):
-        row, project, now = await self._change(
-            workspace_id, exam_id, registration_id, data, user, organized=organized, target_exam_id=data.target_exam_id
+        row, project, now, slots = await self._change(
+            workspace_id,
+            exam_id,
+            registration_id,
+            data,
+            user,
+            organized=organized,
+            target_exam_id=data.target_exam_id,
+            target_slot_id=data.target_slot_id,
         )
         same_exam = exam_id == data.target_exam_id
-        await self._slot(workspace_id, data.target_exam_id, data.target_slot_id, current=row if same_exam else None)
+        await self._slot(data.target_exam_id, data.target_slot_id, locked=slots, current=row if same_exam else None)
         if same_exam and row.slot_id == data.target_slot_id:
             saved = RegistrationRead.model_validate(row)
             return RegistrationMoveRead(source=saved, target=saved)

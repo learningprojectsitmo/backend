@@ -23,7 +23,7 @@ from src.repository.exam_registration_repository import ExamRegistrationReposito
 from src.repository.exam_repository import ExamRepository
 from src.repository.project_repository import ProjectRepository
 from src.repository.project_type_question_repository import ProjectTypeQuestionRepository
-from src.schema.exam import ExamCreate, ExamPublish
+from src.schema.exam import ExamCreate, ExamPublish, ExamSettingsReplace
 from src.schema.exam_registration import RegistrationCancel, RegistrationCreate, RegistrationMove, SlotBatchCreate
 from src.schema.project import ProjectUpdate
 from src.schema.project_type_question import QuestionListReplace
@@ -46,7 +46,14 @@ def reg_service(uow, now=NOW):
 
 
 @pytest_asyncio.fixture(loop_scope="function")
-async def seeded(registration_db):
+async def seeded(registration_db, monkeypatch):
+    class FrozenClock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return NOW.astimezone(tz) if tz is not None else NOW.replace(tzinfo=None)
+
+    monkeypatch.setattr("src.services.exam_service.datetime", FrozenClock)
+    monkeypatch.setattr("src.services.exam_registration_service.datetime", FrozenClock)
     engine, make_uow = registration_db
     async with make_uow() as u:
         roles = {name: Role(name=name) for name in ["admin", "teacher", "manager", "member"]}
@@ -749,6 +756,7 @@ async def test_http_self_flow_commits_and_preserves_history(seeded):
         assert response.status_code == 201
         body = response.json()
         assert body["created_source"] == "manager" and body["version"] == 1
+        assert body["created_at"] == "2026-11-20T10:00:00Z"
         own = await client.get(f"{base}/self")
         assert [r["id"] for r in own.json()["items"]] == [body["id"]]
         cancelled = await client.post(
@@ -906,3 +914,138 @@ async def test_manager_retains_read_access_after_cutoff_and_role_revocation(seed
                 RegistrationCancel(expected_version=1, reason="Роль отозвана"),
                 s["users"]["manager"],
             )
+
+
+@pytest.mark.parametrize("moving", [False, True])
+async def test_slot_row_wait_rechecks_cutoff_and_preserves_original(seeded, moving):
+    s = seeded
+    async with s["uow"]() as u:
+        slots = await reg_service(u).add_slots(s["workspace"], s["exams"][0], intervals(), s["users"]["teacher"])
+    saved = await self_register(s, slot_id=slots[0].id) if moving else None
+    ready = asyncio.Event()
+    pids = []
+    now = [NOW]
+
+    async def waiting():
+        try:
+            async with s["uow"]() as u:
+                pids.append(await u.session.scalar(text("SELECT pg_backend_pid()")))
+                service = reg_service(u)
+                service._clock = lambda: now[0]
+                ready.set()
+                if moving:
+                    return await service.move_self(
+                        s["workspace"],
+                        s["exams"][0],
+                        saved.id,
+                        RegistrationMove(
+                            expected_version=1,
+                            target_exam_id=s["exams"][0],
+                            target_slot_id=slots[1].id,
+                            reason="Ожидание слота",
+                        ),
+                        s["users"]["manager"],
+                    )
+                return await service.create_self(
+                    s["workspace"],
+                    s["exams"][0],
+                    RegistrationCreate(project_id=s["projects"]["manager"], slot_id=slots[1].id),
+                    s["users"]["manager"],
+                )
+        except BusinessLogicError as error:
+            return error.detail["code"]
+
+    async with s["uow"]() as first:
+        await first.session.execute(text("SELECT id FROM exam_slot WHERE id=:id FOR UPDATE"), {"id": slots[1].id})
+        task = asyncio.create_task(waiting())
+        await asyncio.wait_for(ready.wait(), 5)
+        try:
+            await wait_until_blocked(s, pids[0])
+            now[0] = START
+        except BaseException:
+            task.cancel()
+            raise
+    assert await asyncio.wait_for(task, 10) == "registration_closed"
+    assert await count(s, "registration_event") == (1 if moving else 0)
+    if moving:
+        async with s["engine"].connect() as conn:
+            row = (
+                await conn.execute(text("SELECT slot_id,version FROM exam_registration WHERE id=:id"), {"id": saved.id})
+            ).one()
+            assert tuple(row) == (slots[0].id, 1)
+
+
+@pytest.mark.parametrize("slots_win", [False, True])
+async def test_draft_schedule_change_and_slot_creation_keep_slot_after_exam(seeded, slots_win):
+    s = seeded
+    async with s["uow"]() as u:
+        exam = await ExamService(ExamRepository(u), ProjectTypeQuestionRepository(u)).get(
+            s["workspace"], s["draft"], s["users"]["teacher"]
+        )
+    config = exam.configuration.model_dump() | {"starts_at": START + timedelta(hours=1)}
+    replace = ExamSettingsReplace(expected_version=1, reason="Начало позже", configuration=config)
+    ready = asyncio.Event()
+    pids = []
+
+    async def add(u):
+        return await reg_service(u).add_slots(s["workspace"], s["draft"], intervals(), s["users"]["teacher"])
+
+    async def edit(u):
+        return await ExamService(ExamRepository(u), ProjectTypeQuestionRepository(u)).replace_settings(
+            s["workspace"], s["draft"], replace, s["users"]["teacher"]
+        )
+
+    async def other():
+        try:
+            async with s["uow"]() as u:
+                pids.append(await u.session.scalar(text("SELECT pg_backend_pid()")))
+                ready.set()
+                return await (edit(u) if slots_win else add(u))
+        except BusinessLogicError as error:
+            return error.detail["code"]
+
+    async with s["uow"]() as first:
+        await (add(first) if slots_win else edit(first))
+        task = asyncio.create_task(other())
+        await asyncio.wait_for(ready.wait(), 5)
+        try:
+            await wait_until_blocked(s, pids[0])
+        except BaseException:
+            task.cancel()
+            raise
+    assert await asyncio.wait_for(task, 10) == ("slot_schedule_conflict" if slots_win else "slot_before_exam")
+
+
+async def test_slot_writer_role_revoked_while_waiting_is_denied(seeded):
+    s = seeded
+    ready = asyncio.Event()
+    pids = []
+
+    async def other():
+        try:
+            async with s["uow"]() as u:
+                pids.append(await u.session.scalar(text("SELECT pg_backend_pid()")))
+                ready.set()
+                return await reg_service(u).add_slots(
+                    s["workspace"], s["exams"][0], intervals(), s["users"]["local_teacher"]
+                )
+        except PermissionError:
+            return "forbidden"
+
+    async with s["uow"]() as first:
+        await ExamRepository(first).get_scoped(s["workspace"], s["exams"][0], lock=True)
+        task = asyncio.create_task(other())
+        await asyncio.wait_for(ready.wait(), 5)
+        try:
+            await wait_until_blocked(s, pids[0])
+            await first.session.execute(
+                text(
+                    "UPDATE workspace_participation SET role_id=(SELECT id FROM role WHERE name='member') WHERE workspace_id=:ws AND participant_id=:user"
+                ),
+                {"ws": s["workspace"], "user": s["users"]["local_teacher"].id},
+            )
+        except BaseException:
+            task.cancel()
+            raise
+    assert await asyncio.wait_for(task, 10) == "forbidden"
+    assert await count(s, "exam_slot") == 0

@@ -67,3 +67,14 @@ def test_slot_times_are_utc_and_adjacent_intervals_are_supported():
 def test_slot_batch_rejects_invalid_intervals(slots):
     with pytest.raises(ValidationError):
         SlotBatchCreate(slots=slots)
+
+
+@pytest.mark.parametrize("field", ["project_id", "slot_id"])
+def test_identifiers_outside_database_integer_range_are_rejected(field):
+    with pytest.raises(ValidationError):
+        RegistrationCreate.model_validate({"project_id": 1, field: 2**65})
+
+
+def test_nul_in_reason_is_rejected_before_database_write():
+    with pytest.raises(ValidationError):
+        RegistrationCancel(expected_version=1, reason="bad\x00reason")

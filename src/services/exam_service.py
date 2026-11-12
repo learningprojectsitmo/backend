@@ -122,6 +122,9 @@ class ExamService:
         ):
             self._conflict("published_schedule_locked")
         if old != config:
+            earliest = await self._repository.earliest_slot_start(exam_id)
+            if earliest is not None and earliest < config.starts_at:
+                self._conflict("slot_schedule_conflict")
             await self._types(workspace_id, config.project_type_ids, ready=exam.status == "published")
             await self._repository.append_revision(exam, config, changed_by=user.id, reason=data.reason)
         return await self._read(exam)

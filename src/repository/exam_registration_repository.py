@@ -83,10 +83,10 @@ class ExamRegistrationRepository:
             )
         ).one_or_none()
 
-    async def slots_for_update(self, workspace_id: int, exam_id: int, ids: set[int]) -> dict[int, ExamSlot]:
+    async def slots_for_update(self, workspace_id: int, exam_ids: set[int], ids: set[int]) -> dict[int, ExamSlot]:
         query = (
             select(ExamSlot)
-            .where(ExamSlot.id.in_(ids), ExamSlot.workspace_id == workspace_id, ExamSlot.exam_id == exam_id)
+            .where(ExamSlot.id.in_(ids), ExamSlot.workspace_id == workspace_id, ExamSlot.exam_id.in_(exam_ids))
             .order_by(ExamSlot.id)
             .with_for_update()
         )
