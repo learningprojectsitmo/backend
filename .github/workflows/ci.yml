@@ -4,7 +4,7 @@ on:
   push:
     branches: [main, develop]
   pull_request:
-    branches: [main, develop]
+    branches: [main, develop, exam, codex/exam-self-registration]
 
 env:
   PYTHON_VERSION: "3.14"
@@ -80,6 +80,7 @@ jobs:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/ci_db
       EXAM_TEST_DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/ci_db
       QUESTION_TEST_DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/ci_db
+      REGISTRATION_TEST_DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/ci_db
       SECRET_KEY: ci-secret-key-not-used-for-crypto
       ENVIRONMENT: ci
       AUTO_CREATE_TABLES: "false"
@@ -109,6 +110,9 @@ jobs:
           alembic downgrade base
           alembic upgrade head
           alembic check
+
+      - name: Verify registrations on disposable PostgreSQL
+        run: pytest tests/integration/test_exam_registrations_db.py --no-cov
 
       - name: Verify exams on disposable PostgreSQL
         run: pytest tests/integration/test_exams_db.py --no-cov
