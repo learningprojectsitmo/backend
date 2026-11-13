@@ -11,7 +11,19 @@ PositiveId = Annotated[StrictInt, Field(ge=1, le=PG_INTEGER_MAX)]
 
 RegistrationStatus = Literal["active", "cancelled", "moved"]
 RegistrationSource = Literal["manager", "organizer"]
-EventAction = Literal["created", "cancelled", "slot_changed", "moved_out", "moved_in", "defense_started"]
+EventAction = Literal[
+    "created",
+    "cancelled",
+    "slot_changed",
+    "moved_out",
+    "moved_in",
+    "defense_started",
+    "postponed",
+    "returned",
+    "no_show",
+    "queue_changed",
+]
+QueueHold = Literal["postponed", "no_show"]
 
 
 class RegistrationDTO(BaseModel):
@@ -94,6 +106,8 @@ class RegistrationRead(RegistrationDTO):
     project_id: int
     project_type_id_at_registration: int
     slot_id: int | None
+    queue_position: int | None
+    queue_hold: QueueHold | None
     status: RegistrationStatus
     version: int
     created_source: RegistrationSource
@@ -122,6 +136,8 @@ class EventRead(RegistrationDTO):
     reason: str | None
     from_slot_id: int | None
     to_slot_id: int | None
+    from_position: int | None
+    to_position: int | None
     related_registration_id: int | None
     transfer_id: UUID | None
 

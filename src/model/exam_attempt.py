@@ -42,14 +42,23 @@ class ExamAttempt(Base):
             postgresql_where=text("status IN ('speaking','questions')"),
         ),
         Index("ix_attempt_exam_finished", "exam_id", "finished_at", "id"),
-        CheckConstraint("status IN ('speaking','questions','finished')", name="ck_attempt_status"),
+        Index("ix_attempt_exam_postponed", "exam_id", "postponed_at", "id"),
+        CheckConstraint("status IN ('speaking','questions','postponed','finished')", name="ck_attempt_status"),
         CheckConstraint("version>=1", name="ck_attempt_version"),
         CheckConstraint("paused_seconds>=0", name="ck_attempt_paused_seconds"),
         CheckConstraint(
             "(status='finished' AND finished_at IS NOT NULL) OR (status<>'finished' AND finished_at IS NULL)",
             name="ck_attempt_finished",
         ),
-        CheckConstraint("paused_at IS NULL OR status<>'finished'", name="ck_attempt_pause"),
+        CheckConstraint("paused_at IS NULL OR status NOT IN ('finished','postponed')", name="ck_attempt_pause"),
+        CheckConstraint(
+            "(status='postponed') = (postponed_at IS NOT NULL AND postponed_phase IS NOT NULL)",
+            name="ck_attempt_postponed_state",
+        ),
+        CheckConstraint(
+            "postponed_phase IS NULL OR postponed_phase IN ('speaking','questions')",
+            name="ck_attempt_postponed_phase",
+        ),
         CheckConstraint("phase_deadline>=phase_started_at", name="ck_attempt_deadline"),
     )
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -65,6 +74,8 @@ class ExamAttempt(Base):
     phase_started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     phase_deadline: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     paused_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    postponed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    postponed_phase: Mapped[str | None] = mapped_column(String(20))
     paused_seconds: Mapped[int] = mapped_column(Integer, default=0)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_by: Mapped[int] = mapped_column(ForeignKey("user.id", ondelete="RESTRICT"))
@@ -83,11 +94,15 @@ class AttemptEvent(Base):
             ondelete="RESTRICT",
         ),
         CheckConstraint(
-            "action IN ('started','questions','paused','resumed','finished')",
+            "action IN ('started','questions','paused','resumed','finished','postponed','restarted')",
             name="ck_attempt_event_action",
         ),
         CheckConstraint("version>=1", name="ck_attempt_event_version"),
         CheckConstraint("reason IS NULL OR btrim(reason)<>''", name="ck_attempt_event_reason"),
+        CheckConstraint(
+            "action<>'postponed' OR (reason IS NOT NULL AND btrim(reason)<>'')",
+            name="ck_attempt_event_postponed_reason",
+        ),
     )
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     workspace_id: Mapped[int] = mapped_column(Integer)

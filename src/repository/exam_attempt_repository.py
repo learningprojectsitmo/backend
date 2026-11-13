@@ -54,6 +54,18 @@ class ExamAttemptRepository:
         running = await self.running(exam_id)
         if running is not None:
             return running
+        postponed = await self.uow.session.scalar(
+            select(ExamAttempt)
+            .where(
+                ExamAttempt.workspace_id == workspace_id,
+                ExamAttempt.exam_id == exam_id,
+                ExamAttempt.status == "postponed",
+            )
+            .order_by(ExamAttempt.postponed_at.desc(), ExamAttempt.id.desc())
+            .limit(1)
+        )
+        if postponed is not None:
+            return postponed
         query = (
             select(ExamAttempt)
             .where(
@@ -65,6 +77,17 @@ class ExamAttemptRepository:
             .limit(1)
         )
         return (await self.uow.session.scalars(query)).one_or_none()
+
+    async def for_exam(self, workspace_id: int, exam_id: int, *, lock: bool = False) -> dict[int, ExamAttempt]:
+        query = (
+            select(ExamAttempt)
+            .where(ExamAttempt.workspace_id == workspace_id, ExamAttempt.exam_id == exam_id)
+            .execution_options(populate_existing=True)
+        )
+        if lock:
+            query = query.with_for_update()
+        rows = (await self.uow.session.scalars(query)).all()
+        return {row.registration_id: row for row in rows}
 
     async def window(self, attempt_id: int) -> AssessmentWindow | None:
         return (

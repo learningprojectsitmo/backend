@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 
 from src.core.uow import IUnitOfWork
 from src.model.exam import Exam, ExamSettingsProjectType, ExamSettingsRevision
@@ -129,3 +129,13 @@ class ExamRepository:
 
     async def earliest_slot_start(self, exam_id: int):
         return await self.uow.session.scalar(select(func.min(ExamSlot.starts_at)).where(ExamSlot.exam_id == exam_id))
+
+    async def bump_queue_revision(self, exam_id: int) -> int:
+        revision = await self.uow.session.scalar(
+            update(Exam)
+            .where(Exam.id == exam_id)
+            .values(queue_revision=Exam.queue_revision + 1)
+            .returning(Exam.queue_revision)
+            .execution_options(synchronize_session=False)
+        )
+        return int(revision)

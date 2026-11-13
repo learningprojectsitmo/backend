@@ -69,6 +69,14 @@ class ExamRegistration(Base):
         CheckConstraint("created_source IN ('manager','organizer')", name="ck_registration_source"),
         CheckConstraint("version>=1", name="ck_registration_version"),
         CheckConstraint("started_at IS NULL OR status='active'", name="ck_registration_started"),
+        CheckConstraint("queue_position IS NULL OR queue_position>=1", name="ck_registration_queue_position"),
+        CheckConstraint(
+            "queue_hold IS NULL OR queue_hold IN ('postponed','no_show')", name="ck_registration_queue_hold"
+        ),
+        CheckConstraint(
+            "queue_hold IS NULL OR (queue_position IS NULL AND started_at IS NULL)",
+            name="ck_registration_hold_off_queue",
+        ),
         Index("uq_registration_active_project", "project_id", unique=True, postgresql_where=text("status='active'")),
         Index(
             "uq_registration_active_slot",
@@ -77,6 +85,13 @@ class ExamRegistration(Base):
             postgresql_where=text("status='active' AND slot_id IS NOT NULL"),
         ),
         Index("ix_registration_exam_created", "exam_id", "created_at", "id"),
+        Index(
+            "uq_registration_queue_position",
+            "exam_id",
+            "queue_position",
+            unique=True,
+            postgresql_where=text("queue_position IS NOT NULL"),
+        ),
     )
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     workspace_id: Mapped[int] = mapped_column(Integer)
@@ -84,6 +99,8 @@ class ExamRegistration(Base):
     project_id: Mapped[int] = mapped_column(ForeignKey("project.id", ondelete="RESTRICT"))
     project_type_id_at_registration: Mapped[int] = mapped_column(Integer)
     slot_id: Mapped[int | None] = mapped_column(Integer)
+    queue_position: Mapped[int | None] = mapped_column(Integer)
+    queue_hold: Mapped[str | None] = mapped_column(String(20))
     status: Mapped[str] = mapped_column(String(20))
     version: Mapped[int] = mapped_column(Integer)
     created_source: Mapped[str] = mapped_column(String(20))
@@ -124,7 +141,8 @@ class RegistrationEvent(Base):
             ondelete="RESTRICT",
         ),
         CheckConstraint(
-            "action IN ('created','cancelled','slot_changed','moved_out','moved_in','defense_started')",
+            "action IN ('created','cancelled','slot_changed','moved_out','moved_in','defense_started',"
+            "'postponed','returned','no_show','queue_changed')",
             name="ck_event_action",
         ),
         CheckConstraint("source IN ('manager','organizer')", name="ck_event_source"),
@@ -134,10 +152,23 @@ class RegistrationEvent(Base):
             name="ck_event_transfer",
         ),
         CheckConstraint(
-            "action NOT IN ('cancelled','slot_changed','moved_out','moved_in') OR (reason IS NOT NULL AND btrim(reason)<>'')",
+            "action NOT IN ('cancelled','slot_changed','moved_out','moved_in','postponed','no_show')"
+            " OR (reason IS NOT NULL AND btrim(reason)<>'')",
             name="ck_event_reason",
         ),
         CheckConstraint("action<>'defense_started' OR source='organizer'", name="ck_event_start_source"),
+        CheckConstraint(
+            "action NOT IN ('postponed','returned','no_show','queue_changed') OR source='organizer'",
+            name="ck_event_queue_source",
+        ),
+        CheckConstraint(
+            "(action='queue_changed' AND from_position IS NOT NULL AND to_position IS NOT NULL)"
+            " OR (action='returned' AND from_position IS NULL AND to_position IS NOT NULL)"
+            " OR (action IN ('postponed','no_show') AND to_position IS NULL)"
+            " OR (action NOT IN ('queue_changed','returned','postponed','no_show')"
+            " AND from_position IS NULL AND to_position IS NULL)",
+            name="ck_event_queue_positions",
+        ),
     )
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     workspace_id: Mapped[int] = mapped_column(Integer)
@@ -151,5 +182,7 @@ class RegistrationEvent(Base):
     reason: Mapped[str | None] = mapped_column(String(1000))
     from_slot_id: Mapped[int | None] = mapped_column(Integer)
     to_slot_id: Mapped[int | None] = mapped_column(Integer)
+    from_position: Mapped[int | None] = mapped_column(Integer)
+    to_position: Mapped[int | None] = mapped_column(Integer)
     related_registration_id: Mapped[int | None] = mapped_column(Integer)
     transfer_id: Mapped[UUID | None] = mapped_column(Uuid)
