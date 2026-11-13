@@ -61,7 +61,7 @@ async def test_commit_bumps_stream_seq_once_and_notifies_after_commit(seeded):
         after = await stream_seq(s)
         assert after == before + 1
         note = await asyncio.wait_for(notifications.get(), 2)
-        assert note == {"exam_id": s["exams"][0], "stream_seq": after, "changed": ["attempt", "queue"]}
+        assert note == {"workspace_id": s["workspace"], "exam_id": s["exams"][0], "stream_seq": after, "changed": ["attempt", "queue"]}
     finally:
         await connection.close()
 
@@ -110,8 +110,8 @@ async def test_two_exams_get_independent_stream_seq_and_notifications(seeded):
         assert await stream_seq(s, 1) == second_before + 1
         notes = [await asyncio.wait_for(notifications.get(), 2) for _ in range(2)]
         assert notes == [
-            {"exam_id": s["exams"][0], "stream_seq": first_before + 1, "changed": ["queue"]},
-            {"exam_id": s["exams"][1], "stream_seq": second_before + 1, "changed": ["attempt"]},
+            {"workspace_id": s["workspace"], "exam_id": s["exams"][0], "stream_seq": first_before + 1, "changed": ["queue"]},
+            {"workspace_id": s["workspace"], "exam_id": s["exams"][1], "stream_seq": second_before + 1, "changed": ["attempt"]},
         ]
     finally:
         await connection.close()
@@ -126,7 +126,7 @@ async def test_queue_revision_bump_marks_queue_and_moves_stream_seq(seeded):
             await ExamRepository(u).bump_queue_revision(s["exams"][0])
         assert await stream_seq(s) == before + 1
         note = await asyncio.wait_for(notifications.get(), 2)
-        assert note == {"exam_id": s["exams"][0], "stream_seq": before + 1, "changed": ["queue"]}
+        assert note == {"workspace_id": s["workspace"], "exam_id": s["exams"][0], "stream_seq": before + 1, "changed": ["queue"]}
     finally:
         await connection.close()
 

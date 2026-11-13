@@ -46,16 +46,27 @@ class ExamLiveService:
         )
         self._clock = clock or (lambda: datetime.now(UTC))
 
+    async def check_read_access(self, workspace_id: int, exam_id: int, user):
+        return await self._exam_service.read_access(workspace_id, exam_id, user)
+
     async def snapshot(
         self,
         workspace_id: int,
         exam_id: int,
-        user,
+        user=None,
         *,
         reason: ExamLiveReason,
         changed: tuple[str, ...] | list[str] = (),
+        check_access: bool = True,
     ) -> ExamLiveSnapshotRead:
-        exam, _writer = await self._exam_service.read_access(workspace_id, exam_id, user)
+        if check_access:
+            if user is None:
+                raise NotFoundError("Exam not found")
+            exam, _writer = await self._exam_service.read_access(workspace_id, exam_id, user)
+        else:
+            exam = await self._exams.get_scoped(workspace_id, exam_id)
+            if exam is None or exam.status == "draft":
+                raise NotFoundError("Exam not found")
         stale = False
         queue = None
         stream_seq = None

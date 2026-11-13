@@ -47,22 +47,25 @@ class SqlAlchemyUoW:
         if not self._exam_changes:
             return
         for exam_id in sorted(self._exam_changes):
-            stream_seq = await self.session.scalar(
-                text(
-                    """
-                    UPDATE exam
-                    SET stream_seq = stream_seq + 1
-                    WHERE id = :exam_id
-                    RETURNING stream_seq
-                    """
-                ),
-                {"exam_id": exam_id},
-            )
-            if stream_seq is None:
+            row = (
+                await self.session.execute(
+                    text(
+                        """
+                        UPDATE exam
+                        SET stream_seq = stream_seq + 1
+                        WHERE id = :exam_id
+                        RETURNING workspace_id, stream_seq
+                        """
+                    ),
+                    {"exam_id": exam_id},
+                )
+            ).one_or_none()
+            if row is None:
                 raise RuntimeError(f"Exam {exam_id} disappeared while publishing live changes")
             notification = ExamLiveNotification(
+                workspace_id=int(row.workspace_id),
                 exam_id=exam_id,
-                stream_seq=int(stream_seq),
+                stream_seq=int(row.stream_seq),
                 changed=tuple(sorted(self._exam_changes[exam_id])),
             )
             await self.session.execute(

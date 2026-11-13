@@ -175,8 +175,9 @@ class ExamQueueService:
         await self._set_order(order, None, 0)
         return True
 
-    async def read(self, workspace_id: int, exam_id: int, user: User) -> QueueRead:
-        await self._exam_service.require_read_access(workspace_id, exam_id, user)
+    async def read(self, workspace_id: int, exam_id: int, user: User | None = None) -> QueueRead:
+        if user is not None:
+            await self._exam_service.require_read_access(workspace_id, exam_id, user)
         eta_stale = False
         timing_cache: dict[int, EtaTiming] = {}
         for attempt_number in range(SNAPSHOT_RETRIES):
