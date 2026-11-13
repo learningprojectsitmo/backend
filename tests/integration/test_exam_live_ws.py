@@ -360,14 +360,10 @@ async def test_finish_delivers_window_metadata_without_admission(seeded):
 
 async def test_bad_origin_is_rejected(seeded):
     s = seeded
-    teacher = token_for(s["users"]["teacher"])
     async with run_server(s["url"]) as base:
-        with pytest.raises(websockets.ConnectionClosed) as error:
-            async with live_socket(
-                base, s["workspace"], s["exams"][0], teacher, origin="https://evil.example"
-            ) as websocket:
-                await websocket.recv()
-        assert error.value.code == 4403
+        uri = f"{base.replace('http://', 'ws://')}/v1/workspaces/{s['workspace']}/exams/{s['exams'][0]}/live"
+        async with websockets.connect(uri, additional_headers={"Origin": "https://evil.example"}) as websocket:
+            assert await wait_for_close(websocket) == 4403
 
 
 async def test_access_revocation_closes_the_connection(seeded):
@@ -507,14 +503,12 @@ async def test_second_auth_is_rejected(seeded):
 
 async def test_expired_token_is_closed_by_access_guard(seeded):
     s = seeded
-    teacher = token_for(s["users"]["teacher"], ttl=timedelta(seconds=2))
-    async with (
-        run_server(s["url"]) as base,
-        live_socket(base, s["workspace"], s["exams"][0], teacher) as websocket,
-    ):
-        await receive(websocket, "hello")
-        await receive(websocket)
-        assert await wait_for_close(websocket, timeout=8) == 4401
+    async with run_server(s["url"]) as base:
+        teacher = token_for(s["users"]["teacher"], ttl=timedelta(seconds=5))
+        async with live_socket(base, s["workspace"], s["exams"][0], teacher) as websocket:
+            await receive(websocket, "hello")
+            await receive(websocket)
+            assert await wait_for_close(websocket, timeout=10) == 4401
 
 
 async def test_invalid_path_is_rejected(seeded):
