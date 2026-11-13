@@ -7,6 +7,7 @@ from src.api.v1.endpoints.audit import audit_router
 from src.api.v1.endpoints.auth import auth_router
 from src.api.v1.endpoints.auth import router as signup_router
 from src.api.v1.endpoints.exam import exam_router
+from src.api.v1.endpoints.exam_attempt import exam_attempt_router
 from src.api.v1.endpoints.exam_registration import exam_registration_router
 from src.api.v1.endpoints.ideas import ideas_router
 from src.api.v1.endpoints.invitation import invitation_router
@@ -31,6 +32,7 @@ routers = APIRouter(prefix="/v1")
 router_list = [
     exam_router,
     exam_registration_router,
+    exam_attempt_router,
     auth_router,
     user_router,
     role_router,
