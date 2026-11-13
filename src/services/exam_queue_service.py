@@ -78,6 +78,7 @@ class ExamQueueService:
         attempt: ExamAttempt | None,
         slot: ExamSlot | None,
         now: datetime,
+        windows=None,
     ) -> QueueItemRead:
         return QueueItemRead(
             registration_id=registration.id,
@@ -92,7 +93,7 @@ class ExamQueueService:
             state=self._state(registration, attempt),
             registration_version=registration.version,
             started_at=registration.started_at,
-            attempt=None if attempt is None else await attempt_read(self._attempts, attempt, now=now),
+            attempt=None if attempt is None else await attempt_read(self._attempts, attempt, now=now, windows=windows),
         )
 
     async def _mutation(
@@ -121,6 +122,7 @@ class ExamQueueService:
         to_position: int | None = None,
         reason: str | None = None,
     ) -> None:
+        self._repository.uow.mark_exam_changed(registration.exam_id, "queue")
         self._repository.uow.session.add(
             RegistrationEvent(
                 workspace_id=registration.workspace_id,
@@ -174,8 +176,10 @@ class ExamQueueService:
         await self._set_order(order, None, 0)
         return True
 
-    async def read(self, workspace_id: int, exam_id: int, user: User) -> QueueRead:
-        await self._exam_service.require_read_access(workspace_id, exam_id, user)
+    async def read(self, workspace_id: int, exam_id: int, user: User | None = None) -> QueueRead:
+        # Trusted internal live fanout passes None only after the connection's access check.
+        if user is not None:
+            await self._exam_service.require_read_access(workspace_id, exam_id, user)
         eta_stale = False
         timing_cache: dict[int, EtaTiming] = {}
         for attempt_number in range(SNAPSHOT_RETRIES):
@@ -185,6 +189,7 @@ class ExamQueueService:
                 raise NotFoundError("Exam not found")
             rows = await self._repository.list_active(workspace_id, exam_id)
             attempts = await self._attempts.for_exam(workspace_id, exam_id)
+            windows = await self._attempts.windows_for_exam(workspace_id, exam_id)
             slots = {slot.id: slot for slot in await self._repository.all_slots(exam_id)}
             settings_revision = await self._exams.get_revision(exam.id, exam.current_settings_version)
             if settings_revision is None:
@@ -197,7 +202,7 @@ class ExamQueueService:
             finished: list[tuple[ExamRegistration, QueueItemRead, datetime]] = []
             for registration in rows:
                 attempt = attempts.get(registration.id)
-                item = await self._item(registration, attempt, slots.get(registration.slot_id), now)
+                item = await self._item(registration, attempt, slots.get(registration.slot_id), now, windows=windows)
                 marker = (
                     attempt.postponed_at
                     if attempt is not None and attempt.postponed_at is not None

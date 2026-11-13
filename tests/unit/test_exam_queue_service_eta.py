@@ -116,6 +116,9 @@ class FakeAttemptRepository:
     async def version_map(self, _workspace_id, _exam_id):
         return dict(self.version_map_value)
 
+    async def windows_for_exam(self, _workspace_id, _exam_id):
+        return {}
+
 
 def make_service(*, rows, attempts, revisions, current_version=1, revision_state=None, version_map=None):
     exam = SimpleNamespace(
@@ -139,7 +142,8 @@ def make_service(*, rows, attempts, revisions, current_version=1, revision_state
         clock=lambda: NOW,
     )
 
-    async def fake_item(reg, current_attempt, slot, now):
+    async def fake_item(reg, current_attempt, slot, now, windows=None):
+        del windows
         if current_attempt is not None:
             state = "running" if current_attempt.status in ("speaking", "questions") else current_attempt.status
         elif reg.queue_hold is not None:
