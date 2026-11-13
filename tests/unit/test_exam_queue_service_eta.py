@@ -235,7 +235,7 @@ async def test_read_uses_start_settings_for_current_and_current_settings_for_wai
 
 
 @pytest.mark.asyncio
-async def test_read_skips_finished_no_show_and_damaged_rows():
+async def test_read_skips_finished_and_damaged_rows():
     finished = attempt(90, status="finished")
     postponed = attempt(88, status="postponed", postponed_at=NOW, postponed_phase="questions")
     service, _exams, _attempts = make_service(

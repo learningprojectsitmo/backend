@@ -205,6 +205,9 @@ def test_pause_has_priority_over_overdue_reason():
         current=current(paused=True, phase_remaining=0, overdue=120),
         waiting=[waiting(91, 1)],
     )
+    assert eta.current is not None
+    assert eta.current.slot_remaining_seconds == 0
+    assert eta.items[0].eta_seconds == 0
     assert eta.items[0].reason == "paused"
     assert eta.items[0].certainty == "lower_bound"
 

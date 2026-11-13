@@ -282,20 +282,22 @@ async def test_postponed_without_position_does_not_delay(seeded):
     await set_settings(s, presentation_minutes=5, questions_minutes=4, transition_minutes=1)
     c = await register(s, "manager")
     d = await register(s, "manager2")
+    e = await register(s, "local_manager")
     before = await read_eta(s, START)
-    assert [item.eta_seconds for item in before.eta.items] == [0, 600]
+    assert [item.registration_id for item in before.eta.items] == [c.id, d.id, e.id]
+    assert [item.eta_seconds for item in before.eta.items] == [0, 600, 1200]
 
     await postpone_from_queue(s, d.id, d.version, START)
     middle = await read_eta(s, START)
-    assert [item.registration_id for item in middle.eta.items] == [c.id]
-    assert middle.eta.items[0].eta_seconds == before.eta.items[0].eta_seconds
+    assert [item.registration_id for item in middle.eta.items] == [c.id, e.id]
+    assert [item.eta_seconds for item in middle.eta.items] == [0, 600]  # D is gone; E moved earlier
 
     await place(s, d.id, d.version + 1, 1, START)
     after = await read_eta(s, START)
-    assert [item.registration_id for item in after.eta.items] == [d.id, c.id]
-    assert [item.position for item in after.eta.items] == [1, 2]
-    assert [item.state for item in after.eta.items] == ["waiting", "waiting"]
-    assert [item.eta_seconds for item in after.eta.items] == [0, 600]
+    assert [item.registration_id for item in after.eta.items] == [d.id, c.id, e.id]
+    assert [item.position for item in after.eta.items] == [1, 2, 3]
+    assert [item.state for item in after.eta.items] == ["waiting", "waiting", "waiting"]
+    assert [item.eta_seconds for item in after.eta.items] == [0, 600, 1200]
 
 
 async def test_positioned_postponed_uses_full_restart_slot(seeded):
@@ -307,20 +309,23 @@ async def test_positioned_postponed_uses_full_restart_slot(seeded):
     attempt, _ = await start(s, a, START - timedelta(minutes=6))
     attempt = await to_questions(s, attempt, attempt.version, START - timedelta(minutes=1))
     postponed = await postpone_attempt(s, attempt, attempt.version, START)
-
+    # New edition v3 (2 + 2 + 0 = 4 min) must not change A: a positioned postponed
+    # attempt keeps its start edition v2 (questions 4 + transition 1 = 300 s).
+    await set_settings(s, expected_version=2, presentation_minutes=2, questions_minutes=2, transition_minutes=0)
     await place(s, a.id, a.version + 1, 1, START)
     state = await read_eta(s, START)
 
+    assert state.settings_version == 3
     assert state.eta.current is None
     items = state.eta.items
     assert [item.registration_id for item in items] == [a.id, b.id, c.id]
     assert [item.position for item in items] == [1, 2, 3]
     assert [item.state for item in items] == ["postponed", "waiting", "waiting"]
-    assert [item.eta_seconds for item in items] == [0, 300, 900]
+    assert [item.eta_seconds for item in items] == [0, 300, 540]
     assert [item.eta_at for item in items] == [
         START,
         START + timedelta(minutes=5),
-        START + timedelta(minutes=15),
+        START + timedelta(minutes=9),
     ]
     assert postponed.status == "postponed"
 
@@ -487,6 +492,7 @@ async def test_slot_change_does_not_change_eta(seeded):
     assert after.items[1].planned_start_at == slots[2].starts_at
     assert after.items[1].planned_end_at == slots[2].ends_at
     assert after.items[1].planned_start_at != before.items[1].planned_start_at
+    assert after.items[1].registration_version == before.items[1].registration_version + 1
 
 
 async def test_started_exam_before_starts_at_uses_now(seeded):
