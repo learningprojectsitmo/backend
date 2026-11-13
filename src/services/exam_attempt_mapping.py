@@ -22,10 +22,12 @@ async def attempt_read(
     now: datetime,
     windows=None,
 ) -> AttemptRead:
-    if windows is not None:
+    if attempt.status != "finished":
+        window = None
+    elif windows is not None:
         window = windows.get(attempt.id)
     else:
-        window = await repository.window(attempt.id) if attempt.status == "finished" else None
+        window = await repository.window(attempt.id)
     return AttemptRead(
         id=attempt.id,
         workspace_id=attempt.workspace_id,

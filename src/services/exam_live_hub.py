@@ -136,6 +136,10 @@ class ExamLiveConnection:
     async def send_error_and_close(self, code: str, message: str, close_code: int) -> None:
         if self.closed:
             return
+        current = asyncio.current_task()
+        if self._send_task is not None and self._send_task is not current:
+            self._send_task.cancel()
+            await asyncio.gather(self._send_task, return_exceptions=True)
         payload = ExamLiveErrorRead(code=code, message=message).model_dump(mode="json")
         with contextlib.suppress(TimeoutError, RuntimeError):
             await asyncio.wait_for(self.websocket.send_json(payload), self.config.send_timeout_seconds)
@@ -163,19 +167,8 @@ class ExamLiveConnection:
                 except json.JSONDecodeError:
                     await self.send_error_and_close("protocol_error", "Invalid JSON", 4400)
                     break
-                if not isinstance(message, dict):
-                    await self.send_error_and_close("protocol_error", "Message must be an object", 4400)
+                if not await self._handle_message(message, hub):
                     break
-                message_type = message.get("type")
-                if message_type == "resync":
-                    try:
-                        await hub.request_resync(self)
-                    except Exception:
-                        logger.exception("Exam live resync failed")
-                        await self.send_error_and_close("snapshot_unavailable", "Snapshot is unavailable", 1011)
-                        break
-                elif message_type == "ping":
-                    self.offer({"type": "pong", "contract_version": 1, "server_now": self.clock().isoformat()})
         except WebSocketDisconnect:
             pass
         finally:
@@ -186,6 +179,25 @@ class ExamLiveConnection:
             if tasks:
                 await asyncio.gather(*tasks, return_exceptions=True)
             await self.close()
+
+    async def _handle_message(self, message, hub: ExamLiveHub) -> bool:
+        if not isinstance(message, dict):
+            await self.send_error_and_close("protocol_error", "Message must be an object", 4400)
+            return False
+        message_type = message.get("type")
+        if message_type == "auth":
+            await self.send_error_and_close("protocol_error", "Already authenticated", 4400)
+            return False
+        if message_type == "resync":
+            try:
+                await hub.request_resync(self)
+            except Exception:
+                logger.exception("Exam live resync failed")
+                await self.send_error_and_close("snapshot_unavailable", "Snapshot is unavailable", 1011)
+                return False
+        elif message_type == "ping":
+            self.offer({"type": "pong", "contract_version": 1, "server_now": self.clock().isoformat()})
+        return True
 
     async def _send_loop(self) -> None:
         try:
@@ -350,6 +362,11 @@ class ExamLiveHub:
             "stale": snapshot.stale,
         }
 
+    def _mark_stale(self, key: ExamKey) -> None:
+        meta = self._last_meta.get(key)
+        if meta is not None:
+            meta["stale"] = True
+
     @staticmethod
     def _auth_service(uow: IUnitOfWork) -> AuthService:
         return AuthService(
@@ -405,13 +422,17 @@ class ExamLiveHub:
             connections = self._subscribers.get(key)
             if not connections:
                 return
-            snapshot = await self._build(key, user=None, reason=reason, changed=changed, check_access=False)
+            try:
+                snapshot = await self._build(key, user=None, reason=reason, changed=changed, check_access=False)
+            except Exception:
+                self._mark_stale(key)
+                raise
             previous = self._last_sent.get(key, -1)
             if snapshot.stale:
                 if snapshot.stream_seq <= self._last_stale.get(key, -1):
                     return
                 self._last_stale[key] = snapshot.stream_seq
-            elif snapshot.stream_seq <= previous:
+            elif snapshot.stream_seq <= previous and not changed:
                 return
             payload = snapshot.model_dump(mode="json")
             for connection in list(connections):
@@ -452,13 +473,17 @@ class ExamLiveHub:
             return
         connection._last_resync = now
         async with self._lock(connection.key):
-            snapshot = await self._build(
-                connection.key,
-                user=connection.user,
-                reason="resync",
-                changed=(),
-                check_access=True,
-            )
+            try:
+                snapshot = await self._build(
+                    connection.key,
+                    user=connection.user,
+                    reason="resync",
+                    changed=(),
+                    check_access=True,
+                )
+            except Exception:
+                self._mark_stale(connection.key)
+                raise
             connection.offer(snapshot.model_dump(mode="json"))
             self._remember(connection.key, snapshot)
 
@@ -475,7 +500,8 @@ class ExamLiveHub:
                 return "not_found", 4404
             if getattr(error, "status_code", None) == _HTTP_UNAUTHORIZED:
                 return "unauthorized", 4401
-            return "access_revoked", 4403
+            logger.exception("Exam live access recheck failed; will retry")
+            return None
 
     async def _wait_or_stop(self, seconds: float) -> bool:
         try:

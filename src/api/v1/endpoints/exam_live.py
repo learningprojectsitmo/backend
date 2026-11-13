@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import logging
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
@@ -13,6 +14,7 @@ from src.schema.exam_live import ExamLiveErrorRead
 from src.services.exam_live_hub import ExamLiveConnection, ExamLiveHub, ExamLiveLimitError
 
 exam_live_router = APIRouter(tags=["exam-live"])
+logger = logging.getLogger(__name__)
 
 MAX_PATH_ID = 2**31 - 1
 HTTP_UNAUTHORIZED = 401

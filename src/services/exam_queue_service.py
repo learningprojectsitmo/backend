@@ -177,6 +177,7 @@ class ExamQueueService:
         return True
 
     async def read(self, workspace_id: int, exam_id: int, user: User | None = None) -> QueueRead:
+        # Trusted internal live fanout passes None only after the connection's access check.
         if user is not None:
             await self._exam_service.require_read_access(workspace_id, exam_id, user)
         eta_stale = False

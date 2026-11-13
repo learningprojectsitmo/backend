@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 from types import SimpleNamespace
 
+import pytest
+
 from src.services.exam_live_hub import ExamLiveConfig, ExamLiveConnection, ExamLiveHub, OutboundBuffer
 
 
@@ -149,3 +151,63 @@ async def test_slow_consumer_is_closed_with_4408():
     await connection._send_loop()
 
     assert websocket.close_code == 4408
+
+
+async def test_transient_recheck_error_does_not_revoke_access():
+    def failing_uow():
+        raise RuntimeError("database unavailable")
+
+    hub = ExamLiveHub(
+        uow_factory=failing_uow,
+        dsn="",
+        config=ExamLiveConfig(listener_enabled=False),
+        snapshot_builder=None,
+    )
+    connection = SimpleNamespace(workspace_id=7, exam_id=12, token="token", user=SimpleNamespace(id=7))
+
+    assert await hub.recheck_access(connection) is None
+    await hub.stop()
+
+
+async def test_failed_refresh_marks_last_state_stale():
+    async def build(_workspace_id, _exam_id, _user, *, reason, changed, check_access):
+        del reason, changed, check_access
+        raise RuntimeError("database unavailable")
+
+    hub = ExamLiveHub(
+        uow_factory=lambda: None,
+        dsn="",
+        config=ExamLiveConfig(listener_enabled=False),
+        snapshot_builder=build,
+    )
+    key = (7, 12)
+    hub._subscribers.setdefault(key, set()).add(FakeConnection())
+    hub._last_meta[key] = {"stream_seq": 4, "queue_revision": 17, "settings_version": 3, "stale": False}
+
+    with pytest.raises(RuntimeError):
+        await hub.refresh(key, reason="changed", changed=())
+
+    assert hub._last_meta[key]["stale"] is True
+    await hub.stop()
+
+
+async def test_changed_categories_force_refresh_even_with_same_stream_seq():
+    async def build(_workspace_id, _exam_id, _user, *, reason, changed, check_access):
+        del reason, changed, check_access
+        return snapshot(5)
+
+    hub = ExamLiveHub(
+        uow_factory=lambda: None,
+        dsn="",
+        config=ExamLiveConfig(listener_enabled=False),
+        snapshot_builder=build,
+    )
+    key = (7, 12)
+    connection = FakeConnection()
+    hub._subscribers.setdefault(key, set()).add(connection)
+    hub._last_sent[key] = 5
+
+    await hub.refresh(key, reason="changed", changed=("attempt",))
+
+    assert [item["stream_seq"] for item in connection.offers] == [5]
+    await hub.stop()

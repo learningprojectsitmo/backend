@@ -35,13 +35,13 @@ def free_port() -> int:
         return int(sock.getsockname()[1])
 
 
-def token_for(user) -> str:
+def token_for(user, *, ttl: timedelta = timedelta(hours=1)) -> str:
     return jwt.encode(
         {
             "sub": user.email,
             "user_id": user.id,
             "type": "access",
-            "exp": datetime.now(UTC) + timedelta(hours=1),
+            "exp": datetime.now(UTC) + ttl,
         },
         SECRET,
         algorithm="HS256",
@@ -490,3 +490,48 @@ async def test_foreign_workspace_is_rejected(seeded):
         live_socket(base, s["workspace"], s["exams"][0], token_for(s["users"]["outsider"])) as websocket,
     ):
         assert await wait_for_close(websocket) == 4404
+
+
+async def test_second_auth_is_rejected(seeded):
+    s = seeded
+    teacher = token_for(s["users"]["teacher"])
+    async with (
+        run_server(s["url"]) as base,
+        live_socket(base, s["workspace"], s["exams"][0], teacher) as websocket,
+    ):
+        await receive(websocket, "hello")
+        await receive(websocket)
+        await websocket.send(json.dumps({"type": "auth", "token": teacher}))
+        assert await wait_for_close(websocket) == 4400
+
+
+async def test_expired_token_is_closed_by_access_guard(seeded):
+    s = seeded
+    teacher = token_for(s["users"]["teacher"], ttl=timedelta(seconds=2))
+    async with (
+        run_server(s["url"]) as base,
+        live_socket(base, s["workspace"], s["exams"][0], teacher) as websocket,
+    ):
+        await receive(websocket, "hello")
+        await receive(websocket)
+        assert await wait_for_close(websocket, timeout=8) == 4401
+
+
+async def test_invalid_path_is_rejected(seeded):
+    s = seeded
+    async with run_server(s["url"]) as base:
+        uri = f"{base.replace('http://', 'ws://')}/v1/workspaces/0/exams/{s['exams'][0]}/live"
+        async with websockets.connect(uri) as websocket:
+            assert await wait_for_close(websocket) == 4400
+
+
+async def test_invalid_json_after_auth_is_rejected(seeded):
+    s = seeded
+    async with (
+        run_server(s["url"]) as base,
+        live_socket(base, s["workspace"], s["exams"][0], token_for(s["users"]["teacher"])) as websocket,
+    ):
+        await receive(websocket, "hello")
+        await receive(websocket)
+        await websocket.send("not-json")
+        assert await wait_for_close(websocket) == 4400
