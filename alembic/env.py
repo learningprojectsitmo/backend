@@ -29,6 +29,8 @@ from src.model import (  # noqa: F401
     Project,
     ProjectParticipation,
     ProjectStatus,
+    ProjectTypeQuestion,
+    ProjectTypeQuestionLevel,
     ProjectVacancy,
     Response,
     Resume,

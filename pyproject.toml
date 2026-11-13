@@ -5,7 +5,7 @@ description = "FastAPI project with Domain-Driven Design and layered architectur
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
-    "fastapi>=0.104.0",
+    "fastapi>=0.121.1",
     "uvicorn[standard]>=0.24.0",
     "pydantic[email]>=2.5.0",
     "sqlalchemy>=2.0.0",
@@ -79,6 +79,7 @@ strict_equality = true
 [tool.pytest.ini_options]
 asyncio_default_fixture_loop_scope = "session"
 asyncio_mode = "auto"
+markers = ["integration: requires explicit disposable PostgreSQL"]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
@@ -190,3 +191,10 @@ dev = [
     "pytest>=8.4.2",
     "pytest-asyncio>=1.2.0",
 ]
+
+[tool.setuptools.package-data]
+"src.data.assessment" = ["question_templates.json"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src", "src.*"]
