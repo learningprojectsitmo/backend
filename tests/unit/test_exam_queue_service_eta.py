@@ -181,6 +181,7 @@ async def test_read_retries_when_attempt_version_changes_without_queue_revision(
         for_exam_calls += 1
         if for_exam_calls > 1:
             running.version = 2
+            running.paused_at = NOW
         return await original_for_exam(workspace_id, exam_id, lock=lock)
 
     attempts.for_exam = changing_for_exam  # type: ignore[method-assign]
@@ -189,8 +190,10 @@ async def test_read_retries_when_attempt_version_changes_without_queue_revision(
 
     assert result.eta_stale is False
     assert result.eta.current is not None
+    assert result.eta.current.paused is True
     assert exams.get_scoped_calls == 2
     assert result.eta.items[0].eta_seconds == 240  # 3 min phase + 1 min transition
+    assert (result.eta.items[0].certainty, result.eta.items[0].reason) == ("lower_bound", "paused")
 
 
 @pytest.mark.asyncio
@@ -214,9 +217,9 @@ async def test_read_marks_stale_after_three_unstable_snapshots():
 async def test_read_uses_start_settings_for_current_and_current_settings_for_waiting():
     running = attempt(92, settings_version=1, deadline=NOW + timedelta(seconds=60))
     service, _exams, _attempts = make_service(
-        rows=[registration(92, position=None), registration(91, position=1)],
+        rows=[registration(92, position=None), registration(91, position=1), registration(90, position=2)],
         attempts={92: running},
-        revisions={1: settings(1, 7, 7, 1), 2: settings(2, 5, 5, 5)},
+        revisions={1: settings(1, 7, 7, 1), 2: settings(2, 5, 5, 0)},
         current_version=2,
     )
 
@@ -226,9 +229,9 @@ async def test_read_uses_start_settings_for_current_and_current_settings_for_wai
     assert result.eta.current is not None
     assert result.eta.current.settings_version == 1
     assert result.eta.current.slot_remaining_seconds == 60 + 7 * 60 + 60  # v1 speaking + questions + transition
-    assert result.eta.items[0].eta_seconds == 60 + 7 * 60 + 60
-    # The waiting team's slot is from v2: 5 + 5 + 5 minutes.
-    assert result.eta.items[0].eta_at == NOW + timedelta(seconds=60 + 7 * 60 + 60)
+    assert [item.eta_seconds for item in result.eta.items] == [540, 1140]
+    # v2 is 5 + 5 + 0 = 10 min, so the second waiting team's ETA proves v2 is used.
+    assert result.eta.items[1].eta_at == NOW + timedelta(seconds=1140)
 
 
 @pytest.mark.asyncio
@@ -239,7 +242,7 @@ async def test_read_skips_finished_no_show_and_damaged_rows():
         rows=[
             registration(91, position=1),
             registration(90, position=2),
-            registration(89, position=3, hold="no_show"),
+            registration(89, position=3, started_at=NOW),
             registration(88, position=None),
         ],
         attempts={90: finished, 88: postponed},
@@ -253,17 +256,47 @@ async def test_read_skips_finished_no_show_and_damaged_rows():
 
 
 @pytest.mark.asyncio
+async def test_read_retries_when_current_settings_version_changes():
+    service, exams, _attempts = make_service(
+        rows=[registration(91, position=1), registration(90, position=2)],
+        attempts={},
+        revisions={1: settings(1, 7, 7, 1), 2: settings(2, 5, 5, 0)},
+    )
+    exams.revision_state_value = (17, 2)
+    original_get_scoped = exams.get_scoped
+    calls = 0
+
+    async def changing_get_scoped(workspace_id, exam_id, *, lock=False):
+        nonlocal calls
+        calls += 1
+        if calls > 1:
+            exams.exam.current_settings_version = 2
+        return await original_get_scoped(workspace_id, exam_id, lock=lock)
+
+    exams.get_scoped = changing_get_scoped  # type: ignore[method-assign]
+    result = await service.read(7, 12, SimpleNamespace(id=17))
+
+    assert result.eta_stale is False
+    assert result.settings_version == 2
+    assert exams.get_scoped_calls == 2
+    # v2 is 5 + 5 + 0 = 10 min; v1 would make the second ETA 900.
+    assert [item.eta_seconds for item in result.eta.items] == [0, 600]
+
+
+@pytest.mark.asyncio
 async def test_read_before_start():
     service, _exams, _attempts = make_service(
         rows=[registration(91, position=1)],
         attempts={},
-        revisions={1: SimpleNamespace(
-            version=1,
-            starts_at=NOW + timedelta(minutes=10),
-            presentation_minutes=7,
-            questions_minutes=7,
-            transition_minutes=1,
-        )},
+        revisions={
+            1: SimpleNamespace(
+                version=1,
+                starts_at=NOW + timedelta(minutes=10),
+                presentation_minutes=7,
+                questions_minutes=7,
+                transition_minutes=1,
+            )
+        },
     )
 
     result = await service.read(7, 12, SimpleNamespace(id=17))

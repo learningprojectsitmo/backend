@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-import pytest
-
 from src.schema.exam_queue import EtaCurrentRead, EtaItemRead, QueueEtaRead, QueueRead
 from src.services.exam_eta import (
     EtaCurrentState,
@@ -123,6 +121,18 @@ def test_before_start_floor():
     assert eta.items[0].eta_at == starts_at
     assert eta.items[0].reason == "before_start"
     assert eta.items[0].certainty == "certain"
+
+
+def test_started_exam_ignores_the_starts_at_floor():
+    eta = build_queue_eta(
+        now=NOW,
+        exam_starts_at=NOW + timedelta(minutes=10),
+        current=None,
+        waiting=[waiting(91, 1)],
+        exam_started=True,
+    )
+    assert eta.items[0].eta_seconds == 0
+    assert eta.items[0].reason is None
 
 
 def test_empty_queue():

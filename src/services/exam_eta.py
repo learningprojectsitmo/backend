@@ -70,13 +70,13 @@ def waiting_slot_seconds(waiting: EtaWaitingState) -> int:
 
 
 def _certainty_and_reason(
-    current: EtaCurrentState | None, now: datetime, exam_starts_at: datetime
+    current: EtaCurrentState | None, now: datetime, exam_starts_at: datetime, exam_started: bool
 ) -> tuple[EtaCertainty, EtaReason | None]:
     if current is not None and current.paused:
         return "lower_bound", "paused"
     if current is not None and current.overdue_seconds > 0:
         return "lower_bound", "overdue"
-    if current is None and now < exam_starts_at:
+    if current is None and now < exam_starts_at and not exam_started:
         return "certain", "before_start"
     return "certain", None
 
@@ -91,12 +91,13 @@ def build_queue_eta(
     exam_starts_at: datetime,
     current: EtaCurrentState | None,
     waiting: Sequence[EtaWaitingState],
+    exam_started: bool = False,
 ) -> QueueEtaRead:
-    certainty, reason = _certainty_and_reason(current, now, exam_starts_at)
+    certainty, reason = _certainty_and_reason(current, now, exam_starts_at, exam_started)
 
     cursor = now
     if current is None:
-        cursor = max(now, exam_starts_at)
+        cursor = now if exam_started else max(now, exam_starts_at)
         current_read = None
     else:
         cursor = now + timedelta(seconds=current_slot_seconds(current))

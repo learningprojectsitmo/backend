@@ -224,18 +224,23 @@ class ExamQueueService:
             current_state, waiting_states = await self._eta_states(
                 exam, queued, attempts, settings_revision, now, timing_cache
             )
+            exam_started = bool(attempts) or any(row.started_at is not None for row in rows)
 
             eta = build_queue_eta(
                 now=now,
                 exam_starts_at=settings_revision.starts_at,
                 current=current_state,
                 waiting=waiting_states,
+                exam_started=exam_started,
             )
 
             latest_state = await self._exams.revision_state(workspace_id, exam_id)
             latest_versions = await self._attempts.version_map(workspace_id, exam_id)
             loaded_versions = {attempt.id: attempt.version for attempt in attempts.values()}
-            if latest_state == (exam.queue_revision, exam.current_settings_version) and latest_versions == loaded_versions:
+            if (
+                latest_state == (exam.queue_revision, exam.current_settings_version)
+                and latest_versions == loaded_versions
+            ):
                 eta_stale = False
                 break
             eta_stale = True
@@ -266,9 +271,7 @@ class ExamQueueService:
         )
         current_state = None
         if current_attempt is not None:
-            current_timing = await self._eta_timing(
-                exam, current_attempt.settings_version, current_revision, cache
-            )
+            current_timing = await self._eta_timing(exam, current_attempt.settings_version, current_revision, cache)
             reference = current_attempt.paused_at or now
             phase_remaining = max(0, math.floor((current_attempt.phase_deadline - reference).total_seconds()))
             overdue = max(0, math.floor((reference - current_attempt.phase_deadline).total_seconds()))
@@ -289,7 +292,8 @@ class ExamQueueService:
             if attempt is not None and attempt.status == "postponed":
                 state = "postponed"
                 postponed_phase = attempt.postponed_phase
-                timing = await self._eta_timing(exam, attempt.settings_version, current_revision, cache)
+                timing_version = exam.current_settings_version if postponed_phase is None else attempt.settings_version
+                timing = await self._eta_timing(exam, timing_version, current_revision, cache)
             elif attempt is None and registration.queue_hold is None and registration.started_at is None:
                 state = "waiting"
                 postponed_phase = None
