@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 
 from src.core.exceptions import NotFoundError
 from src.core.uow import IUnitOfWork
 from src.model.project import ProjectType
-from src.model.project_type_question import ProjectTypeQuestion, ProjectTypeQuestionLevel
+from src.model.project_type_question import ProjectTypeQuestion, ProjectTypeQuestionLevel, ProjectTypeQuestionLock
 from src.model.user import Role
 from src.model.workspace import WorkSpace, WorkSpaceParticipation
 from src.schema.project_type_question import QuestionListReplace
@@ -74,3 +76,19 @@ class ProjectTypeQuestionRepository:
                     )
         await self.uow.session.flush()
         return await self.list_questions(type_id)
+
+    async def get_question_lock(self, type_id: int) -> ProjectTypeQuestionLock | None:
+        return await self.uow.session.get(ProjectTypeQuestionLock, type_id)
+
+    async def add_question_lock(
+        self, workspace_id: int, type_id: int, exam_id: int, *, locked_at: datetime
+    ) -> ProjectTypeQuestionLock:
+        existing = await self.get_question_lock(type_id)
+        if existing is not None:
+            return existing
+        marker = ProjectTypeQuestionLock(
+            project_type_id=type_id, workspace_id=workspace_id, first_exam_id=exam_id, locked_at=locked_at
+        )
+        self.uow.session.add(marker)
+        await self.uow.session.flush()
+        return marker

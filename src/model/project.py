@@ -251,7 +251,10 @@ class ProjectVacancy(Base):
 
 class ProjectType(Base):
     __tablename__ = "project_type"
-    __table_args__ = (UniqueConstraint("workspace_id", "name", name="uq_project_type_workspace_name"),)
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "name", name="uq_project_type_workspace_name"),
+        UniqueConstraint("id", "workspace_id", name="uq_project_type_scope"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     workspace_id: Mapped[int | None] = mapped_column(ForeignKey("workspace.id"), nullable=True)

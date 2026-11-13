@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from src.core.exceptions import NotFoundError, PermissionError
+from src.core.exceptions import BusinessLogicError, NotFoundError, PermissionError
 from src.model.user import User
 from src.repository.project_type_question_repository import ProjectTypeQuestionRepository
 from src.schema.project_type_question import (
@@ -47,6 +47,10 @@ class ProjectTypeQuestionService:
         self, workspace_id: int, type_id: int, data: QuestionListReplace, user: User
     ) -> ProjectTypeQuestionsRead:
         await self._require_scope(workspace_id, type_id, user, write=True)
+        if await self._repository.get_question_lock(type_id) is not None:
+            raise BusinessLogicError(
+                {"code": "questions_locked", "message": "Questions are locked after assessment first opens"}
+            )
         return self._response(type_id, await self._repository.replace_questions(type_id, data))
 
     async def apply_template(
