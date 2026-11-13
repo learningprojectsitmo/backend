@@ -181,7 +181,7 @@ async def test_postpone_queue_and_return(seeded):
     assert postponed.item.state == "postponed"
     assert postponed.item.position is None
     assert postponed.item.attempt is None
-    assert postponed.queue_revision >= 1
+    assert postponed.queue_revision == await revision(s)
     state = await read_queue(s)
     assert [item.registration_id for item in state.items] == [second.id, first.id]
     assert state.items[0].position == 1
