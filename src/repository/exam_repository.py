@@ -62,6 +62,11 @@ class ExamRepository:
     async def get_revision(self, exam_id: int, version: int) -> ExamSettingsRevision | None:
         return await self.uow.session.get(ExamSettingsRevision, (exam_id, version))
 
+    async def event_seq(self, workspace_id: int, exam_id: int) -> int | None:
+        return await self.uow.session.scalar(
+            select(Exam.stream_seq).where(Exam.id == exam_id, Exam.workspace_id == workspace_id)
+        )
+
     async def revision_state(self, workspace_id: int, exam_id: int) -> tuple[int, int] | None:
         """Return (queue_revision, current_settings_version) for the ETA snapshot check."""
         row = (
@@ -145,6 +150,7 @@ class ExamRepository:
         return await self.uow.session.scalar(select(func.min(ExamSlot.starts_at)).where(ExamSlot.exam_id == exam_id))
 
     async def bump_queue_revision(self, exam_id: int) -> int:
+        self.uow.mark_exam_changed(exam_id, "queue")
         revision = await self.uow.session.scalar(
             update(Exam)
             .where(Exam.id == exam_id)
