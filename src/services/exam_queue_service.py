@@ -1,13 +1,13 @@
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
 from datetime import UTC, datetime
 
-from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from src.core.exceptions import BusinessLogicError, NotFoundError
-from src.model.exam import Exam
+from src.model.exam import Exam, ExamSettingsRevision
 from src.model.exam_attempt import ExamAttempt
 from src.model.exam_registration import ExamRegistration, ExamSlot, RegistrationEvent
 from src.model.user import User
@@ -23,6 +23,7 @@ from src.schema.exam_queue import (
     QueueReason,
 )
 from src.services.exam_attempt_mapping import attempt_read
+from src.services.exam_eta import EtaCurrentState, EtaTiming, EtaWaitingState, build_queue_eta
 from src.services.exam_service import ExamService
 
 SNAPSHOT_RETRIES = 3
@@ -175,57 +176,165 @@ class ExamQueueService:
 
     async def read(self, workspace_id: int, exam_id: int, user: User) -> QueueRead:
         await self._exam_service.require_read_access(workspace_id, exam_id, user)
-        exam = await self._exams.get_scoped(workspace_id, exam_id)
-        if exam is None:
-            raise NotFoundError("Exam not found")
+        eta_stale = False
+        timing_cache: dict[int, EtaTiming] = {}
         for attempt_number in range(SNAPSHOT_RETRIES):
             now = self._clock()
-            rows = await self._repository.list_active(workspace_id, exam_id)
-            attempts = await self._attempts.for_exam(workspace_id, exam_id)
-            slots = {slot.id: slot for slot in await self._repository.all_slots(exam_id)}
-            latest_revision = await self._repository.uow.session.scalar(
-                select(Exam.queue_revision).where(Exam.id == exam_id)
-            )
-            if latest_revision == exam.queue_revision or attempt_number == SNAPSHOT_RETRIES - 1:
-                break
             exam = await self._exams.get_scoped(workspace_id, exam_id)
             if exam is None:
                 raise NotFoundError("Exam not found")
-        running: list[tuple[ExamRegistration, QueueItemRead, datetime]] = []
-        queued: list[tuple[ExamRegistration, QueueItemRead, datetime]] = []
-        postponed: list[tuple[ExamRegistration, QueueItemRead, datetime]] = []
-        no_show: list[tuple[ExamRegistration, QueueItemRead, datetime]] = []
-        finished: list[tuple[ExamRegistration, QueueItemRead, datetime]] = []
-        for registration in rows:
-            attempt = attempts.get(registration.id)
-            item = await self._item(registration, attempt, slots.get(registration.slot_id), now)
-            marker = (
-                attempt.postponed_at
-                if attempt is not None and attempt.postponed_at is not None
-                else registration.updated_at
-            )
-            if item.state == "running":
-                running.append((registration, item, marker))
-            elif registration.queue_position is not None:
-                queued.append((registration, item, marker))
-            elif item.state == "postponed":
-                postponed.append((registration, item, marker))
-            elif item.state == "no_show":
-                no_show.append((registration, item, marker))
-            else:
-                finished.append(
-                    (registration, item, attempt.finished_at if attempt and attempt.finished_at else marker)
+            rows = await self._repository.list_active(workspace_id, exam_id)
+            attempts = await self._attempts.for_exam(workspace_id, exam_id)
+            slots = {slot.id: slot for slot in await self._repository.all_slots(exam_id)}
+            settings_revision = await self._exams.get_revision(exam.id, exam.current_settings_version)
+            if settings_revision is None:
+                raise RuntimeError("Exam settings revision is missing")
+
+            running: list[tuple[ExamRegistration, QueueItemRead, datetime]] = []
+            queued: list[tuple[ExamRegistration, QueueItemRead, datetime]] = []
+            postponed: list[tuple[ExamRegistration, QueueItemRead, datetime]] = []
+            no_show: list[tuple[ExamRegistration, QueueItemRead, datetime]] = []
+            finished: list[tuple[ExamRegistration, QueueItemRead, datetime]] = []
+            for registration in rows:
+                attempt = attempts.get(registration.id)
+                item = await self._item(registration, attempt, slots.get(registration.slot_id), now)
+                marker = (
+                    attempt.postponed_at
+                    if attempt is not None and attempt.postponed_at is not None
+                    else registration.updated_at
                 )
-        queued.sort(key=lambda entry: (entry[1].position or 0, entry[0].id))
-        postponed.sort(key=lambda entry: (entry[2], entry[0].id), reverse=True)
-        no_show.sort(key=lambda entry: (entry[2], entry[0].id), reverse=True)
-        finished.sort(key=lambda entry: (entry[2], entry[0].id), reverse=True)
-        ordered = running + queued + postponed + no_show + finished
+                if item.state == "running":
+                    running.append((registration, item, marker))
+                elif registration.queue_position is not None:
+                    queued.append((registration, item, marker))
+                elif item.state == "postponed":
+                    postponed.append((registration, item, marker))
+                elif item.state == "no_show":
+                    no_show.append((registration, item, marker))
+                else:
+                    finished.append(
+                        (registration, item, attempt.finished_at if attempt and attempt.finished_at else marker)
+                    )
+            queued.sort(key=lambda entry: (entry[1].position or 0, entry[0].id))
+            postponed.sort(key=lambda entry: (entry[2], entry[0].id), reverse=True)
+            no_show.sort(key=lambda entry: (entry[2], entry[0].id), reverse=True)
+            finished.sort(key=lambda entry: (entry[2], entry[0].id), reverse=True)
+            ordered = running + queued + postponed + no_show + finished
+
+            current_state, waiting_states = await self._eta_states(
+                exam, queued, attempts, settings_revision, now, timing_cache
+            )
+            exam_started = bool(attempts) or any(row.started_at is not None for row in rows)
+
+            eta = build_queue_eta(
+                now=now,
+                exam_starts_at=settings_revision.starts_at,
+                current=current_state,
+                waiting=waiting_states,
+                exam_started=exam_started,
+            )
+
+            latest_state = await self._exams.revision_state(workspace_id, exam_id)
+            latest_versions = await self._attempts.version_map(workspace_id, exam_id)
+            loaded_versions = {attempt.id: attempt.version for attempt in attempts.values()}
+            if (
+                latest_state == (exam.queue_revision, exam.current_settings_version)
+                and latest_versions == loaded_versions
+            ):
+                eta_stale = False
+                break
+            eta_stale = True
+            if attempt_number == SNAPSHOT_RETRIES - 1:
+                break
+
         return QueueRead(
-            queue_revision=latest_revision,
+            queue_revision=exam.queue_revision,
             server_now=now,
+            settings_version=exam.current_settings_version,
+            eta_stale=eta_stale,
             items=[item for _, item, _ in ordered],
+            eta=eta,
         )
+
+    async def _eta_states(
+        self,
+        exam: Exam,
+        queued: list[tuple[ExamRegistration, QueueItemRead, datetime]],
+        attempts: dict[int, ExamAttempt],
+        current_revision: ExamSettingsRevision,
+        now: datetime,
+        cache: dict[int, EtaTiming],
+    ) -> tuple[EtaCurrentState | None, list[EtaWaitingState]]:
+        current_attempt = next(
+            (attempt for attempt in attempts.values() if attempt.status in ("speaking", "questions")),
+            None,
+        )
+        current_state = None
+        if current_attempt is not None:
+            current_timing = await self._eta_timing(exam, current_attempt.settings_version, current_revision, cache)
+            reference = current_attempt.paused_at or now
+            phase_remaining = max(0, math.floor((current_attempt.phase_deadline - reference).total_seconds()))
+            overdue = max(0, math.floor((reference - current_attempt.phase_deadline).total_seconds()))
+            current_state = EtaCurrentState(
+                registration_id=current_attempt.registration_id,
+                attempt_id=current_attempt.id,
+                status=current_attempt.status,  # type: ignore[arg-type]
+                paused=current_attempt.paused_at is not None,
+                phase_remaining_seconds=phase_remaining,
+                overdue_seconds=overdue,
+                settings_version=current_attempt.settings_version,
+                timing=current_timing,
+            )
+
+        waiting_states: list[EtaWaitingState] = []
+        for registration, _item, _marker in queued:
+            attempt = attempts.get(registration.id)
+            if attempt is not None and attempt.status == "postponed":
+                state = "postponed"
+                postponed_phase = attempt.postponed_phase
+                timing_version = exam.current_settings_version if postponed_phase is None else attempt.settings_version
+                timing = await self._eta_timing(exam, timing_version, current_revision, cache)
+            elif attempt is None and registration.queue_hold is None and registration.started_at is None:
+                state = "waiting"
+                postponed_phase = None
+                timing = await self._eta_timing(exam, exam.current_settings_version, current_revision, cache)
+            else:
+                # A finished/no-show attempt with a position is a damaged linkage; do not
+                # turn it into a forecast. It still stays visible in QueueRead.items.
+                continue
+            waiting_states.append(
+                EtaWaitingState(
+                    registration_id=registration.id,
+                    position=registration.queue_position,  # type: ignore[arg-type]
+                    state=state,  # type: ignore[arg-type]
+                    timing=timing,
+                    postponed_phase=postponed_phase,
+                )
+            )
+        return current_state, waiting_states
+
+    async def _eta_timing(
+        self,
+        exam: Exam,
+        version: int,
+        current_revision: ExamSettingsRevision,
+        cache: dict[int, EtaTiming],
+    ) -> EtaTiming:
+        if version in cache:
+            return cache[version]
+        if current_revision.version == version:
+            revision = current_revision
+        else:
+            revision = await self._exams.get_revision(exam.id, version)
+        if revision is None:
+            raise RuntimeError(f"Exam settings revision {version} is missing")
+        timing = EtaTiming(
+            presentation_seconds=revision.presentation_minutes * 60,
+            questions_seconds=revision.questions_minutes * 60,
+            transition_seconds=revision.transition_minutes * 60,
+        )
+        cache[version] = timing
+        return timing
 
     async def place(
         self,
