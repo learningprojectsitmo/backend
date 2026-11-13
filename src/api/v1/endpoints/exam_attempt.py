@@ -10,7 +10,9 @@ from src.schema.exam_attempt import (
     AttemptCommand,
     AttemptEventListRead,
     AttemptPause,
+    AttemptPostpone,
     AttemptRead,
+    AttemptRestart,
     AttemptStart,
     CurrentAttemptRead,
 )
@@ -106,6 +108,30 @@ async def finish_attempt(
     service: ExamAttemptService = Depends(get_exam_attempt_service),
 ):
     return await service.finish(workspace_id, exam_id, attempt_id, data, user)
+
+
+@exam_attempt_router.post("/{attempt_id}/postpone", response_model=AttemptRead)
+async def postpone_attempt(
+    data: AttemptPostpone,
+    workspace_id: int = Path(ge=1, le=PG_INTEGER_MAX),
+    exam_id: int = Path(ge=1, le=PG_INTEGER_MAX),
+    attempt_id: int = Path(ge=1, le=PG_INTEGER_MAX),
+    user: User = Depends(get_current_user),
+    service: ExamAttemptService = Depends(get_exam_attempt_service),
+):
+    return await service.postpone(workspace_id, exam_id, attempt_id, data, user)
+
+
+@exam_attempt_router.post("/{attempt_id}/restart", response_model=AttemptRead)
+async def restart_attempt(
+    data: AttemptRestart,
+    workspace_id: int = Path(ge=1, le=PG_INTEGER_MAX),
+    exam_id: int = Path(ge=1, le=PG_INTEGER_MAX),
+    attempt_id: int = Path(ge=1, le=PG_INTEGER_MAX),
+    user: User = Depends(get_current_user),
+    service: ExamAttemptService = Depends(get_exam_attempt_service),
+):
+    return await service.restart(workspace_id, exam_id, attempt_id, data, user)
 
 
 @exam_attempt_router.get("/{attempt_id}/events", response_model=AttemptEventListRead)

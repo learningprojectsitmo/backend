@@ -39,6 +39,7 @@ from src.services.audit_service import AuditService
 from src.services.auth_service import AuthService
 from src.services.education_service import EducationService
 from src.services.exam_attempt_service import ExamAttemptService
+from src.services.exam_queue_service import ExamQueueService
 from src.services.exam_registration_service import ExamRegistrationService
 from src.services.exam_service import ExamService
 from src.services.fixtures_service import FixtureService
@@ -552,16 +553,26 @@ async def get_exam_registration_repository(uow: IUnitOfWork = Depends(get_uow, s
     return ExamRegistrationRepository(uow)
 
 
+async def get_exam_attempt_repository(uow: IUnitOfWork = Depends(get_uow, scope="function")):
+    return ExamAttemptRepository(uow)
+
+
+async def get_exam_queue_service(
+    repository=Depends(get_exam_registration_repository),
+    attempts=Depends(get_exam_attempt_repository),
+    exams=Depends(get_exam_repository),
+    exam_service=Depends(get_exam_service),
+):
+    return ExamQueueService(repository, attempts, exams, exam_service)
+
+
 async def get_exam_registration_service(
     repository=Depends(get_exam_registration_repository),
     exam_service=Depends(get_exam_service),
     questions=Depends(get_project_type_question_repository),
+    queue=Depends(get_exam_queue_service),
 ):
-    return ExamRegistrationService(repository, exam_service, questions)
-
-
-async def get_exam_attempt_repository(uow: IUnitOfWork = Depends(get_uow, scope="function")):
-    return ExamAttemptRepository(uow)
+    return ExamRegistrationService(repository, exam_service, questions, queue)
 
 
 async def get_exam_attempt_service(
@@ -569,5 +580,7 @@ async def get_exam_attempt_service(
     exams=Depends(get_exam_repository),
     registrations=Depends(get_exam_registration_service),
     exam_service=Depends(get_exam_service),
+    queue=Depends(get_exam_queue_service),
+    registrations_repository=Depends(get_exam_registration_repository),
 ):
-    return ExamAttemptService(repository, exams, registrations, exam_service)
+    return ExamAttemptService(repository, exams, registrations, exam_service, queue, registrations_repository)

@@ -8,8 +8,9 @@ from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator
 PG_INTEGER_MAX = 2**31 - 1
 PositiveId = Annotated[StrictInt, Field(ge=1, le=PG_INTEGER_MAX)]
 
-AttemptStatus = Literal["speaking", "questions", "finished"]
-AttemptAction = Literal["started", "questions", "paused", "resumed", "finished"]
+AttemptStatus = Literal["speaking", "questions", "postponed", "finished"]
+AttemptAction = Literal["started", "questions", "paused", "resumed", "finished", "postponed", "restarted"]
+PostponedPhase = Literal["speaking", "questions"]
 
 
 class AttemptDTO(BaseModel):
@@ -26,6 +27,32 @@ class AttemptCommand(AttemptDTO):
 
 
 class AttemptPause(AttemptCommand):
+    reason: Annotated[str, Field(min_length=1, max_length=1000)] | None = None
+
+    @field_validator("reason", mode="before")
+    @classmethod
+    def trim_reason(cls, value):
+        if isinstance(value, str):
+            if "\x00" in value:
+                raise ValueError("NUL is not allowed in a reason")
+            return value.strip()
+        return value
+
+
+class AttemptPostpone(AttemptCommand):
+    reason: Annotated[str, Field(min_length=1, max_length=1000)]
+
+    @field_validator("reason", mode="before")
+    @classmethod
+    def trim_reason(cls, value):
+        if isinstance(value, str):
+            if "\x00" in value:
+                raise ValueError("NUL is not allowed in a reason")
+            return value.strip()
+        return value
+
+
+class AttemptRestart(AttemptCommand):
     reason: Annotated[str, Field(min_length=1, max_length=1000)] | None = None
 
     @field_validator("reason", mode="before")
@@ -60,6 +87,8 @@ class AttemptRead(AttemptDTO):
     phase_started_at: datetime
     phase_deadline: datetime
     paused_at: datetime | None
+    postponed_at: datetime | None = None
+    postponed_phase: PostponedPhase | None = None
     paused_seconds: int
     finished_at: datetime | None
     created_by: int

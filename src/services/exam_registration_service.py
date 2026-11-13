@@ -28,6 +28,7 @@ from src.schema.exam_registration import (
     SlotListRead,
     SlotRead,
 )
+from src.services.exam_queue_service import ExamQueueService
 from src.services.exam_service import ExamService
 
 
@@ -37,12 +38,14 @@ class ExamRegistrationService:
         repository: ExamRegistrationRepository,
         exam_service: ExamService,
         questions: ProjectTypeQuestionRepository,
+        queue: ExamQueueService,
         *,
         clock: Callable[[], datetime] | None = None,
     ):
         self._repository = repository
         self._exam_service = exam_service
         self._questions = questions
+        self._queue = queue
         self._clock = clock or (lambda: datetime.now(UTC))
 
     @staticmethod
@@ -231,6 +234,7 @@ class ExamRegistrationService:
         await self._flush()
         self._event(row, action="created", source=source, user=user, now=now, to_slot_id=row.slot_id)
         await self._flush()
+        await self._queue.assign_on_create(workspace_id, exam_id, row)
         return RegistrationRead.model_validate(row)
 
     async def create_self(
@@ -280,6 +284,7 @@ class ExamRegistrationService:
             workspace_id, exam_id, registration_id, data, user, organized=organized, target_exam_id=exam_id
         )
         row.status = "cancelled"
+        row.queue_hold = None
         self._touch(row, user, now)
         self._event(
             row,
@@ -291,6 +296,7 @@ class ExamRegistrationService:
             from_slot_id=row.slot_id,
         )
         await self._flush()
+        await self._queue.release(workspace_id, exam_id, row)
         return RegistrationRead.model_validate(row)
 
     async def cancel_self(
@@ -333,10 +339,13 @@ class ExamRegistrationService:
             saved = RegistrationRead.model_validate(row)
             return RegistrationMoveRead(source=saved, target=saved)
         row.status = "moved"
+        row.queue_hold = None
         # Release the global active-project index before inserting its successor.
         await self._flush()
+        await self._queue.release(workspace_id, exam_id, row)
         target = self._new(workspace_id, data.target_exam_id, project, data.target_slot_id, user, now, source)
         await self._flush()
+        await self._queue.assign_on_create(workspace_id, data.target_exam_id, target)
         transfer_id = uuid4()
         self._event(
             row,

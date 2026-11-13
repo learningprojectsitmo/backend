@@ -100,6 +100,41 @@ class ExamRegistrationRepository:
             query = query.where(ExamRegistration.id != except_registration)
         return (await self.uow.session.scalar(query.limit(1))) is not None
 
+    async def list_active(self, workspace_id: int, exam_id: int, *, lock: bool = False) -> list[ExamRegistration]:
+        query = (
+            select(ExamRegistration)
+            .where(
+                ExamRegistration.workspace_id == workspace_id,
+                ExamRegistration.exam_id == exam_id,
+                ExamRegistration.status == "active",
+            )
+            .order_by(ExamRegistration.id)
+            .execution_options(populate_existing=True)
+        )
+        if lock:
+            query = query.with_for_update()
+        return list((await self.uow.session.scalars(query)).all())
+
+    async def queued_for_update(self, workspace_id: int, exam_id: int) -> list[ExamRegistration]:
+        query = (
+            select(ExamRegistration)
+            .where(
+                ExamRegistration.workspace_id == workspace_id,
+                ExamRegistration.exam_id == exam_id,
+                ExamRegistration.status == "active",
+                ExamRegistration.queue_position.is_not(None),
+            )
+            .order_by(ExamRegistration.queue_position, ExamRegistration.id)
+            .execution_options(populate_existing=True)
+            .with_for_update()
+        )
+        return list((await self.uow.session.scalars(query)).all())
+
+    async def slot(self, exam_id: int, slot_id: int) -> ExamSlot | None:
+        return await self.uow.session.scalar(
+            select(ExamSlot).where(ExamSlot.id == slot_id, ExamSlot.exam_id == exam_id)
+        )
+
     async def list_registrations(
         self,
         workspace_id: int,

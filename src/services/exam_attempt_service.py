@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
@@ -10,18 +9,22 @@ from src.core.exceptions import BusinessLogicError, NotFoundError
 from src.model.exam_attempt import AssessmentWindow, AttemptEvent, ExamAttempt
 from src.model.user import User
 from src.repository.exam_attempt_repository import ExamAttemptRepository
+from src.repository.exam_registration_repository import ExamRegistrationRepository
 from src.repository.exam_repository import ExamRepository
 from src.schema.exam_attempt import (
     AttemptCommand,
     AttemptEventListRead,
     AttemptEventRead,
     AttemptPause,
+    AttemptPostpone,
     AttemptRead,
+    AttemptRestart,
     AttemptStart,
     AttemptTiming,
-    AttemptWindowRead,
     CurrentAttemptRead,
 )
+from src.services.exam_attempt_mapping import attempt_read
+from src.services.exam_queue_service import ExamQueueService
 from src.services.exam_registration_service import ExamRegistrationService
 from src.services.exam_service import ExamService
 
@@ -33,6 +36,8 @@ class ExamAttemptService:
         exams: ExamRepository,
         registrations: ExamRegistrationService,
         exam_service: ExamService,
+        queue: ExamQueueService,
+        registrations_repository: ExamRegistrationRepository,
         *,
         clock: Callable[[], datetime] | None = None,
     ):
@@ -40,6 +45,8 @@ class ExamAttemptService:
         self._exams = exams
         self._registrations = registrations
         self._exam_service = exam_service
+        self._queue = queue
+        self._registrations_repository = registrations_repository
         self._clock = clock or (lambda: datetime.now(UTC))
 
     @staticmethod
@@ -70,48 +77,8 @@ class ExamAttemptService:
             presentation_minutes=revision.presentation_minutes, questions_minutes=revision.questions_minutes
         )
 
-    async def _window_read(self, attempt_id: int) -> AttemptWindowRead | None:
-        window = await self._repository.window(attempt_id)
-        if window is None:
-            return None
-        return AttemptWindowRead(
-            opened_at=window.opened_at,
-            closes_at=window.closes_at,
-            settings_version=window.settings_version,
-            project_type_id=window.project_type_id,
-        )
-
-    @staticmethod
-    def _remaining(attempt: ExamAttempt, now: datetime) -> int:
-        if attempt.status == "finished":
-            return 0
-        return math.floor((attempt.phase_deadline - (attempt.paused_at or now)).total_seconds())
-
-    async def _read(self, attempt: ExamAttempt) -> AttemptRead:
-        now = self._clock()
-        return AttemptRead(
-            id=attempt.id,
-            workspace_id=attempt.workspace_id,
-            exam_id=attempt.exam_id,
-            registration_id=attempt.registration_id,
-            project_id=attempt.project_id,
-            project_type_id=attempt.project_type_id,
-            status=attempt.status,
-            version=attempt.version,
-            settings_version=attempt.settings_version,
-            started_at=attempt.started_at,
-            phase_started_at=attempt.phase_started_at,
-            phase_deadline=attempt.phase_deadline,
-            paused_at=attempt.paused_at,
-            paused_seconds=attempt.paused_seconds,
-            finished_at=attempt.finished_at,
-            created_by=attempt.created_by,
-            created_at=attempt.created_at,
-            updated_at=attempt.updated_at,
-            remaining_seconds=self._remaining(attempt, now),
-            server_now=now,
-            assessment_window=await self._window_read(attempt.id) if attempt.status == "finished" else None,
-        )
+    async def _read(self, attempt: ExamAttempt, now: datetime | None = None) -> AttemptRead:
+        return await attempt_read(self._repository, attempt, now=self._clock() if now is None else now)
 
     def _event(self, attempt: ExamAttempt, *, action: str, user: User, now: datetime, reason: str | None = None):
         self._repository.uow.session.add(
@@ -131,7 +98,18 @@ class ExamAttemptService:
         exam = await self._lock_exam(workspace_id, exam_id, user)
         existing = await self._repository.by_registration(workspace_id, exam_id, data.registration_id)
         if existing is not None:
+            if existing.status == "postponed":
+                self._conflict("attempt_postponed")
             return await self._read(existing), False
+        registration = await self._registrations_repository.registration(workspace_id, exam_id, data.registration_id)
+        if registration is None:
+            raise NotFoundError("Registration not found")
+        if registration.status != "active":
+            self._conflict("registration_not_active")
+        if registration.started_at is not None:
+            self._conflict("defense_already_started")
+        if registration.queue_hold is not None or registration.queue_position is None:
+            self._conflict("registration_not_queued")
         if await self._repository.running(exam_id) is not None:
             self._conflict("another_defense_active")
         now = self._clock()
@@ -176,6 +154,7 @@ class ExamAttemptService:
             raise
         self._event(attempt, action="started", user=user, now=now)
         await self._repository.uow.session.flush()
+        await self._queue.release(workspace_id, exam_id, registration)
         return await self._read(attempt), True
 
     async def current(self, workspace_id: int, exam_id: int, user: User) -> CurrentAttemptRead:
@@ -196,6 +175,8 @@ class ExamAttemptService:
         _, attempt = await self._lock_attempt(workspace_id, exam_id, attempt_id, user)
         if attempt.status == "finished":
             self._conflict("attempt_finished")
+        if attempt.status == "postponed":
+            self._conflict("attempt_postponed")
         if attempt.paused_at is not None:
             self._conflict("attempt_paused")
         if attempt.status == "questions":
@@ -219,6 +200,8 @@ class ExamAttemptService:
         _, attempt = await self._lock_attempt(workspace_id, exam_id, attempt_id, user)
         if attempt.status == "finished":
             self._conflict("attempt_finished")
+        if attempt.status == "postponed":
+            self._conflict("attempt_postponed")
         if attempt.paused_at is not None:
             return await self._read(attempt)
         if attempt.version != data.expected_version:
@@ -237,6 +220,8 @@ class ExamAttemptService:
         _, attempt = await self._lock_attempt(workspace_id, exam_id, attempt_id, user)
         if attempt.status == "finished":
             self._conflict("attempt_finished")
+        if attempt.status == "postponed":
+            self._conflict("attempt_postponed")
         if attempt.paused_at is None:
             return await self._read(attempt)
         if attempt.version != data.expected_version:
@@ -283,13 +268,88 @@ class ExamAttemptService:
         )
         if attempt.paused_at is not None:
             attempt.paused_seconds += int(max(now - attempt.paused_at, timedelta(0)).total_seconds())
+        registration = await self._registrations_repository.registration(workspace_id, exam_id, attempt.registration_id)
+        released = None
+        if registration is not None:
+            released = await self._queue.release(workspace_id, exam_id, registration)
         attempt.status = "finished"
         attempt.finished_at = now
         attempt.paused_at = None
+        attempt.postponed_at = None
+        attempt.postponed_phase = None
         attempt.version += 1
         attempt.updated_at = now
         self._event(attempt, action="finished", user=user, now=now)
         await self._repository.uow.session.flush()
+        if released is None:
+            await self._exams.bump_queue_revision(exam_id)
+        return await self._read(attempt)
+
+    async def postpone(
+        self,
+        workspace_id: int,
+        exam_id: int,
+        attempt_id: int,
+        data: AttemptPostpone,
+        user: User,
+    ) -> AttemptRead:
+        _, attempt = await self._lock_attempt(workspace_id, exam_id, attempt_id, user)
+        if attempt.status == "finished":
+            self._conflict("attempt_finished")
+        if attempt.status == "postponed":
+            return await self._read(attempt)
+        if attempt.version != data.expected_version:
+            self._conflict("attempt_version_conflict")
+        now = self._clock()
+        if attempt.paused_at is not None:
+            attempt.paused_seconds += int(max(now - attempt.paused_at, timedelta(0)).total_seconds())
+            attempt.paused_at = None
+        attempt.postponed_at = now
+        attempt.postponed_phase = attempt.status
+        attempt.status = "postponed"
+        attempt.version += 1
+        attempt.updated_at = now
+        self._event(attempt, action="postponed", user=user, now=now, reason=data.reason)
+        await self._repository.uow.session.flush()
+        await self._exams.bump_queue_revision(exam_id)
+        return await self._read(attempt)
+
+    async def restart(
+        self,
+        workspace_id: int,
+        exam_id: int,
+        attempt_id: int,
+        data: AttemptRestart,
+        user: User,
+    ) -> AttemptRead:
+        _, attempt = await self._lock_attempt(workspace_id, exam_id, attempt_id, user)
+        if attempt.status == "finished":
+            self._conflict("attempt_finished")
+        if attempt.status != "postponed":
+            self._conflict("attempt_not_postponed")
+        if await self._repository.running(exam_id) is not None:
+            self._conflict("another_defense_active")
+        if attempt.version != data.expected_version:
+            self._conflict("attempt_version_conflict")
+        now = self._clock()
+        phase = attempt.postponed_phase
+        timing = await self._timing(exam_id, attempt.settings_version)
+        minutes = timing.presentation_minutes if phase == "speaking" else timing.questions_minutes
+        attempt.status = phase
+        attempt.phase_started_at = now
+        attempt.phase_deadline = now + timedelta(minutes=minutes)
+        attempt.postponed_at = None
+        attempt.postponed_phase = None
+        attempt.version += 1
+        attempt.updated_at = now
+        registration = await self._registrations_repository.registration(workspace_id, exam_id, attempt.registration_id)
+        released = None
+        if registration is not None:
+            released = await self._queue.release(workspace_id, exam_id, registration)
+        self._event(attempt, action="restarted", user=user, now=now, reason=data.reason)
+        await self._repository.uow.session.flush()
+        if released is None:
+            await self._exams.bump_queue_revision(exam_id)
         return await self._read(attempt)
 
     async def events(
