@@ -102,8 +102,10 @@ POST .../attempts/31/restart {"expected_version":4,"reason":"Продолжае�
 - `registration_not_queued` — команда не в очереди (отложена/неявка без возврата или старт не из очереди);
 - `attempt_postponed` — у попытки уже есть отложенное состояние, нужен `restart`;
 - `attempt_not_postponed` — restart не из `postponed`;
-- `attempt_running` — перестановка/неявка/возврат выступающей;
-- `attempt_finished` / `attempt_paused` / `attempt_version_conflict` / `registration_version_conflict` / `registration_not_active` / `defense_already_started` / `another_defense_active` / `queue_position_out_of_range` / `queue_position_conflict` — конфликты состояния и версий.
+- `attempt_running` — перестановка выступающей; неявка/возврат начатой — `defense_already_started`;
+- `attempt_finished` — перестановка завершённой; `attempt_paused` / `attempt_version_conflict` / `registration_version_conflict` / `registration_not_active` / `defense_already_started` / `another_defense_active` / `queue_position_out_of_range` / `queue_position_conflict` — конфликты состояния и версий.
+
+`place`/`next`/`postpone`/`no-show` сверяют `expected_version` регистрации: реальная смена с устаревшей версией — 409 `registration_version_conflict`; no-op по целевому состоянию важнее версии (повтор возвращает 200).
 
 Успех HTTP возвращается после commit. Ошибка любого шага откатывает позиции, удержание, события, окно и смену статуса.
 

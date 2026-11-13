@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from datetime import UTC, datetime
 
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from src.core.exceptions import BusinessLogicError, NotFoundError
@@ -23,6 +24,8 @@ from src.schema.exam_queue import (
 )
 from src.services.exam_attempt_mapping import attempt_read
 from src.services.exam_service import ExamService
+
+SNAPSHOT_RETRIES = 3
 
 
 class ExamQueueService:
@@ -175,10 +178,19 @@ class ExamQueueService:
         exam = await self._exams.get_scoped(workspace_id, exam_id)
         if exam is None:
             raise NotFoundError("Exam not found")
-        now = self._clock()
-        rows = await self._repository.list_active(workspace_id, exam_id)
-        attempts = await self._attempts.for_exam(workspace_id, exam_id)
-        slots = {slot.id: slot for slot in await self._repository.all_slots(exam_id)}
+        for attempt_number in range(SNAPSHOT_RETRIES):
+            now = self._clock()
+            rows = await self._repository.list_active(workspace_id, exam_id)
+            attempts = await self._attempts.for_exam(workspace_id, exam_id)
+            slots = {slot.id: slot for slot in await self._repository.all_slots(exam_id)}
+            latest_revision = await self._repository.uow.session.scalar(
+                select(Exam.queue_revision).where(Exam.id == exam_id)
+            )
+            if latest_revision == exam.queue_revision or attempt_number == SNAPSHOT_RETRIES - 1:
+                break
+            exam = await self._exams.get_scoped(workspace_id, exam_id)
+            if exam is None:
+                raise NotFoundError("Exam not found")
         running: list[tuple[ExamRegistration, QueueItemRead, datetime]] = []
         queued: list[tuple[ExamRegistration, QueueItemRead, datetime]] = []
         postponed: list[tuple[ExamRegistration, QueueItemRead, datetime]] = []
@@ -210,7 +222,7 @@ class ExamQueueService:
         finished.sort(key=lambda entry: (entry[2], entry[0].id), reverse=True)
         ordered = running + queued + postponed + no_show + finished
         return QueueRead(
-            queue_revision=exam.queue_revision,
+            queue_revision=latest_revision,
             server_now=now,
             items=[item for _, item, _ in ordered],
         )
@@ -230,6 +242,8 @@ class ExamQueueService:
         if registration.status != "active":
             self._conflict("registration_not_active")
         attempt = await self._attempts.by_registration(workspace_id, exam_id, registration.id, lock=True)
+        if attempt is None and registration.started_at is not None:
+            self._conflict("defense_already_started")
         if attempt is not None:
             if attempt.status == "finished":
                 self._conflict("attempt_finished")
@@ -244,6 +258,8 @@ class ExamQueueService:
             self._conflict("queue_position_out_of_range")
         if registration.queue_position == index + 1 and registration.queue_hold is None:
             return await self._mutation(exam, registration, attempt, now, exam.queue_revision)
+        if registration.version != data.expected_version:
+            self._conflict("registration_version_conflict")
         from_position = registration.queue_position
         registration.queue_hold = None
         await self._set_order(order, registration, index)
@@ -289,8 +305,6 @@ class ExamQueueService:
             self._conflict("registration_not_active")
         attempt = await self._attempts.by_registration(workspace_id, exam_id, registration.id, lock=True)
         if attempt is not None:
-            if attempt.status == "finished":
-                self._conflict("attempt_finished")
             self._conflict("defense_already_started")
         if registration.started_at is not None:
             self._conflict("defense_already_started")
@@ -301,6 +315,8 @@ class ExamQueueService:
             self._conflict("registration_not_queued")
         if registration.queue_position is None:
             self._conflict("registration_not_queued")
+        if registration.version != data.expected_version:
+            self._conflict("registration_version_conflict")
         from_position = registration.queue_position
         await self._release(exam, registration)
         registration.queue_hold = "postponed"
@@ -335,8 +351,6 @@ class ExamQueueService:
             self._conflict("registration_not_active")
         attempt = await self._attempts.by_registration(workspace_id, exam_id, registration.id, lock=True)
         if attempt is not None:
-            if attempt.status == "finished":
-                self._conflict("attempt_finished")
             self._conflict("defense_already_started")
         if registration.started_at is not None:
             self._conflict("defense_already_started")
@@ -345,6 +359,8 @@ class ExamQueueService:
             return await self._mutation(exam, registration, attempt, now, exam.queue_revision)
         if registration.queue_position is None and registration.queue_hold != "postponed":
             self._conflict("registration_not_queued")
+        if registration.version != data.expected_version:
+            self._conflict("registration_version_conflict")
         from_position = registration.queue_position
         await self._release(exam, registration)
         registration.queue_hold = "no_show"

@@ -296,7 +296,8 @@ class ExamRegistrationService:
             from_slot_id=row.slot_id,
         )
         await self._flush()
-        await self._queue.release(workspace_id, exam_id, row)
+        if await self._queue.release(workspace_id, exam_id, row) is None:
+            await ExamRepository(self._repository.uow).bump_queue_revision(exam_id)
         return RegistrationRead.model_validate(row)
 
     async def cancel_self(
@@ -342,7 +343,8 @@ class ExamRegistrationService:
         row.queue_hold = None
         # Release the global active-project index before inserting its successor.
         await self._flush()
-        await self._queue.release(workspace_id, exam_id, row)
+        if await self._queue.release(workspace_id, exam_id, row) is None:
+            await ExamRepository(self._repository.uow).bump_queue_revision(exam_id)
         target = self._new(workspace_id, data.target_exam_id, project, data.target_slot_id, user, now, source)
         await self._flush()
         await self._queue.assign_on_create(workspace_id, data.target_exam_id, target)
