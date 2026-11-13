@@ -104,6 +104,15 @@ class ExamAttemptRepository:
             await self.uow.session.scalars(select(AssessmentWindow).where(AssessmentWindow.attempt_id == attempt_id))
         ).one_or_none()
 
+    async def windows_for_exam(self, workspace_id: int, exam_id: int) -> dict[int, AssessmentWindow]:
+        rows = await self.uow.session.scalars(
+            select(AssessmentWindow).where(
+                AssessmentWindow.workspace_id == workspace_id,
+                AssessmentWindow.exam_id == exam_id,
+            )
+        )
+        return {row.attempt_id: row for row in rows}
+
     async def events(self, attempt_id: int, *, limit: int, offset: int) -> list[AttemptEvent]:
         return list(
             (
