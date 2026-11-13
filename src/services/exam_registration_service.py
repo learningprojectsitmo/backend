@@ -16,12 +16,14 @@ from src.repository.project_type_question_repository import ProjectTypeQuestionR
 from src.schema.exam_registration import (
     EventListRead,
     EventRead,
+    RegistrationAttemptBinding,
     RegistrationCancel,
     RegistrationCreate,
     RegistrationListRead,
     RegistrationMove,
     RegistrationMoveRead,
     RegistrationRead,
+    RegistrationVersion,
     SlotBatchCreate,
     SlotListRead,
     SlotRead,
@@ -408,4 +410,80 @@ class ExamRegistrationService:
             limit=limit,
             offset=offset,
             has_more=len(events) > limit,
+        )
+
+    async def create_organized(
+        self, workspace_id: int, exam_id: int, data: RegistrationCreate, user: User
+    ) -> RegistrationRead:
+        return await self._create(workspace_id, exam_id, data, user, organized=True)
+
+    async def cancel_organized(
+        self, workspace_id: int, exam_id: int, registration_id: int, data: RegistrationCancel, user: User
+    ) -> RegistrationRead:
+        return await self._cancel(workspace_id, exam_id, registration_id, data, user, organized=True)
+
+    async def move_organized(
+        self, workspace_id: int, exam_id: int, registration_id: int, data: RegistrationMove, user: User
+    ) -> RegistrationMoveRead:
+        return await self._move(workspace_id, exam_id, registration_id, data, user, organized=True)
+
+    async def list_organized(
+        self,
+        workspace_id: int,
+        exam_id: int,
+        user: User,
+        *,
+        project_id: int | None,
+        status: str | None,
+        limit: int,
+        offset: int,
+    ) -> RegistrationListRead:
+        await self._exam_service.require_organizer(workspace_id, exam_id, user)
+        rows = await self._repository.list_registrations(
+            workspace_id, exam_id, author_id=None, project_id=project_id, status=status, limit=limit, offset=offset
+        )
+        return RegistrationListRead(
+            items=[RegistrationRead.model_validate(r) for r in rows[:limit]],
+            limit=limit,
+            offset=offset,
+            has_more=len(rows) > limit,
+        )
+
+    async def claim_for_attempt(
+        self,
+        workspace_id: int,
+        exam_id: int,
+        registration_id: int,
+        *,
+        expected_version: int,
+        actor: User,
+        started_at: datetime,
+    ) -> RegistrationAttemptBinding:
+        data = RegistrationVersion(expected_version=expected_version)
+        try:
+            started_at = ExamService._utc(started_at)
+        except OverflowError as error:
+            raise ValueError("Timestamp is outside the supported UTC range") from error
+        row, project, _, _ = await self._change(
+            workspace_id, exam_id, registration_id, data, actor, organized=True, target_exam_id=exam_id
+        )
+        row.started_at = started_at
+        self._touch(row, actor, started_at)
+        self._event(
+            row,
+            action="defense_started",
+            source="organizer",
+            user=actor,
+            now=started_at,
+            from_slot_id=row.slot_id,
+            to_slot_id=row.slot_id,
+        )
+        await self._flush()
+        return RegistrationAttemptBinding(
+            registration_id=row.id,
+            workspace_id=workspace_id,
+            exam_id=exam_id,
+            project_id=project.id,
+            project_type_id=project.project_type_id,
+            started_at=started_at,
         )

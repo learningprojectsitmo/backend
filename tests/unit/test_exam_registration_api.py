@@ -98,3 +98,20 @@ async def test_http_rejects_database_integer_overflow(client, path):
     async with client:
         response = await client.get(path)
     assert response.status_code == 422
+
+
+@pytest.mark.parametrize(
+    "method,path",
+    [
+        ("GET", "/registrations"),
+        ("POST", "/registrations"),
+        ("POST", "/registrations/1/cancel"),
+        ("POST", "/registrations/1/move"),
+    ],
+)
+async def test_organizer_registration_routes_require_authentication(client, method, path):
+    async with client:
+        response = await client.request(
+            method, "/v1/workspaces/1/exams/1" + path, headers={"Authorization": "Bearer invalid"}
+        )
+    assert response.status_code == 401

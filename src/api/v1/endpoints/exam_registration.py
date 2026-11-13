@@ -111,3 +111,54 @@ async def registration_history(
     service: ExamRegistrationService = Depends(get_exam_registration_service),
 ):
     return await service.history(workspace_id, exam_id, registration_id, user, limit=limit, offset=offset)
+
+
+@exam_registration_router.post("/registrations", response_model=RegistrationRead, status_code=201)
+async def create_organized_registration(
+    data: RegistrationCreate,
+    workspace_id: int = Path(ge=1, le=PG_INTEGER_MAX),
+    exam_id: int = Path(ge=1, le=PG_INTEGER_MAX),
+    user: User = Depends(get_current_user),
+    service: ExamRegistrationService = Depends(get_exam_registration_service),
+):
+    return await service.create_organized(workspace_id, exam_id, data, user)
+
+
+@exam_registration_router.get("/registrations", response_model=RegistrationListRead)
+async def list_organized_registrations(
+    workspace_id: int = Path(ge=1, le=PG_INTEGER_MAX),
+    exam_id: int = Path(ge=1, le=PG_INTEGER_MAX),
+    project_id: int | None = Query(None, ge=1, le=PG_INTEGER_MAX),
+    status: RegistrationStatus | None = None,
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0, le=PG_INTEGER_MAX),
+    user: User = Depends(get_current_user),
+    service: ExamRegistrationService = Depends(get_exam_registration_service),
+):
+    return await service.list_organized(
+        workspace_id, exam_id, user, project_id=project_id, status=status, limit=limit, offset=offset
+    )
+
+
+@exam_registration_router.post("/registrations/{registration_id}/cancel", response_model=RegistrationRead)
+async def cancel_organized_registration(
+    data: RegistrationCancel,
+    workspace_id: int = Path(ge=1, le=PG_INTEGER_MAX),
+    exam_id: int = Path(ge=1, le=PG_INTEGER_MAX),
+    registration_id: int = Path(ge=1, le=PG_INTEGER_MAX),
+    user: User = Depends(get_current_user),
+    service: ExamRegistrationService = Depends(get_exam_registration_service),
+):
+    return await service.cancel_organized(workspace_id, exam_id, registration_id, data, user)
+
+
+@exam_registration_router.post("/registrations/{registration_id}/move", response_model=RegistrationMoveRead)
+async def move_organized_registration(
+    data: RegistrationMove,
+    workspace_id: int = Path(ge=1, le=PG_INTEGER_MAX),
+    exam_id: int = Path(ge=1, le=PG_INTEGER_MAX),
+    registration_id: int = Path(ge=1, le=PG_INTEGER_MAX),
+    user: User = Depends(get_current_user),
+    service: ExamRegistrationService = Depends(get_exam_registration_service),
+):
+    return await service.move_organized(workspace_id, exam_id, registration_id, data, user)
