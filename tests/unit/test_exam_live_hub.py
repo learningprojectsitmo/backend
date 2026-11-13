@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from types import SimpleNamespace
 
-from src.services.exam_live_hub import ExamLiveConfig, ExamLiveHub, OutboundBuffer
+from src.services.exam_live_hub import ExamLiveConfig, ExamLiveConnection, ExamLiveHub, OutboundBuffer
 
 
 class FakeConnection:
@@ -115,3 +115,37 @@ async def test_duplicate_or_older_stream_seq_is_not_broadcast():
 
     assert connection.offers == []
     await hub.stop()
+
+
+class SlowWebSocket:
+    def __init__(self):
+        self.close_code = None
+
+    async def send_json(self, _payload):
+        await asyncio.sleep(0.05)
+
+    async def close(self, code: int = 1000, reason: str = ""):
+        del reason
+        self.close_code = code
+
+
+async def test_slow_consumer_is_closed_with_4408():
+    websocket = SlowWebSocket()
+    connection = ExamLiveConnection(
+        websocket,
+        workspace_id=7,
+        exam_id=12,
+        user=SimpleNamespace(id=7),
+        token="token",
+        role="viewer",
+        can_manage=False,
+        reason="connected",
+        config=ExamLiveConfig(max_messages=1, send_timeout_seconds=0.01),
+        clock=lambda: None,
+    )
+    connection.buffer.offer({"type": "heartbeat", "stream_seq": 1})
+    connection.buffer.offer({"type": "heartbeat", "stream_seq": 2})
+
+    await connection._send_loop()
+
+    assert websocket.close_code == 4408
