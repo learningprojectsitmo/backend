@@ -65,7 +65,7 @@ class ExamLiveService:
             exam, _writer = await self._exam_service.read_access(workspace_id, exam_id, user)
         else:
             exam = await self._exams.get_scoped(workspace_id, exam_id)
-            if exam is None or exam.status == "draft":
+            if exam is None:
                 raise NotFoundError("Exam not found")
         stale = False
         queue = None

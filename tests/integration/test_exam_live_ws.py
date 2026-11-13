@@ -458,3 +458,35 @@ async def test_viewer_receives_queue_without_manage_flag(seeded):
         assert hello["access"] == {"role": "viewer", "can_manage": False}
         assert snapshot["exam"]["id"] == s["exams"][0]
         assert "queue" in snapshot
+
+
+async def test_draft_organizer_receives_publish_change(seeded):
+    s = seeded
+    teacher = token_for(s["users"]["teacher"])
+    async with (
+        run_server(s["url"]) as base,
+        live_socket(base, s["workspace"], s["draft"], teacher) as websocket,
+    ):
+        await receive(websocket, "hello")
+        snapshot = await receive(websocket)
+        assert snapshot["exam"]["status"] == "draft"
+        async with httpx.AsyncClient(base_url=base) as client:
+            await http_json(
+                client,
+                "POST",
+                f"/v1/workspaces/{s['workspace']}/exams/{s['draft']}/publish",
+                teacher,
+                json={"expected_version": 1},
+            )
+        changed = await receive(websocket)
+        assert changed["exam"]["status"] == "published"
+        assert "exam" in changed["changed"]
+
+
+async def test_foreign_workspace_is_rejected(seeded):
+    s = seeded
+    async with (
+        run_server(s["url"]) as base,
+        live_socket(base, s["workspace"], s["exams"][0], token_for(s["users"]["outsider"])) as websocket,
+    ):
+        assert await wait_for_close(websocket) == 4404
