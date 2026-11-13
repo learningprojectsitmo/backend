@@ -31,7 +31,7 @@ class ExamService:
         workspace = await self._questions.get_workspace(workspace_id)
         if workspace is None:
             raise NotFoundError("Workspace not found")
-        role = user.role.name if user.role else None
+        role = await self._questions.get_global_role(user.id)
         if role == "admin":
             return True
         member, local = await self._questions.get_membership_role(workspace_id, user.id)
@@ -122,6 +122,9 @@ class ExamService:
         ):
             self._conflict("published_schedule_locked")
         if old != config:
+            earliest = await self._repository.earliest_slot_start(exam_id)
+            if earliest is not None and earliest < config.starts_at:
+                self._conflict("slot_schedule_conflict")
             await self._types(workspace_id, config.project_type_ids, ready=exam.status == "published")
             await self._repository.append_revision(exam, config, changed_by=user.id, reason=data.reason)
         return await self._read(exam)
@@ -204,3 +207,9 @@ class ExamService:
             opened_at=opened_at,
             closes_at=opened_at + timedelta(minutes=config.assessment_window_minutes),
         )
+
+    async def require_read_access(self, workspace_id: int, exam_id: int, user: User) -> None:
+        await self._exam(workspace_id, exam_id, user)
+
+    async def require_organizer(self, workspace_id: int, exam_id: int, user: User) -> None:
+        await self._exam(workspace_id, exam_id, user, write=True)

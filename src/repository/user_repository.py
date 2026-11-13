@@ -8,7 +8,7 @@ from sqlalchemy.orm import selectinload
 
 from src.core.uow import IUnitOfWork
 from src.model.auth import NewUser
-from src.model.user import Permission, User, UserPermission
+from src.model.user import Permission, Role, User, UserPermission
 from src.repository.base_repository import BaseRepository
 from src.schema.user import (
     NewUserCreate,
@@ -23,6 +23,20 @@ class UserRepository(BaseRepository[User, UserCreateHashedPwd, UserUpdate]):
     def __init__(self, uow: IUnitOfWork) -> None:
         super().__init__(uow)
         self._model = User
+
+    async def can_update_role(self, actor_id: int, target_id: int, role_id: int | None) -> bool:
+        # Lock both users in a stable order through the enclosing profile update.
+        # Comparing scalar DB values also rejects a stale unchanged-role echo.
+        query = (
+            select(User.id, User.role_id)
+            .where(User.id.in_({actor_id, target_id}))
+            .order_by(User.id)
+            .with_for_update(of=User)
+        )
+        rows = {row.id: row for row in (await self.uow.session.execute(query)).all()}
+        actor, target = rows.get(actor_id), rows.get(target_id)
+        admin_id = await self.uow.session.scalar(select(Role.id).where(Role.name == "admin"))
+        return actor is not None and target is not None and (target.role_id == role_id or actor.role_id == admin_id)
 
     async def get_by_id_with_role(self, id: int) -> User | None:
         result = await self.uow.session.execute(

@@ -3,11 +3,12 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any
 
-from sqlalchemy import Date, cast, func, or_, select, update
+from sqlalchemy import Date, cast, exists, func, or_, select, update
 from sqlalchemy.orm import selectinload
 from sqlalchemy.sql.elements import ColumnElement
 
 from src.core.uow import IUnitOfWork
+from src.model.exam_registration import ExamRegistration
 from src.model.project import (
     Project,
     ProjectParticipation,
@@ -62,6 +63,18 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         )
         result = await self.uow.session.execute(query)
         return result.scalar_one_or_none()
+
+    async def get_for_registration_update(self, project_id: int) -> Project | None:
+        query = (
+            select(Project).where(Project.id == project_id).with_for_update().execution_options(populate_existing=True)
+        )
+        return (await self.uow.session.scalars(query)).one_or_none()
+
+    async def has_registration_history(self, project_id: int, *, active_only: bool = False) -> bool:
+        query = select(ExamRegistration.id).where(ExamRegistration.project_id == project_id)
+        if active_only:
+            query = query.where(or_(ExamRegistration.status == "active", ExamRegistration.started_at.is_not(None)))
+        return bool(await self.uow.session.scalar(select(exists(query))))
 
     async def is_user_in_project(self, project_id: int, user_id: int) -> bool:
         """Есть ли пользователь в проекте.

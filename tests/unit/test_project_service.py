@@ -46,6 +46,12 @@ class TestProjectService:
         editor_result = Mock()
         editor_result.scalars.return_value.all.return_value = []
         mock_session.execute = AsyncMock(return_value=editor_result)
+
+        async def locked_project(project_id):
+            return await mock_repo.get_by_id(project_id)
+
+        mock_repo.get_for_registration_update = AsyncMock(side_effect=locked_project)
+        mock_repo.has_registration_history = AsyncMock(return_value=False)
         return mock_repo
 
     @staticmethod
@@ -1084,7 +1090,8 @@ class TestProjectService:
         # given
         mock_repository = Mock(spec=ProjectRepository)
         mock_project = Project(id=1, name="Test Project", description="Test Description", author_id=1)
-        mock_repository.get_by_id.return_value = mock_project
+        mock_repository.get_for_registration_update.return_value = mock_project
+        mock_repository.has_registration_history.return_value = False
         mock_repository.delete.return_value = True
 
         project_service = ProjectService(mock_repository)
@@ -1094,7 +1101,7 @@ class TestProjectService:
 
         # then
         assert result is True
-        mock_repository.get_by_id.assert_called_once_with(1)
+        mock_repository.get_for_registration_update.assert_called_once_with(1)
         mock_repository.delete.assert_called_once_with(1)
 
     @pytest.mark.asyncio
@@ -1103,7 +1110,8 @@ class TestProjectService:
         # given
         mock_repository = Mock(spec=ProjectRepository)
         mock_project = Project(id=1, name="Test Project", description="Test Description", author_id=99)
-        mock_repository.get_by_id.return_value = mock_project
+        mock_repository.get_for_registration_update.return_value = mock_project
+        mock_repository.has_registration_history.return_value = False
         mock_repository.delete.return_value = True
 
         project_service = ProjectService(mock_repository)

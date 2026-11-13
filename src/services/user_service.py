@@ -49,6 +49,9 @@ class UserService(BaseService[User, UserCreate, UserUpdate]):
         self._mail_service = mail_service or MailService()
         self._logger = get_logger(self.__class__.__name__)
 
+    async def can_update_role(self, actor_id: int, target_id: int, role_id: int | None) -> bool:
+        return await self._user_repository.can_update_role(actor_id, target_id, role_id)
+
     async def _get_default_role_id(self) -> int:
         """Вернуть id роли по умолчанию (member) для новых пользователей."""
         member_role = await self._role_repository.get_by_name("member")

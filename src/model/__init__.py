@@ -5,6 +5,7 @@ from src.model.audit import AuditLog
 from src.model.auth import NewUser, PasswordReset, Session
 from src.model.education import Education
 from src.model.exam import Exam, ExamSettingsProjectType, ExamSettingsRevision
+from src.model.exam_registration import ExamRegistration, ExamSlot, RegistrationEvent
 from src.model.ideas import Idea, IdeaComment, IdeaTag, IdeaVote
 from src.model.kanban_models import Column, Subtask, Task, TaskAssignee, TaskHistory
 from src.model.language import Language
@@ -34,8 +35,10 @@ __all__ = [
     "Column",
     "Education",
     "Exam",
+    "ExamRegistration",
     "ExamSettingsProjectType",
     "ExamSettingsRevision",
+    "ExamSlot",
     "Idea",
     "IdeaComment",
     "IdeaTag",
@@ -54,6 +57,7 @@ __all__ = [
     "ProjectTypeQuestionLevel",
     "ProjectTypeQuestionLock",
     "ProjectVacancy",
+    "RegistrationEvent",
     "Response",
     "Resume",
     "ResumeEducation",
