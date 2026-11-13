@@ -24,7 +24,7 @@ def snapshot(seq: int, *, stale: bool = False):
         stale=stale,
         queue=SimpleNamespace(queue_revision=17, settings_version=3),
         server_now=None,
-        model_dump=lambda _mode="json": {
+        model_dump=lambda **_: {
             "type": "snapshot",
             "stream_seq": seq,
             "stale": stale,
