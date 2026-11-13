@@ -39,11 +39,15 @@ class ExamService:
             raise NotFoundError("Workspace not found")
         return role == "teacher" or local in {"teacher", "admin"}
 
-    async def _exam(self, workspace_id, exam_id, user, *, write=False, lock=False):
+    async def read_access(self, workspace_id, exam_id, user, *, lock=False):
         writer = await self._scope(workspace_id, user)
         exam = await self._repository.get_scoped(workspace_id, exam_id, lock=lock)
         if exam is None or (exam.status == "draft" and (not writer)):
             raise NotFoundError("Exam not found")
+        return exam, writer
+
+    async def _exam(self, workspace_id, exam_id, user, *, write=False, lock=False):
+        exam, writer = await self.read_access(workspace_id, exam_id, user, lock=lock)
         if write and (not writer):
             raise PermissionError("Only workspace teacher/admin can manage exams")
         return exam
@@ -212,7 +216,7 @@ class ExamService:
         )
 
     async def require_read_access(self, workspace_id: int, exam_id: int, user: User) -> None:
-        await self._exam(workspace_id, exam_id, user)
+        await self.read_access(workspace_id, exam_id, user)
 
     async def require_organizer(self, workspace_id: int, exam_id: int, user: User) -> None:
         await self._exam(workspace_id, exam_id, user, write=True)

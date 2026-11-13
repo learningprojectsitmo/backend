@@ -7,10 +7,13 @@ import asyncpg
 import pytest
 import test_exam_registrations_db as registration_cases
 from sqlalchemy import select
+from test_exam_eta_db import finish_attempt, start
+from test_exam_queue_db import read_queue, register
 
 from src.core.exam_live_protocol import EXAM_LIVE_CHANNEL
 from src.model.exam import Exam
 from src.repository.exam_repository import ExamRepository
+from src.services.exam_live_service import ExamLiveService
 
 pytestmark = pytest.mark.integration
 
@@ -122,3 +125,41 @@ async def test_queue_revision_bump_marks_queue_and_moves_stream_seq(seeded):
         assert note == {"exam_id": s["exams"][0], "stream_seq": before + 1, "changed": ["queue"]}
     finally:
         await connection.close()
+
+
+async def live_snapshot(s, *, user="teacher", exam=0):
+    async with s["uow"]() as u:
+        return await ExamLiveService(u).snapshot(
+            s["workspace"], s["exams"][exam] if exam != "draft" else s["draft"], s["users"][user], reason="connected"
+        )
+
+
+async def test_snapshot_uses_http_queue_and_reports_finished_window(seeded):
+    s = seeded
+    registration = await register(s, "manager")
+    attempt, _ = await start(s, registration)
+    finished = await finish_attempt(s, attempt, attempt.version)
+
+    snapshot = await live_snapshot(s)
+
+    assert snapshot.stream_seq >= 1
+    assert snapshot.queue.queue_revision == (await read_queue(s)).queue_revision
+    assert snapshot.queue.items[0].registration_id == registration.id
+    assert snapshot.queue.items[0].attempt is not None
+    assert snapshot.queue.items[0].attempt.status == "finished"
+    assert len(snapshot.assessment_windows) == 1
+    window = snapshot.assessment_windows[0]
+    assert (window.attempt_id, window.registration_id) == (finished.id, registration.id)
+    assert window.closes_at == finished.assessment_window.closes_at
+    assert window.state == ("open" if snapshot.server_now < window.closes_at else "closed")
+
+
+async def test_draft_is_hidden_from_viewer_but_visible_to_organizer(seeded):
+    s = seeded
+
+    with pytest.raises(Exception) as error:
+        await live_snapshot(s, user="manager", exam="draft")
+    assert error.value.__class__.__name__ == "NotFoundError"
+
+    snapshot = await live_snapshot(s, user="teacher", exam="draft")
+    assert snapshot.exam.status == "draft"
