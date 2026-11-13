@@ -36,10 +36,10 @@ Content-Type: application/json
 {"project_id":42,"slot_id":5}
 ```
 
-Для Exam без слотов поле можно опустить или передать null. Ответ201 — регистрация:
+Для Exam без слотов поле можно опустить или передать null. Ответ201 — регистрация (позиция в очереди назначается при создании; см. [очередь](exam-queue.md)):
 
 ```json
-{"id":91,"workspace_id":7,"exam_id":12,"project_id":42,"project_type_id_at_registration":8,"slot_id":5,"status":"active","version":1,"created_source":"manager","created_by":17,"created_at":"2026-11-20T10:00:00Z","updated_by":17,"updated_at":"2026-11-20T10:00:00Z","started_at":null}
+{"id":91,"workspace_id":7,"exam_id":12,"project_id":42,"project_type_id_at_registration":8,"slot_id":5,"queue_position":1,"queue_hold":null,"status":"active","version":1,"created_source":"manager","created_by":17,"created_at":"2026-11-20T10:00:00Z","updated_by":17,"updated_at":"2026-11-20T10:00:00Z","started_at":null}
 ```
 
 Проверяются свой проект/роль, общий workspace, выбранный в Exam тип проекта, published, открытый период и слот. Самостоятельные create/cancel/move разрешены от `max(published_at,registration_opens_at)` включительно до `min(starts_at,registration_closes_at)` исключительно; при null используются published_at/starts_at. Проверка периода и запись выполняются в одной транзакции существующим `ExamService.require_self_registration_open`.
@@ -55,7 +55,7 @@ GET /v1/workspaces/7/exams/12/registrations/91/history
 
 Списки: limit50 по умолчанию (1–100), offset0; `items,limit,offset,has_more`. Статус фильтра: active/cancelled/moved. Свои регистрации отсортированы created_at,id; события — version. Без фильтра status остаются видны отменённые/перенесённые строки. Текущий автор проекта сохраняет чтение после cutoff/потери роли manager при сохранённом доступе к workspace. Чужой manager не видит эту историю; scoped teacher/admin может читать её как организатор.
 
-Событие содержит action/source/actor_id/occurred_at/reason, old/new slot ids, nullable related_registration_id/transfer_id и версию. `created_source/created_by` регистрации не меняются при последующих действиях; конкретное действие видно в событиях. Сведения в истории не являются чужими листами/баллами оценивания.
+Событие содержит action/source/actor_id/occurred_at/reason, old/new slot ids, `from_position/to_position` для queue-действий, nullable related_registration_id/transfer_id и версию. Действия #108: `postponed`, `returned`, `no_show`, `queue_changed` (источник organizer). `created_source/created_by` регистрации не меняются при последующих действиях; конкретное действие видно в событиях. Сведения в истории не являются чужими листами/баллами оценивания.
 
 ## Отмена и перенос
 
@@ -96,7 +96,7 @@ Teacher/admin с правами Exam управляет любой команд�
 
 ## Начало защиты и изменение проекта
 
-Регистрация не создаёт попытку, таймер, очередь или окно оценивания. С #107 постоянный started_at выставляет старт попытки: после фактического начала обычные cancel/move запрещены409, включая завершённую защиту. Техническое откладывание и пересдача — отдельные сценарии #108, не перенос начатой записи. HTTP старта защиты — в [инструкции попытки](exam-attempts.md).
+Регистрация не создаёт попытку, таймер или окно оценивания, но при создании получает место в очереди (`queue_position`) и при откладывании/неявке — удержание (`queue_hold`). С #107 постоянный started_at выставляет старт попытки: после фактического начала обычные cancel/move запрещены409, включая завершённую защиту. Техническое откладывание, неявка, возврат и перестановка — отдельные сценарии #108, не перенос начатой записи; HTTP — в [инструкции очереди](exam-queue.md).
 
 При active/started регистрации существующий Project CRUD запрещает менять workspace/type409 `project_registration_locked`. Название/описание и обычная смена автора не переписывают историю; право manager проверяется по текущему автору. После отмены всех не начатых записей смена типа/workspace снова возможна. Проект с любой историей регистраций удалять нельзя409 `project_has_registrations`.
 
@@ -119,7 +119,7 @@ Teacher/admin с правами Exam управляет любой команд�
 - `defense_already_started`: начатую/завершённую защиту нельзя менять этим API.
 - `project_registration_locked` / `project_has_registrations`: ограничение изменения/удаления проекта.
 
-Успех HTTP возвращается после commit. Неизвестная/отложенная ошибка БД возвращает500 и откатывает регистрацию, события и освобождение исходного места. Порядок locks: Exam ids ASC → Project → Registration → Slot ids ASC; часы сервера проверяются после ожидания блокировок. Не повторять POST вслепую после неопределённого сетевого результата: сначала перечитать свои записи/версию.
+Успех HTTP возвращается после commit. Неизвестная/отложенная ошибка БД возвращает500 и откатывает регистрацию, события, позиции очереди и освобождение исходного места. Порядок locks: Exam ids ASC → Project → Registration → Slot ids ASC; часы сервера проверяются после ожидания блокировок. Для queue-операций порядок: Exam → регистрации Exam (ORDER BY id) → Attempt; все они сериализуются блокировкой Exam. Не повторять POST вслепую после неопределённого сетевого результата: сначала перечитать свои записи/версию.
 
 ## Хранение и проверка
 

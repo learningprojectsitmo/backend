@@ -1,6 +1,6 @@
 # Попытка защиты: старт, фазы, пауза и конец
 
-Попытка создаётся по записи команды на экзамен и связывает регистрацию, экзамен, проект и workspace. Ведёт защиту организатор Exam (teacher/admin с доступом). Попытка может проходить через фазы `speaking` → `questions` → `finished`; пауза останавливает таймер текущей фазы, но не освобождает место выступающей команды. В экзамене одновременно идёт не более одной попытки.
+Попытка создаётся по записи команды на экзамен и связывает регистрацию, экзамен, проект и workspace. Ведёт защиту организатор Exam (teacher/admin с доступом). Попытка может проходить через фазы `speaking` → `questions` → `finished`, а также быть временно отложенной (`postponed`) и продолженной в той же попытке. Пауза останавливает таймер текущей фазы, но не освобождает место выступающей команды; откладывание освобождает его. В экзамене одновременно идёт не более одной попытки.
 
 Все операции требуют Bearer token. База маршрутов: `/v1/workspaces/{workspace_id}/exams/{exam_id}/attempts`.
 
@@ -46,6 +46,18 @@ POST .../attempts/31/finish      {"expected_version":4}
 
 Повтор уже применённой команды — no-op: тот же статус, версия, дедлайн и число событий; исключение — `questions` на паузе, где возвращается409 `attempt_paused`. Команды после `finished` (кроме повторного `finish`) отклоняются `409 attempt_finished`. Устаревшая `expected_version` при реальной смене — `409 attempt_version_conflict`.
 
+## Откладывание и повторный запуск
+
+```http
+POST .../attempts/31/postpone {"expected_version":3,"reason":"Сбой проектора"}
+POST .../attempts/31/restart  {"expected_version":4,"reason":"Продолжаем"}
+```
+
+- `postpone` допустим из `speaking`/`questions`, в том числе на паузе. Пауза закрывается и учитывается в `paused_seconds`; попытка получает `status="postponed"`, `postponed_at`, `postponed_phase`, версия+1 и событие `postponed`. Дедлайн не меняется, `remaining_seconds` замораживается. Место выступающей команды освобождается: другая команда может стартовать. Окно оценивания не открывается, вопросы типа не блокируются.
+- `restart` допустим только из `postponed`. Попытка та же, фаза продолжается та, что была при откладывании, а таймер сбрасывается на полную длительность этой фазы из редакции настроек старта; пишется событие `restarted`. Время откладывания в `paused_seconds` не входит. Если в Exam уже идёт другая защита — `409 another_defense_active`; повторный `restart` при идущей защите — `409 attempt_not_postponed`.
+- `finish` из `postponed` разрешён и открывает окно по общим правилам; откладывание само окно не открывает. `questions`/`pause`/`resume` на `postponed` — `409 attempt_postponed`.
+- Очередь, неявка и возврат команд — [`exam-queue.md`](exam-queue.md).
+
 ## Конец защиты и окно оценивания
 
 `finish` в одном UoW:
@@ -69,7 +81,7 @@ GET .../attempts/31
 GET .../attempts/31/events?limit=50&offset=0
 ```
 
-`current` отдаёт выступающую попытку (`speaking`/`questions`), если её нет — последнюю завершённую этого Exam, иначе `{"attempt":null}`. Ответ содержит абсолютный `phase_deadline`, серверные `server_now` и `remaining_seconds`; клиент не использует собственные часы как источник истины. При паузе остаток заморожен. `events` — append-only история, доступна организатору; пагинация `limit` 1–100, `offset`, `has_more`.
+`current` отдаёт выступающую попытку (`speaking`/`questions`); если её нет — последнюю отложенную (`postponed`), затем последнюю завершённую этого Exam, иначе `{"attempt":null}`. Так после откладывания карточка не подменяется чужой завершённой защитой. Ответ содержит абсолютный `phase_deadline`, серверные `server_now` и `remaining_seconds`; клиент не использует собственные часы как источник истины. При паузе остаток заморожен. `events` — append-only история, доступна организатору; пагинация `limit` 1–100, `offset`, `has_more`.
 
 Чтение доступно участнику, который видит опубликованный Exam; draft скрыт. Мутации — только организатор Exam. Проект, руководитель и состав команды в ответ не входят: их отдают существующие проектные API.
 
@@ -85,13 +97,13 @@ GET .../attempts/31/events?limit=50&offset=0
 
 ## Хранение и границы
 
-Миграция `d107a10b20c6` от `d102a10b20c5` добавляет `exam_attempt`, `attempt_event`, `assessment_window`. Ограничения: `UNIQUE(registration_id)`, partial `UNIQUE(exam_id) WHERE status IN ('speaking','questions')`, scoped FK к регистрации/типу, CHECK статуса/времени/паузы, `UNIQUE(attempt_id,version)` событий. Downgrade теряет попытки/события/окна, сохраняя регистрации, Exam и вопросы; созданный `finish` question lock в `project_type_question_lock` при этом остаётся, поэтому цикл выполнять только в disposable БД.
+Миграция `d107a10b20c6` от `d102a10b20c5` добавляет `exam_attempt`, `attempt_event`, `assessment_window`; #108 расширяет статус `postponed`, поля `postponed_at/postponed_phase` и действия `postponed/restarted`. Ограничения: `UNIQUE(registration_id)`, partial `UNIQUE(exam_id) WHERE status IN ('speaking','questions')` (отложенная микрофон не держит), scoped FK к регистрации/типу, CHECK статуса/времени/паузы, `UNIQUE(attempt_id,version)` событий. Downgrade теряет попытки/события/окна, сохраняя регистрации, Exam и вопросы; созданный `finish` question lock в `project_type_question_lock` при этом остаётся, поэтому цикл выполнять только в disposable БД.
 
-Не реализовано здесь: очередь и перестановка, откладывание/неявка/возврат (#108), WebSocket (#109), ETA (#110), аудитория и допуск (#104/#106), автооткрытие формы/срок/черновик (#111), отправка, редакции и серверный дедлайн (#112), пересдачи и вторая попытка — у регистрации ровно одна попытка.
+Очередь, перестановка, откладывание из очереди, неявка и возврат реализованы в #108 и описаны в [`exam-queue.md`](exam-queue.md). Не реализовано здесь: WebSocket (#109), ETA (#110), аудитория и допуск (#104/#106), автооткрытие формы/срок/черновик (#111), отправка, редакции и серверный дедлайн (#112), пересдачи и вторая попытка — у регистрации ровно одна попытка.
 
 ```sh
 pytest tests/unit/test_exam_attempt_schema.py tests/unit/test_exam_attempt_api.py --no-cov
-REGISTRATION_TEST_DATABASE_URL=... pytest tests/integration/test_exam_attempts_db.py --no-cov
+REGISTRATION_TEST_DATABASE_URL=... pytest tests/integration/test_exam_attempts_db.py tests/integration/test_exam_queue_db.py --no-cov
 ruff check src/ tests/
 ruff format --check src/ tests/
 pytest --no-cov
