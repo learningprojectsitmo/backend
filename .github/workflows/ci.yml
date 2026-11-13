@@ -5,11 +5,7 @@ on:
     branches: [main, develop]
   pull_request:
     branches:
-<<<<<<< HEAD
-      [main, develop, exam, codex/exam-self-registration, codex/exam-organizer-registration, codex/exam-attempts, codex/exam-queue]
-=======
-      [main, develop, exam, codex/exam-self-registration, codex/exam-organizer-registration, codex/exam-attempts, codex/project-type-questions]
->>>>>>> main
+      [main, develop, exam, codex/exam-self-registration, codex/exam-organizer-registration, codex/exam-attempts, codex/exam-queue, codex/project-type-questions]
 
 env:
   PYTHON_VERSION: "3.14"
