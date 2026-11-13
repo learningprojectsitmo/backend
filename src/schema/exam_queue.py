@@ -8,6 +8,9 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from src.schema.exam_attempt import AttemptRead, PositiveId
 
 QueueState = Literal["waiting", "running", "postponed", "no_show", "finished"]
+EtaCertainty = Literal["certain", "lower_bound"]
+EtaReason = Literal["paused", "overdue", "before_start"]
+EtaItemState = Literal["waiting", "postponed"]
 
 
 class QueueDTO(BaseModel):
@@ -50,10 +53,40 @@ class QueueItemRead(QueueDTO):
     attempt: AttemptRead | None = None
 
 
+class EtaCurrentRead(QueueDTO):
+    registration_id: int
+    attempt_id: int
+    status: Literal["speaking", "questions"]
+    paused: bool
+    phase_remaining_seconds: int
+    slot_remaining_seconds: int
+    overdue_seconds: int
+    settings_version: int
+
+
+class EtaItemRead(QueueDTO):
+    registration_id: int
+    position: PositiveId
+    state: EtaItemState
+    eta_seconds: int
+    eta_at: datetime
+    certainty: EtaCertainty
+    reason: EtaReason | None = None
+
+
+class QueueEtaRead(QueueDTO):
+    current: EtaCurrentRead | None
+    items: list[EtaItemRead]
+
+
 class QueueRead(QueueDTO):
     queue_revision: int
     server_now: datetime
+    settings_version: int
+    eta_stale: bool
+    contract_version: int = 1
     items: list[QueueItemRead]
+    eta: QueueEtaRead
 
 
 class QueueMutationRead(QueueDTO):

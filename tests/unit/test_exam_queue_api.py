@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -10,6 +11,7 @@ from fastapi import FastAPI
 from src.api.v1.routes import routers
 from src.core.container import get_auth_service, get_exam_attempt_service, get_exam_queue_service, get_uow
 from src.core.exceptions import AuthError, BusinessLogicError, NotFoundError, PermissionError
+from src.schema.exam_queue import QueueEtaRead, QueueRead
 
 BASE = "/v1/workspaces/7/exams/12/queue"
 ATTEMPTS = "/v1/workspaces/7/exams/12/attempts"
@@ -128,3 +130,24 @@ async def test_attempt_postpone_and_restart_require_authentication():
         restarted = await http.post(ATTEMPTS + "/31/restart", json={"expected_version": 1})
     assert postponed.status_code == 401
     assert restarted.status_code == 401
+
+
+async def test_queue_read_exposes_eta_contract():
+    read_model = QueueRead(
+        queue_revision=17,
+        server_now=datetime(2026, 11, 30, 14, 0, tzinfo=UTC),
+        settings_version=3,
+        eta_stale=False,
+        items=[],
+        eta=QueueEtaRead(current=None, items=[]),
+    )
+    service = SimpleNamespace(read=AsyncMock(return_value=read_model))
+    async with client(app_with(queue_service=service)) as http:
+        response = await http.get(BASE)
+    assert response.status_code == 200
+    body = response.json()
+    assert body["contract_version"] == 1
+    assert body["settings_version"] == 3
+    assert body["eta_stale"] is False
+    assert body["eta"] == {"current": None, "items": []}
+    assert body["server_now"].endswith("Z")

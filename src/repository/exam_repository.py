@@ -62,6 +62,20 @@ class ExamRepository:
     async def get_revision(self, exam_id: int, version: int) -> ExamSettingsRevision | None:
         return await self.uow.session.get(ExamSettingsRevision, (exam_id, version))
 
+    async def revision_state(self, workspace_id: int, exam_id: int) -> tuple[int, int] | None:
+        """Return (queue_revision, current_settings_version) for the ETA snapshot check."""
+        row = (
+            await self.uow.session.execute(
+                select(Exam.queue_revision, Exam.current_settings_version).where(
+                    Exam.id == exam_id,
+                    Exam.workspace_id == workspace_id,
+                )
+            )
+        ).one_or_none()
+        if row is None:
+            return None
+        return int(row[0]), int(row[1])
+
     async def configuration(self, revision: ExamSettingsRevision) -> ExamConfiguration:
         ids = (
             (

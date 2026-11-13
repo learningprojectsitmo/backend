@@ -89,6 +89,16 @@ class ExamAttemptRepository:
         rows = (await self.uow.session.scalars(query)).all()
         return {row.registration_id: row for row in rows}
 
+    async def version_map(self, workspace_id: int, exam_id: int) -> dict[int, int]:
+        """Attempt id -> version; used to detect phase/pause changes that do not bump queue_revision."""
+        rows = await self.uow.session.execute(
+            select(ExamAttempt.id, ExamAttempt.version).where(
+                ExamAttempt.workspace_id == workspace_id,
+                ExamAttempt.exam_id == exam_id,
+            )
+        )
+        return {int(attempt_id): int(version) for attempt_id, version in rows.all()}
+
     async def window(self, attempt_id: int) -> AssessmentWindow | None:
         return (
             await self.uow.session.scalars(select(AssessmentWindow).where(AssessmentWindow.attempt_id == attempt_id))
