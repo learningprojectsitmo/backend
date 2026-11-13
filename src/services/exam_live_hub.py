@@ -330,6 +330,10 @@ class ExamLiveHub:
                     task.cancel()
 
     @property
+    def clock(self) -> Callable[[], datetime]:
+        return self._clock
+
+    @property
     def total_connections(self) -> int:
         return sum(len(connections) for connections in self._subscribers.values())
 
@@ -345,6 +349,23 @@ class ExamLiveHub:
             "settings_version": snapshot.queue.settings_version,
             "stale": snapshot.stale,
         }
+
+    @staticmethod
+    def _auth_service(uow: IUnitOfWork) -> AuthService:
+        return AuthService(
+            UserRepository(uow),
+            SessionService(SessionRepository(uow)),
+            PasswordResetRepository(uow),
+            UserPermissionRepository(uow),
+            RolePermissionRepository(uow),
+        )
+
+    async def authenticate(self, token: str, workspace_id: int, exam_id: int):
+        async with self._uow_factory() as uow:
+            user = await self._auth_service(uow).get_current_user(token)
+            service = ExamLiveService(uow, clock=self._clock)
+            exam, writer = await service.check_read_access(workspace_id, exam_id, user)
+            return user, writer, exam
 
     async def _build(
         self,
@@ -444,15 +465,7 @@ class ExamLiveHub:
     async def recheck_access(self, connection: ExamLiveConnection) -> tuple[str, int] | None:
         try:
             async with self._uow_factory() as uow:
-                user_repository = UserRepository(uow)
-                auth = AuthService(
-                    user_repository,
-                    SessionService(SessionRepository(uow)),
-                    PasswordResetRepository(uow),
-                    UserPermissionRepository(uow),
-                    RolePermissionRepository(uow),
-                )
-                user = await auth.get_current_user(connection.token)
+                user = await self._auth_service(uow).get_current_user(connection.token)
                 service = ExamLiveService(uow, clock=self._clock)
                 await service.check_read_access(connection.workspace_id, connection.exam_id, user)
                 connection.user = user

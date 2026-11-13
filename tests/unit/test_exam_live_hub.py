@@ -14,10 +14,7 @@ class FakeConnection:
     def offer(self, message: dict) -> None:
         self.offers.append(message)
 
-    def request_close(self, code: int, reason: str = "") -> None:
-        self.closed = True
-
-    async def close(self, code: int = 1000, reason: str = "") -> None:
+    async def close(self, _code: int = 1000, _reason: str = "") -> None:
         self.closed = True
 
 
@@ -27,7 +24,7 @@ def snapshot(seq: int, *, stale: bool = False):
         stale=stale,
         queue=SimpleNamespace(queue_revision=17, settings_version=3),
         server_now=None,
-        model_dump=lambda mode="json": {
+        model_dump=lambda _mode="json": {
             "type": "snapshot",
             "stream_seq": seq,
             "stale": stale,

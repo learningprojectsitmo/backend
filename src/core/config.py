@@ -58,6 +58,16 @@ class Settings(BaseSettings):
         "https://fpin-projects.ru",
     ]
 
+    # Exam live WebSocket
+    EXAM_LIVE_HEARTBEAT_SECONDS: float = 20.0
+    EXAM_LIVE_RECONCILE_SECONDS: float = 10.0
+    EXAM_LIVE_ACCESS_CHECK_SECONDS: float = 30.0
+    EXAM_LIVE_AUTH_TIMEOUT_SECONDS: float = 5.0
+    EXAM_LIVE_SEND_TIMEOUT_SECONDS: float = 5.0
+    EXAM_LIVE_COALESCE_SECONDS: float = 0.1
+    EXAM_LIVE_MAX_CONNECTIONS_PER_EXAM: int = 250
+    EXAM_LIVE_MAX_CONNECTIONS_PER_PROCESS: int = 1000
+
     # Logging
     LOG_LEVEL: str = "INFO"
     LOG_FORMAT: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
