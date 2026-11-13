@@ -7,12 +7,16 @@ import asyncpg
 import pytest
 import test_exam_registrations_db as registration_cases
 from sqlalchemy import select
-from test_exam_eta_db import finish_attempt, start
-from test_exam_queue_db import read_queue, register
+from test_exam_eta_db import finish_attempt, pause_attempt, place, set_settings, start, to_questions
+from test_exam_queue_db import attempt_service, read_queue, register
+from test_exam_registrations_db import reg_service
 
 from src.core.exam_live_protocol import EXAM_LIVE_CHANNEL
 from src.model.exam import Exam
+from src.repository.exam_registration_repository import ExamRegistrationRepository
 from src.repository.exam_repository import ExamRepository
+from src.schema.exam_attempt import AttemptCommand
+from src.schema.exam_registration import RegistrationMove
 from src.services.exam_live_service import ExamLiveService
 
 pytestmark = pytest.mark.integration
@@ -163,3 +167,113 @@ async def test_draft_is_hidden_from_viewer_but_visible_to_organizer(seeded):
 
     snapshot = await live_snapshot(s, user="teacher", exam="draft")
     assert snapshot.exam.status == "draft"
+
+
+async def resume_attempt(s, attempt, version):
+    async with s["uow"]() as u:
+        return await attempt_service(u).resume(
+            s["workspace"], s["exams"][0], attempt.id, AttemptCommand(expected_version=version), s["users"]["teacher"]
+        )
+
+
+async def test_questions_pause_resume_advance_stream_without_queue_revision(seeded):
+    s = seeded
+    registration = await register(s, "manager")
+    attempt, _ = await start(s, registration)
+    before_queue = await read_queue(s)
+    before_seq = await stream_seq(s)
+
+    questions = await to_questions(s, attempt, attempt.version)
+    assert (await read_queue(s)).queue_revision == before_queue.queue_revision
+    assert await stream_seq(s) == before_seq + 1
+
+    paused = await pause_attempt(s, questions, questions.version)
+    assert (await read_queue(s)).queue_revision == before_queue.queue_revision
+    assert await stream_seq(s) == before_seq + 2
+
+    resumed = await resume_attempt(s, paused, paused.version)
+    assert (await read_queue(s)).queue_revision == before_queue.queue_revision
+    assert await stream_seq(s) == before_seq + 3
+    snapshot = await live_snapshot(s)
+    assert snapshot.queue.queue_revision == before_queue.queue_revision
+    assert snapshot.queue.items[0].attempt.version == resumed.version
+    assert snapshot.queue.items[0].attempt.status == "questions"
+    assert snapshot.stream_seq == before_seq + 3
+
+
+async def test_repeat_pause_is_noop_for_stream_and_queue(seeded):
+    s = seeded
+    registration = await register(s, "manager")
+    attempt, _ = await start(s, registration)
+    paused = await pause_attempt(s, attempt, attempt.version)
+    before_seq = await stream_seq(s)
+    before_revision = (await read_queue(s)).queue_revision
+
+    repeated = await pause_attempt(s, paused, paused.version)
+
+    assert repeated.version == paused.version
+    assert await stream_seq(s) == before_seq
+    assert (await read_queue(s)).queue_revision == before_revision
+
+
+async def test_settings_change_advances_stream_without_queue_revision(seeded):
+    s = seeded
+    registration = await register(s, "manager")
+    await start(s, registration)
+    before_queue = await read_queue(s)
+    before_seq = await stream_seq(s)
+
+    await set_settings(s, expected_version=1, presentation_minutes=8)
+
+    after_queue = await read_queue(s)
+    assert after_queue.queue_revision == before_queue.queue_revision
+    assert after_queue.settings_version == before_queue.settings_version + 1
+    assert await stream_seq(s) == before_seq + 1
+    snapshot = await live_snapshot(s)
+    assert snapshot.queue.settings_version == after_queue.settings_version
+    assert snapshot.stream_seq == before_seq + 1
+
+
+async def test_slot_change_advances_stream_without_queue_revision(seeded):
+    s = seeded
+    async with s["uow"]() as u:
+        await reg_service(u).add_slots(
+            s["workspace"], s["exams"][0], registration_cases.intervals(), s["users"]["teacher"]
+        )
+    async with s["uow"]() as u:
+        slots = await ExamRegistrationRepository(u).all_slots(s["exams"][0])
+    registration = await register(s, "manager", slot_id=slots[0].id)
+    before_queue = await read_queue(s)
+    before_seq = await stream_seq(s)
+
+    async with s["uow"]() as u:
+        moved = await reg_service(u).move_organized(
+            s["workspace"],
+            s["exams"][0],
+            registration.id,
+            RegistrationMove(
+                expected_version=registration.version,
+                target_exam_id=s["exams"][0],
+                target_slot_id=slots[1].id,
+                reason="Перенос внутри экзамена",
+            ),
+            s["users"]["teacher"],
+        )
+
+    after_queue = await read_queue(s)
+    assert moved.target.slot_id == slots[1].id
+    assert after_queue.queue_revision == before_queue.queue_revision
+    assert await stream_seq(s) == before_seq + 1
+    assert after_queue.items[0].planned_start_at == slots[1].starts_at
+
+
+async def test_queue_place_noop_does_not_advance_stream(seeded):
+    s = seeded
+    registration = await register(s, "manager")
+    before_seq = await stream_seq(s)
+    before_revision = (await read_queue(s)).queue_revision
+
+    await place(s, registration.id, registration.version, position=1)
+
+    assert await stream_seq(s) == before_seq
+    assert (await read_queue(s)).queue_revision == before_revision

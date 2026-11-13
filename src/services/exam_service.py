@@ -131,6 +131,7 @@ class ExamService:
                 self._conflict("slot_schedule_conflict")
             await self._types(workspace_id, config.project_type_ids, ready=exam.status == "published")
             await self._repository.append_revision(exam, config, changed_by=user.id, reason=data.reason)
+            self._repository.uow.mark_exam_changed(exam.id, "settings")
         return await self._read(exam)
 
     async def publish(self, workspace_id: int, exam_id: int, data: ExamPublish, user: User) -> ExamRead:
@@ -143,6 +144,7 @@ class ExamService:
             exam.status = "published"
             exam.published_by = user.id
             exam.published_at = datetime.now(UTC)
+            self._repository.uow.mark_exam_changed(exam.id, "exam")
             await self._repository.uow.session.flush()
         return await self._read(exam)
 

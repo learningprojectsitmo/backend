@@ -121,6 +121,7 @@ class ExamQueueService:
         to_position: int | None = None,
         reason: str | None = None,
     ) -> None:
+        self._repository.uow.mark_exam_changed(registration.exam_id, "queue")
         self._repository.uow.session.add(
             RegistrationEvent(
                 workspace_id=registration.workspace_id,
