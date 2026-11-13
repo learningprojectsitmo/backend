@@ -19,6 +19,7 @@ from src.model.exam_registration import ExamRegistration
 from src.model.project import Project, ProjectType
 from src.model.user import Role, User
 from src.model.workspace import WorkSpace, WorkSpaceParticipation, WorkSpaceStatus
+from src.repository.exam_attempt_repository import ExamAttemptRepository
 from src.repository.exam_registration_repository import ExamRegistrationRepository
 from src.repository.exam_repository import ExamRepository
 from src.repository.project_repository import ProjectRepository
@@ -27,6 +28,7 @@ from src.schema.exam import ExamCreate, ExamPublish, ExamSettingsReplace
 from src.schema.exam_registration import RegistrationCancel, RegistrationCreate, RegistrationMove, SlotBatchCreate
 from src.schema.project import ProjectUpdate
 from src.schema.project_type_question import QuestionListReplace
+from src.services.exam_queue_service import ExamQueueService
 from src.services.exam_registration_service import ExamRegistrationService
 from src.services.exam_service import ExamService
 from src.services.project_service import ProjectService
@@ -40,13 +42,19 @@ START = datetime(2026, 11, 30, 10, tzinfo=UTC)
 
 def reg_service(uow, now=NOW):
     questions = ProjectTypeQuestionRepository(uow)
-    return ExamRegistrationService(
-        ExamRegistrationRepository(uow), ExamService(ExamRepository(uow), questions), questions, clock=lambda: now
+    exam_service = ExamService(ExamRepository(uow), questions)
+    queue = ExamQueueService(
+        ExamRegistrationRepository(uow),
+        ExamAttemptRepository(uow),
+        ExamRepository(uow),
+        exam_service,
+        clock=lambda: now,
     )
+    return ExamRegistrationService(ExamRegistrationRepository(uow), exam_service, questions, queue, clock=lambda: now)
 
 
 @pytest_asyncio.fixture(loop_scope="function")
-async def seeded(registration_db, monkeypatch):
+async def seeded(registration_db, registration_database_url, monkeypatch):
     class FrozenClock(datetime):
         @classmethod
         def now(cls, tz=None):
@@ -158,6 +166,7 @@ async def seeded(registration_db, monkeypatch):
         "projects": ids,
         "exams": [e.id for e in exams],
         "draft": draft.id,
+        "url": registration_database_url,
     }
 
 

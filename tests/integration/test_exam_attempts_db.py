@@ -17,6 +17,7 @@ from src.core.dependencies import get_current_user
 from src.core.exceptions import BusinessLogicError, NotFoundError, PermissionError
 from src.model.exam_attempt import ExamAttempt
 from src.repository.exam_attempt_repository import ExamAttemptRepository
+from src.repository.exam_registration_repository import ExamRegistrationRepository
 from src.repository.exam_repository import ExamRepository
 from src.repository.project_type_question_repository import ProjectTypeQuestionRepository
 from src.schema.exam import ExamSettingsReplace
@@ -24,6 +25,7 @@ from src.schema.exam_attempt import AttemptCommand, AttemptPause, AttemptStart
 from src.schema.exam_registration import RegistrationCreate
 from src.schema.project_type_question import QuestionListReplace
 from src.services.exam_attempt_service import ExamAttemptService
+from src.services.exam_queue_service import ExamQueueService
 from src.services.exam_service import ExamService
 from src.services.project_type_question_service import ProjectTypeQuestionService
 from src.services.question_template_service import QuestionTemplateService
@@ -43,11 +45,17 @@ class Clock:
 
 def attempt_service(uow, now=NOW):
     clock = now if callable(now) else (lambda: now)
+    exam_service = ExamService(ExamRepository(uow), ProjectTypeQuestionRepository(uow))
+    queue = ExamQueueService(
+        ExamRegistrationRepository(uow), ExamAttemptRepository(uow), ExamRepository(uow), exam_service, clock=clock
+    )
     return ExamAttemptService(
         ExamAttemptRepository(uow),
         ExamRepository(uow),
-        reg_service(uow),
-        ExamService(ExamRepository(uow), ProjectTypeQuestionRepository(uow)),
+        reg_service(uow, now),
+        exam_service,
+        queue,
+        ExamRegistrationRepository(uow),
         clock=clock,
     )
 

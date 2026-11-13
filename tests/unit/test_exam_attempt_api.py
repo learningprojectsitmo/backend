@@ -86,6 +86,8 @@ def client(app: FastAPI, *, token: str = "valid", raise_app_exceptions: bool = F
         ("POST", "/31/pause"),
         ("POST", "/31/resume"),
         ("POST", "/31/finish"),
+        ("POST", "/31/postpone"),
+        ("POST", "/31/restart"),
     ],
 )
 async def test_attempt_routes_require_authentication(method, path):
@@ -134,6 +136,10 @@ async def test_start_body_is_strict(body):
         ("/31/pause", {"expected_version": 1, "reason": "a\x00b"}),
         ("/31/resume", {"expected_version": 1, "actor_id": 4}),
         ("/31/finish", {"expected_version": 1, "server_now": "2026-11-30T07:00:00Z"}),
+        ("/31/postpone", {"expected_version": 1}),
+        ("/31/postpone", {"expected_version": 1, "reason": "a\x00b"}),
+        ("/31/restart", {"expected_version": 1, "reason": "a\x00b"}),
+        ("/31/restart", {"expected_version": 1, "extra": 1}),
     ],
 )
 async def test_command_body_is_strict(path, body):
