@@ -1,0 +1,279 @@
+from __future__ import annotations
+
+from datetime import timedelta
+
+import pytest
+import test_exam_registrations_db as registration_cases
+from sqlalchemy import text
+from test_exam_registrations_db import NOW, count, reg_service
+
+from src.repository.exam_attempt_repository import ExamAttemptRepository
+from src.repository.exam_registration_repository import ExamRegistrationRepository
+from src.repository.exam_repository import ExamRepository
+from src.repository.project_type_question_repository import ProjectTypeQuestionRepository
+from src.schema.exam_attempt import AttemptCommand, AttemptStart
+from src.schema.exam_registration import RegistrationCreate
+from src.services.exam_attempt_service import ExamAttemptService
+from src.services.exam_queue_service import ExamQueueService
+from src.services.exam_service import ExamService
+
+pytestmark = pytest.mark.integration
+seeded = registration_cases.seeded
+
+
+async def _organized(s, project="manager", now=NOW):
+    async with s["uow"]() as u:
+        return await reg_service(u, now).create_organized(
+            s["workspace"],
+            s["exams"][0],
+            RegistrationCreate(project_id=s["projects"][project]),
+            s["users"]["teacher"],
+        )
+
+
+async def _start(s, registration, now=NOW):
+    async with s["uow"]() as u:
+        exam_service = ExamService(ExamRepository(u), ProjectTypeQuestionRepository(u))
+
+        def clock():
+            return now
+
+        queue = ExamQueueService(
+            ExamRegistrationRepository(u), ExamAttemptRepository(u), ExamRepository(u), exam_service, clock=clock
+        )
+        svc = ExamAttemptService(
+            ExamAttemptRepository(u),
+            ExamRepository(u),
+            reg_service(u, now),
+            exam_service,
+            queue,
+            ExamRegistrationRepository(u),
+            clock=clock,
+        )
+        return await svc.start(
+            s["workspace"],
+            s["exams"][0],
+            AttemptStart(registration_id=registration.id, expected_version=1),
+            s["users"]["teacher"],
+        )
+
+
+async def _finish_attempt(s, attempt_id, now=None):
+    if now is None:
+        now = NOW
+    async with s["uow"]() as u:
+        repo = ExamAttemptRepository(u)
+        attempt = await repo.get(s["workspace"], s["exams"][0], attempt_id)
+        assert attempt is not None, f"Attempt {attempt_id} not found"
+
+        exam_service = ExamService(ExamRepository(u), ProjectTypeQuestionRepository(u))
+
+        def clock():
+            return now
+
+        queue = ExamQueueService(
+            ExamRegistrationRepository(u), ExamAttemptRepository(u), ExamRepository(u), exam_service, clock=clock
+        )
+        svc = ExamAttemptService(
+            repo,
+            ExamRepository(u),
+            reg_service(u, now),
+            exam_service,
+            queue,
+            ExamRegistrationRepository(u),
+            clock=clock,
+        )
+        return await svc.finish(
+            attempt.workspace_id,
+            attempt.exam_id,
+            attempt.id,
+            AttemptCommand(expected_version=attempt.version),
+            s["users"]["teacher"],
+        )
+
+
+async def _start_and_finish(s, project="manager"):
+    reg = await _organized(s, project=project)
+    result = await _start(s, reg, now=NOW)
+    attempt_read, _created = result
+    finished = await _finish_attempt(s, attempt_read.id, now=NOW + timedelta(minutes=10))
+    async with s["engine"].connect() as conn:
+        window_id = (await conn.execute(
+            text("SELECT id FROM assessment_window WHERE attempt_id = :aid"),
+            {"aid": attempt_read.id},
+        )).scalar_one()
+    return reg, finished, window_id
+
+
+class TestAudienceOnFinish:
+    async def test_creates_audience_on_first_finish(self, seeded):
+        s = seeded
+        _reg, _finished, window_id = await _start_and_finish(s, project="manager")
+        assert window_id is not None
+
+        async with s["engine"].connect() as conn:
+            count = (await conn.execute(
+                text("SELECT count(*) FROM assessment_window_audience WHERE window_id = :wid"),
+                {"wid": window_id},
+            )).scalar_one()
+        assert count > 0
+
+    async def test_audience_has_correct_roles(self, seeded):
+        s = seeded
+        _reg, _finished, window_id = await _start_and_finish(s, project="manager")
+
+        async with s["engine"].connect() as conn:
+            rows = (await conn.execute(
+                text(
+                    "SELECT user_id, role, admitted, exclusion_reason "
+                    "FROM assessment_window_audience WHERE window_id = :wid ORDER BY user_id"
+                ),
+                {"wid": window_id},
+            )).fetchall()
+
+        roles_by_user = {row.user_id: row for row in rows}
+
+        local_teacher = roles_by_user.get(s["users"]["local_teacher"].id)
+        assert local_teacher is not None, "local_teacher should be in audience"
+        assert local_teacher.role == "teacher"
+        assert local_teacher.admitted is True
+        assert local_teacher.exclusion_reason is None
+
+        admin_row = roles_by_user.get(s["users"]["local_admin"].id)
+        assert admin_row is not None, "local_admin should be in audience"
+        assert admin_row.role == "teacher"
+
+        valid_roles = {"teacher", "manager", "member"}
+        for row in rows:
+            assert row.role in valid_roles, f"Invalid role {row.role} for user {row.user_id}"
+
+    async def test_excludes_manager_of_defending_team(self, seeded):
+        s = seeded
+        _reg, _finished, window_id = await _start_and_finish(s, project="manager")
+
+        async with s["engine"].connect() as conn:
+            row = (await conn.execute(
+                text(
+                    "SELECT admitted, exclusion_reason FROM assessment_window_audience "
+                    "WHERE window_id = :wid AND user_id = :uid"
+                ),
+                {"wid": window_id, "uid": s["users"]["manager"].id},
+            )).fetchone()
+
+        assert row is not None, "manager user should be in audience"
+        assert row.admitted is False
+        assert row.exclusion_reason == "manager_of_defending_team"
+
+    async def test_author_of_other_project_is_admitted(self, seeded):
+        s = seeded
+        _reg, _finished, window_id = await _start_and_finish(s, project="manager")
+
+        async with s["engine"].connect() as conn:
+            row = (await conn.execute(
+                text(
+                    "SELECT admitted, exclusion_reason FROM assessment_window_audience "
+                    "WHERE window_id = :wid AND user_id = :uid"
+                ),
+                {"wid": window_id, "uid": s["users"]["member"].id},
+            )).fetchone()
+
+        if row is not None:
+            assert row.admitted is True
+            assert row.exclusion_reason is None
+
+    async def test_teachers_are_never_excluded(self, seeded):
+        s = seeded
+        _reg, _finished, window_id = await _start_and_finish(s, project="manager")
+
+        async with s["engine"].connect() as conn:
+            rows = (await conn.execute(
+                text(
+                    "SELECT user_id, admitted, exclusion_reason FROM assessment_window_audience "
+                    "WHERE window_id = :wid AND role = 'teacher'"
+                ),
+                {"wid": window_id},
+            )).fetchall()
+
+        for row in rows:
+            assert row.admitted is True, f"user {row.user_id}: teacher excluded unexpectedly"
+            assert row.exclusion_reason is None
+
+    async def test_own_project_ids_include_authored_projects(self, seeded):
+        s = seeded
+        _reg, _finished, window_id = await _start_and_finish(s, project="manager")
+
+        async with s["engine"].connect() as conn:
+            row = (await conn.execute(
+                text(
+                    "SELECT own_project_ids FROM assessment_window_audience "
+                    "WHERE window_id = :wid AND user_id = :uid"
+                ),
+                {"wid": window_id, "uid": s["users"]["manager"].id},
+            )).fetchone()
+
+        assert row is not None
+        manager_project_id = s["projects"]["manager"]
+        assert manager_project_id in (row.own_project_ids or [])
+
+    async def test_idempotent_finish_does_not_duplicate_audience(self, seeded):
+        s = seeded
+        _reg, finished, window_id = await _start_and_finish(s, project="manager")
+
+        async with s["engine"].connect() as conn:
+            count1 = (await conn.execute(
+                text("SELECT count(*) FROM assessment_window_audience WHERE window_id = :wid"),
+                {"wid": window_id},
+            )).scalar_one()
+
+        await _finish_attempt(s, finished.id, now=NOW + timedelta(minutes=15))
+
+        async with s["engine"].connect() as conn:
+            count2 = (await conn.execute(
+                text("SELECT count(*) FROM assessment_window_audience WHERE window_id = :wid"),
+                {"wid": window_id},
+            )).scalar_one()
+
+        assert count1 == count2
+        assert count1 > 0
+
+    async def test_manager_is_excluded_with_correct_role(self, seeded):
+        s = seeded
+        _reg, _finished, window_id = await _start_and_finish(s, project="manager")
+
+        async with s["engine"].connect() as conn:
+            row = (await conn.execute(
+                text(
+                    "SELECT role, admitted, exclusion_reason FROM assessment_window_audience "
+                    "WHERE window_id = :wid AND user_id = :uid"
+                ),
+                {"wid": window_id, "uid": s["users"]["manager"].id},
+            )).fetchone()
+
+        assert row is not None
+        assert row.role == "manager"
+        assert row.admitted is False
+        assert row.exclusion_reason == "manager_of_defending_team"
+
+
+class TestAudienceMigration:
+    async def test_table_exists_after_migration(self, seeded):
+        s = seeded
+        async with s["engine"].connect() as conn:
+            tables = set((await conn.execute(
+                text("SELECT tablename FROM pg_tables WHERE schemaname='public'")
+            )).scalars())
+        assert "assessment_window_audience" in tables
+
+    async def test_can_reverse_migration_preserving_exam(self, seeded, registration_database_url, run_migrations):
+        s = seeded
+        run_migrations(registration_database_url, "check")
+        await s["engine"].dispose()
+        run_migrations(registration_database_url, "downgrade", "d108a10b20c7")
+        run_migrations(registration_database_url, "upgrade", "head")
+        assert await count(s, "exam") == 3
+        assert await count(s, "project_type_question") == 1
+        async with s["engine"].connect() as conn:
+            tables = set((await conn.execute(
+                text("SELECT tablename FROM pg_tables WHERE schemaname='public'")
+            )).scalars())
+        assert "assessment_window_audience" in tables

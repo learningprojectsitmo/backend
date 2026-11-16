@@ -3,10 +3,11 @@ from __future__ import annotations
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
+from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
 from src.core.exceptions import BusinessLogicError, NotFoundError
-from src.model.exam_attempt import AssessmentWindow, AttemptEvent, ExamAttempt
+from src.model.exam_attempt import AssessmentWindow, AssessmentWindowAudience, AttemptEvent, ExamAttempt
 from src.model.user import User
 from src.repository.exam_attempt_repository import ExamAttemptRepository
 from src.repository.exam_registration_repository import ExamRegistrationRepository
@@ -253,19 +254,32 @@ class ExamAttemptService:
             expected_version=exam.current_settings_version,
             opened_at=now,
         )
-        self._repository.uow.session.add(
-            AssessmentWindow(
-                workspace_id=workspace_id,
-                exam_id=exam_id,
-                attempt_id=attempt.id,
-                project_type_id=attempt.project_type_id,
-                settings_version=settings.settings_version,
-                opened_at=settings.opened_at,
-                closes_at=settings.closes_at,
-                created_by=user.id,
-                created_at=now,
-            )
+        window = AssessmentWindow(
+            workspace_id=workspace_id,
+            exam_id=exam_id,
+            attempt_id=attempt.id,
+            project_type_id=attempt.project_type_id,
+            settings_version=settings.settings_version,
+            opened_at=settings.opened_at,
+            closes_at=settings.closes_at,
+            created_by=user.id,
+            created_at=now,
         )
+        self._repository.uow.session.add(window)
+        await self._repository.uow.session.flush()
+
+        # Build the audience snapshot once — idempotent across repeated finish calls.
+        existing_count = await self._repository.uow.session.execute(
+            text("SELECT count(*) FROM assessment_window_audience WHERE window_id = :wid"),
+            {"wid": window.id},
+        )
+        if existing_count.scalar_one() == 0:
+            rows = await self._build_audience(workspace_id, attempt.project_id, now)
+            for row in rows:
+                row.window_id = window.id
+                self._repository.uow.session.add(row)
+            await self._repository.uow.session.flush()
+
         if attempt.paused_at is not None:
             attempt.paused_seconds += int(max(now - attempt.paused_at, timedelta(0)).total_seconds())
         registration = await self._registrations_repository.registration(workspace_id, exam_id, attempt.registration_id)
@@ -351,6 +365,89 @@ class ExamAttemptService:
         if released is None:
             await self._exams.bump_queue_revision(exam_id)
         return await self._read(attempt)
+
+    async def _build_audience(
+        self, workspace_id: int, project_id: int, now: datetime
+    ) -> list[AssessmentWindowAudience]:
+        """Query workspace members with roles and project affiliations,
+        then build one AssessmentWindowAudience row per qualifying user."""
+        rows = await self._repository.uow.session.execute(
+            text(
+                """
+                SELECT
+                    u.id AS user_id,
+                    COALESCE(lr.name, gr.name) AS effective_role,
+                    ARRAY_AGG(DISTINCT owned.project_id ORDER BY owned.project_id)
+                        FILTER (WHERE owned.project_id IS NOT NULL) AS own_project_ids,
+                    bool_or(pp_def.project_id IS NOT NULL) AS is_member,
+                    p_def.author_id = u.id AS is_manager
+                FROM workspace_participation wp
+                JOIN "user" u ON u.id = wp.participant_id
+                LEFT JOIN role lr ON lr.id = wp.role_id
+                LEFT JOIN role gr ON gr.id = u.role_id
+                LEFT JOIN LATERAL (
+                    SELECT pp.project_id FROM project_participation pp WHERE pp.participant_id = u.id
+                    UNION
+                    SELECT p.id FROM project p WHERE p.author_id = u.id AND p.workspace_id = :workspace_id
+                ) owned ON TRUE
+                LEFT JOIN project_participation pp_def
+                    ON pp_def.participant_id = u.id AND pp_def.project_id = :defending_project_id
+                LEFT JOIN project p_def ON p_def.id = :defending_project_id
+                WHERE wp.workspace_id = :workspace_id
+                GROUP BY u.id, lr.name, gr.name, p_def.author_id
+                """
+            ),
+            {"workspace_id": workspace_id, "defending_project_id": project_id},
+        )
+
+        audience_rows: list[AssessmentWindowAudience] = []
+        for row in rows:
+            user_id = row.user_id
+            effective_role = row.effective_role
+            own_project_ids = row.own_project_ids or []
+            is_member = row.is_member
+            is_manager = row.is_manager
+
+            # Skip users without a defined role.
+            if effective_role is None:
+                continue
+
+            # Map admin → teacher, keep teacher/manager/member as-is.
+            if effective_role in ("admin", "teacher"):
+                snapshot_role = "teacher"
+            elif effective_role == "manager":
+                snapshot_role = "manager"
+            elif effective_role == "member":
+                snapshot_role = "member"
+            else:
+                continue
+
+            # Determine exclusion: priority member_of > manager_of.
+            admitted = True
+            exclusion_reason = None
+            if is_member:
+                admitted = False
+                exclusion_reason = "member_of_defending_team"
+            elif is_manager and snapshot_role != "teacher":
+                # A teacher who happens to be the project author is still
+                # a teacher — they are NOT excluded.
+                admitted = False
+                exclusion_reason = "manager_of_defending_team"
+
+            audience_rows.append(
+                AssessmentWindowAudience(
+                    window_id=0,  # placeholder — caller sets real window_id after flush
+                    workspace_id=workspace_id,
+                    user_id=user_id,
+                    role=snapshot_role,
+                    own_project_ids=sorted(own_project_ids) if own_project_ids else [],
+                    admitted=admitted,
+                    exclusion_reason=exclusion_reason,
+                    created_at=now,
+                )
+            )
+
+        return audience_rows
 
     async def events(
         self, workspace_id: int, exam_id: int, attempt_id: int, user: User, *, limit: int, offset: int

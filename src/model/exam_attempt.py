@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from sqlalchemy import (
+    JSON,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -143,4 +144,39 @@ class AssessmentWindow(Base):
     opened_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     closes_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     created_by: Mapped[int] = mapped_column(ForeignKey("user.id", ondelete="RESTRICT"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class AssessmentWindowAudience(Base):
+    __tablename__ = "assessment_window_audience"
+    __table_args__ = (
+        UniqueConstraint("window_id", "user_id", name="uq_audience_user"),
+        ForeignKeyConstraint(
+            ["window_id"],
+            ["assessment_window.id"],
+            name="fk_audience_window",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["user_id"],
+            ["user.id"],
+            name="fk_audience_user",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint("role IN ('teacher','manager','member')", name="ck_audience_role"),
+        CheckConstraint(
+            "(admitted = TRUE AND exclusion_reason IS NULL) OR "
+            "(admitted = FALSE AND exclusion_reason IN ('member_of_defending_team','manager_of_defending_team'))",
+            name="ck_audience_exclusion",
+        ),
+        Index("ix_audience_window", "window_id"),
+    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    window_id: Mapped[int] = mapped_column(Integer)
+    workspace_id: Mapped[int] = mapped_column(Integer)
+    user_id: Mapped[int] = mapped_column(Integer)
+    role: Mapped[str] = mapped_column(String(20))
+    own_project_ids: Mapped[list] = mapped_column(JSON, default=list)
+    admitted: Mapped[bool] = mapped_column()
+    exclusion_reason: Mapped[str | None] = mapped_column(String(50))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
