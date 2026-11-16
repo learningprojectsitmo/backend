@@ -39,18 +39,11 @@ async def get_project_relations(
     # Authorize: manager of the project OR teacher/admin of the workspace
     is_manager = user.id == manager_id
     if not is_manager:
-        is_teacher = await service.is_workspace_teacher(
-            user.id, workspace_id=workspace_id
-        )
+        is_teacher = await service.is_workspace_teacher(user.id, workspace_id=workspace_id)
         if not is_teacher:
-            raise PermissionError(
-                "Access denied: must be a teacher/admin of this workspace "
-                "or the project manager"
-            )
+            raise PermissionError("Access denied: must be a teacher/admin of this workspace or the project manager")
 
-    relations = await service.get_project_relations(
-        project_id, workspace_id=workspace_id
-    )
+    relations = await service.get_project_relations(project_id, workspace_id=workspace_id)
 
     return ProjectRelationsResponse(
         project_id=relations.project_id,

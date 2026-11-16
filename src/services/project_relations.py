@@ -18,13 +18,14 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from sqlalchemy import select
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import aliased
 
 from src.core.exceptions import NotFoundError
+from src.model.user import Role as RoleModel
+from src.model.user import User
+from src.model.workspace import WorkSpaceParticipation
 
 if TYPE_CHECKING:
-    from src.model.user import Role, User
-    from src.model.workspace import WorkSpaceParticipation
     from src.repository.project_repository import ProjectRepository
     from src.repository.workspace_repository import WorkspaceRepository
 
@@ -38,15 +39,6 @@ class ProjectRelations:
     manager_id: int
     member_ids: list[int] = field(default_factory=list)
     workspace_teacher_ids: list[int] = field(default_factory=list)
-
-    def __repr__(self) -> str:
-        return (
-            f"ProjectRelations(project_id={self.project_id}, "
-            f"workspace_id={self.workspace_id}, "
-            f"manager_id={self.manager_id}, "
-            f"members={len(self.member_ids)}, "
-            f"teachers={len(self.workspace_teacher_ids)})"
-        )
 
 
 class ProjectRelationsService:
@@ -64,14 +56,10 @@ class ProjectRelationsService:
         self._project_repo = project_repository
         self._workspace_repo = workspace_repository
 
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
-
     async def get_manager_id(self, project_id: int, *, workspace_id: int) -> int:
         """Return the manager (author) of the project.
 
-        Always ``project.author_id``.  Raises ``NotFoundError`` when the
+        Always ``project.author_id``. Raises ``NotFoundError`` when the
         project does not exist or belongs to a different workspace.
         """
         project = await self._require_project_in_workspace(project_id, workspace_id)
@@ -80,7 +68,7 @@ class ProjectRelationsService:
     async def get_member_ids(self, project_id: int, *, workspace_id: int) -> list[int]:
         """Return student/participant IDs for the project.
 
-        Reads ``project_participation.participant_id`` only.  The free-text
+        Reads ``project_participation.participant_id`` only. The free-text
         ``ProjectParticipation.role`` column is intentionally ignored — it is
         not a trusted assessment role.
         """
@@ -88,28 +76,21 @@ class ProjectRelationsService:
         return sorted(p.participant_id for p in project.participants)
 
     async def get_workspace_teacher_ids(self, workspace_id: int) -> list[int]:
-        """Return user IDs with effective role teacher or admin in the workspace.
-
-        Effective-role resolution (local > global) and admin→teacher mapping
-        are delegated to ``_resolve_effective_role``.
-        """
+        """Return user IDs with effective role teacher or admin in the workspace."""
         session = self._workspace_repo.uow.session
-        from src.model.user import Role as RoleModel
-        from src.model.user import User
-        from src.model.workspace import WorkSpaceParticipation
 
-        LocalRole = RoleModel
-        GlobalRole = RoleModel
+        local_role = aliased(RoleModel)
+        global_role = aliased(RoleModel)
 
         stmt = (
             select(
                 WorkSpaceParticipation.participant_id,
-                LocalRole.name.label("local_role_name"),
-                GlobalRole.name.label("global_role_name"),
+                local_role.name.label("local_role_name"),
+                global_role.name.label("global_role_name"),
             )
             .join(User, User.id == WorkSpaceParticipation.participant_id)
-            .outerjoin(LocalRole, LocalRole.id == WorkSpaceParticipation.role_id)
-            .outerjoin(GlobalRole, GlobalRole.id == User.role_id)
+            .outerjoin(local_role, local_role.id == WorkSpaceParticipation.role_id)
+            .outerjoin(global_role, global_role.id == User.role_id)
             .where(WorkSpaceParticipation.workspace_id == workspace_id)
         )
         result = await session.execute(stmt)
@@ -129,21 +110,19 @@ class ProjectRelationsService:
     async def is_workspace_teacher(self, user_id: int, *, workspace_id: int) -> bool:
         """Check whether *user_id* has effective teacher/admin role in the workspace."""
         session = self._workspace_repo.uow.session
-        from src.model.user import Role as RoleModel
-        from src.model.user import User
-        from src.model.workspace import WorkSpaceParticipation
 
-        LocalRole = RoleModel
-        GlobalRole = RoleModel
+        local_role = aliased(RoleModel)
+        global_role = aliased(RoleModel)
 
         stmt = (
             select(
-                LocalRole.name.label("local_role_name"),
-                GlobalRole.name.label("global_role_name"),
+                local_role.name.label("local_role_name"),
+                global_role.name.label("global_role_name"),
             )
+            .select_from(WorkSpaceParticipation)
             .join(User, User.id == WorkSpaceParticipation.participant_id)
-            .outerjoin(LocalRole, LocalRole.id == WorkSpaceParticipation.role_id)
-            .outerjoin(GlobalRole, GlobalRole.id == User.role_id)
+            .outerjoin(local_role, local_role.id == WorkSpaceParticipation.role_id)
+            .outerjoin(global_role, global_role.id == User.role_id)
             .where(
                 WorkSpaceParticipation.workspace_id == workspace_id,
                 WorkSpaceParticipation.participant_id == user_id,
@@ -161,9 +140,7 @@ class ProjectRelationsService:
         )
         return effective in ("teacher", "admin")
 
-    async def get_project_relations(
-        self, project_id: int, *, workspace_id: int
-    ) -> ProjectRelations:
+    async def get_project_relations(self, project_id: int, *, workspace_id: int) -> ProjectRelations:
         """Return the full relationship snapshot for a project."""
         project = await self._require_project_in_workspace(project_id, workspace_id)
 
@@ -177,10 +154,6 @@ class ProjectRelationsService:
             member_ids=member_ids,
             workspace_teacher_ids=teacher_ids,
         )
-
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
 
     async def _require_project_in_workspace(self, project_id: int, workspace_id: int):
         """Load the project and ensure it belongs to *workspace_id*."""

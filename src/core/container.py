@@ -52,6 +52,7 @@ from src.services.notification_service import NotificationService
 from src.services.permission_service import PermissionService
 from src.services.portfolio_service import PortfolioService
 from src.services.profile_service import ProfileService
+from src.services.project_relations import ProjectRelationsService
 from src.services.project_service import ProjectService
 from src.services.project_type_question_service import ProjectTypeQuestionService
 from src.services.question_template_service import QuestionTemplateService
@@ -310,9 +311,7 @@ async def get_permission_service(
 async def get_project_relations_service(
     project_repository: ProjectRepository = Depends(get_project_repository),
     workspace_repository: WorkSpaceRepository = Depends(get_workspace_repository),
-):
-    from src.services.project_relations import ProjectRelationsService
-
+) -> ProjectRelationsService:
     return ProjectRelationsService(project_repository, workspace_repository)
 
 

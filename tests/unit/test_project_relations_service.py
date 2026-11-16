@@ -8,11 +8,7 @@ import pytest
 
 from src.core.exceptions import NotFoundError
 from src.model.project import Project
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+from src.services.project_relations import ProjectRelationsService
 
 
 def _make_mock_project_repo(project: Mock) -> Mock:
@@ -22,7 +18,7 @@ def _make_mock_project_repo(project: Mock) -> Mock:
     return repo
 
 
-def _make_mock_ws_repo(session: AsyncMock) -> Mock:
+def _make_mock_ws_repo(session) -> Mock:
     """Return a WorkspaceRepository mock with a session attached."""
     repo = Mock()
     uow = Mock()
@@ -40,15 +36,14 @@ def _row(participant_id, local_role_name, global_role_name):
     return row
 
 
-# ---------------------------------------------------------------------------
-# Test: get_manager_id
-# ---------------------------------------------------------------------------
+def _session_returning_all(rows):
+    session = AsyncMock()
+    session.execute = AsyncMock(return_value=Mock(all=lambda: rows))
+    return session
 
 
 class TestGetManagerId:
     async def test_manager_id_is_project_author(self):
-        from src.services.project_relations import ProjectRelationsService
-
         project = Mock(spec=Project)
         project.id = 42
         project.author_id = 10
@@ -63,8 +58,6 @@ class TestGetManagerId:
         assert manager_id == 10
 
     async def test_manager_id_wrong_workspace_raises_not_found(self):
-        from src.services.project_relations import ProjectRelationsService
-
         project = Mock(spec=Project)
         project.id = 42
         project.author_id = 10
@@ -79,15 +72,8 @@ class TestGetManagerId:
             await svc.get_manager_id(42, workspace_id=999)
 
 
-# ---------------------------------------------------------------------------
-# Test: get_member_ids
-# ---------------------------------------------------------------------------
-
-
 class TestGetMemberIds:
     async def test_member_ids_are_project_participants(self):
-        from src.services.project_relations import ProjectRelationsService
-
         project = Mock(spec=Project)
         project.id = 42
         project.author_id = 10
@@ -110,8 +96,6 @@ class TestGetMemberIds:
         assert sorted(member_ids) == [11, 12]
 
     async def test_member_ids_empty_when_no_participants(self):
-        from src.services.project_relations import ProjectRelationsService
-
         project = Mock(spec=Project)
         project.id = 42
         project.author_id = 10
@@ -127,22 +111,10 @@ class TestGetMemberIds:
         assert member_ids == []
 
 
-# ---------------------------------------------------------------------------
-# Test: get_workspace_teacher_ids
-# ---------------------------------------------------------------------------
-
-
 class TestGetWorkspaceTeacherIds:
     async def test_workspace_teacher_ids_local_role_priority(self):
         """Local role=teacher takes priority over global role=member."""
-        from src.services.project_relations import ProjectRelationsService
-
-        session = AsyncMock()
-        session.execute = AsyncMock(
-            return_value=Mock(
-                all=lambda: [_row(10, "teacher", "member")]
-            )
-        )
+        session = _session_returning_all([_row(10, "teacher", "member")])
 
         svc = ProjectRelationsService(
             project_repository=Mock(),
@@ -154,14 +126,7 @@ class TestGetWorkspaceTeacherIds:
 
     async def test_workspace_teacher_ids_admin_maps_to_teacher(self):
         """Admin effective role is included (admin is a teacher for assessment)."""
-        from src.services.project_relations import ProjectRelationsService
-
-        session = AsyncMock()
-        session.execute = AsyncMock(
-            return_value=Mock(
-                all=lambda: [_row(20, "admin", "member")]
-            )
-        )
+        session = _session_returning_all([_row(20, "admin", "member")])
 
         svc = ProjectRelationsService(
             project_repository=Mock(),
@@ -173,12 +138,7 @@ class TestGetWorkspaceTeacherIds:
 
     async def test_workspace_author_not_teacher_without_participation(self):
         """Workspace.author_id is NOT a teacher without explicit participation."""
-        from src.services.project_relations import ProjectRelationsService
-
-        session = AsyncMock()
-        session.execute = AsyncMock(
-            return_value=Mock(all=lambda: [])  # No participants
-        )
+        session = _session_returning_all([])
 
         svc = ProjectRelationsService(
             project_repository=Mock(),
@@ -190,14 +150,7 @@ class TestGetWorkspaceTeacherIds:
 
     async def test_null_role_excluded_from_teachers(self):
         """Both local and global roles NULL → not a teacher."""
-        from src.services.project_relations import ProjectRelationsService
-
-        session = AsyncMock()
-        session.execute = AsyncMock(
-            return_value=Mock(
-                all=lambda: [_row(40, None, None)]
-            )
-        )
+        session = _session_returning_all([_row(40, None, None)])
 
         svc = ProjectRelationsService(
             project_repository=Mock(),
@@ -209,14 +162,7 @@ class TestGetWorkspaceTeacherIds:
 
     async def test_global_teacher_fallback(self):
         """When local role is NULL, global role=teacher is used."""
-        from src.services.project_relations import ProjectRelationsService
-
-        session = AsyncMock()
-        session.execute = AsyncMock(
-            return_value=Mock(
-                all=lambda: [_row(50, None, "teacher")]
-            )
-        )
+        session = _session_returning_all([_row(50, None, "teacher")])
 
         svc = ProjectRelationsService(
             project_repository=Mock(),
@@ -227,16 +173,9 @@ class TestGetWorkspaceTeacherIds:
         assert 50 in teacher_ids
 
 
-# ---------------------------------------------------------------------------
-# Test: get_project_relations
-# ---------------------------------------------------------------------------
-
-
 class TestGetProjectRelations:
     async def test_get_project_relations_composite(self):
         """Composite result combines manager, members, and teachers."""
-        from src.services.project_relations import ProjectRelationsService
-
         project = Mock(spec=Project)
         project.id = 42
         project.author_id = 10
@@ -246,12 +185,7 @@ class TestGetProjectRelations:
         p.role = None
         project.participants = [p]
 
-        session = AsyncMock()
-        session.execute = AsyncMock(
-            return_value=Mock(
-                all=lambda: [_row(2, "teacher", None)]
-            )
-        )
+        session = _session_returning_all([_row(2, "teacher", None)])
 
         svc = ProjectRelationsService(
             project_repository=_make_mock_project_repo(project),
@@ -266,22 +200,15 @@ class TestGetProjectRelations:
         assert 2 in rel.workspace_teacher_ids
 
 
-# ---------------------------------------------------------------------------
-# Test: is_workspace_teacher
-# ---------------------------------------------------------------------------
-
-
 class TestIsWorkspaceTeacher:
+    def _session_with_one_row(self, row):
+        session = AsyncMock()
+        session.execute = AsyncMock(return_value=Mock(one_or_none=lambda: row))
+        return session
+
     async def test_is_workspace_teacher_true(self):
         """User with effective teacher role returns True."""
-        from src.services.project_relations import ProjectRelationsService
-
-        session = AsyncMock()
-        session.execute = AsyncMock(
-            return_value=Mock(
-                one_or_none=lambda: _row(None, "teacher", None)
-            )
-        )
+        session = self._session_with_one_row(_row(None, "teacher", None))
 
         svc = ProjectRelationsService(
             project_repository=Mock(),
@@ -292,14 +219,7 @@ class TestIsWorkspaceTeacher:
 
     async def test_is_workspace_teacher_false(self):
         """User without teacher role returns False."""
-        from src.services.project_relations import ProjectRelationsService
-
-        session = AsyncMock()
-        session.execute = AsyncMock(
-            return_value=Mock(
-                one_or_none=lambda: _row(None, "member", None)
-            )
-        )
+        session = self._session_with_one_row(_row(None, "member", None))
 
         svc = ProjectRelationsService(
             project_repository=Mock(),
@@ -310,12 +230,7 @@ class TestIsWorkspaceTeacher:
 
     async def test_is_workspace_teacher_no_participation(self):
         """User not in workspace returns False."""
-        from src.services.project_relations import ProjectRelationsService
-
-        session = AsyncMock()
-        session.execute = AsyncMock(
-            return_value=Mock(one_or_none=lambda: None)
-        )
+        session = self._session_with_one_row(None)
 
         svc = ProjectRelationsService(
             project_repository=Mock(),
