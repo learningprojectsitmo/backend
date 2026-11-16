@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 import test_exam_registrations_db as reg_cases
 from sqlalchemy import select
@@ -236,3 +238,54 @@ class TestScopedFetch:
         async with s["uow"]() as u:
             result = await _repo(u).get_attempt_with_window_and_project(workspace_id=999, exam_id=999, attempt_id=999)
             assert result is None
+
+
+class TestQueueChangeAndConcurrency:
+    async def test_two_attempts_have_distinct_sheets(self, seeded):
+        """Queue change (next team) creates a new attempt and a distinct sheet — no replacement."""
+        s = seeded
+        first = await _finished_attempt(s, project="manager")
+        second = await _finished_attempt(s, project="manager2")
+        assert first.id != second.id
+        async with s["uow"]() as u:
+            repo = _repo(u)
+            uid = s["users"]["local_teacher"].id
+            s1 = await repo.get_or_create_sheet(s["workspace"], s["exams"][0], first.id, uid)
+            s2 = await repo.get_or_create_sheet(s["workspace"], s["exams"][0], second.id, uid)
+            assert s1.id != s2.id
+            assert s1.attempt_id == first.id
+            assert s2.attempt_id == second.id
+
+    async def test_concurrent_get_or_create_produces_one_sheet(self, seeded):
+        """Two parallel get_or_create calls for the same (user, attempt) yield one sheet."""
+        s = seeded
+        attempt = await _finished_attempt(s, project="manager")
+        uid = s["users"]["local_teacher"].id
+
+        async def create():
+            async with s["uow"]() as u:
+                sheet = await _repo(u).get_or_create_sheet(s["workspace"], s["exams"][0], attempt.id, uid)
+                return sheet.id
+
+        first_id, second_id = await asyncio.gather(create(), create())
+        assert first_id == second_id
+
+    async def test_sheet_creation_rolls_back_on_later_error(self, seeded):
+        """An exception after lazy sheet creation rolls back the new sheet (UoW rollback)."""
+        s = seeded
+        attempt = await _finished_attempt(s, project="manager")
+        uid = s["users"]["local_teacher"].id
+
+        class Boom(Exception):
+            pass
+
+        with pytest.raises(Boom):
+            async with s["uow"]() as u:
+                repo = _repo(u)
+                await repo.get_or_create_sheet(s["workspace"], s["exams"][0], attempt.id, uid)
+                await u.session.flush()
+                raise Boom()
+
+        # The sheet must not persist after the rollback.
+        async with s["uow"]() as u:
+            assert await _repo(u).get_sheet(s["workspace"], s["exams"][0], attempt.id, uid) is None
