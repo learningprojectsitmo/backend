@@ -307,6 +307,15 @@ async def get_permission_service(
     return PermissionService(permission_repository)
 
 
+async def get_project_relations_service(
+    project_repository: ProjectRepository = Depends(get_project_repository),
+    workspace_repository: WorkSpaceRepository = Depends(get_workspace_repository),
+):
+    from src.services.project_relations import ProjectRelationsService
+
+    return ProjectRelationsService(project_repository, workspace_repository)
+
+
 async def get_workspace_service(
     workspace_repository: WorkSpaceRepository = Depends(get_workspace_repository),
 ) -> WorkSpaceService:
