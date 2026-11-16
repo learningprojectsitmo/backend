@@ -8,8 +8,8 @@ from src.core.uow import IUnitOfWork, SqlAlchemyUoW
 from src.repository.app_setting_repository import AppSettingRepository
 from src.repository.audit_repository import AuditRepository
 from src.repository.education_repository import EducationRepository
-from src.repository.exam_attempt_repository import ExamAttemptRepository
 from src.repository.exam_assessment_repository import ExamAssessmentRepository
+from src.repository.exam_attempt_repository import ExamAttemptRepository
 from src.repository.exam_registration_repository import ExamRegistrationRepository
 from src.repository.exam_repository import ExamRepository
 from src.repository.ideas_repository import IdeaCommentRepository, IdeaRepository, IdeaTagRepository
@@ -39,8 +39,8 @@ from src.services.app_setting_service import AppSettingService
 from src.services.audit_service import AuditService
 from src.services.auth_service import AuthService
 from src.services.education_service import EducationService
-from src.services.exam_attempt_service import ExamAttemptService
 from src.services.exam_assessment_service import ExamAssessmentService
+from src.services.exam_attempt_service import ExamAttemptService
 from src.services.exam_queue_service import ExamQueueService
 from src.services.exam_registration_service import ExamRegistrationService
 from src.services.exam_service import ExamService

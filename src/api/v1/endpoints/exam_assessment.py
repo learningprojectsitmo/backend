@@ -5,8 +5,8 @@ from fastapi import APIRouter, Depends, Path
 from src.core.container import get_exam_assessment_service
 from src.core.dependencies import get_current_user, setup_audit
 from src.model.user import User
-from src.schema.exam_attempt import PG_INTEGER_MAX
 from src.schema.exam_assessment import AssessmentDraftRead, AssessmentDraftWrite, AssessmentFormRead
+from src.schema.exam_attempt import PG_INTEGER_MAX
 from src.services.exam_assessment_service import ExamAssessmentService
 
 exam_assessment_router = APIRouter(

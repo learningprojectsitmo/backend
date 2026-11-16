@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from src.core.exceptions import NotFoundError, PermissionError
-from src.schema.exam import ExamConfiguration, ExamWeights
-from src.schema.exam_assessment import AssessmentDraftWrite, AnswerDraftWrite
+from src.model.user import User
+from src.schema.exam_assessment import AnswerDraftWrite, AssessmentDraftWrite
 from src.services.exam_assessment_service import ExamAssessmentService
 
 
@@ -71,24 +71,33 @@ class TestDetermineAccess:
 
 class TestGetForm:
     async def test_get_form_full_structure(self):
-        svc, repo, attempts, questions, exams = _service()
+        svc, repo, _attempts, questions, exams = _service()
         attempt = MagicMock(status="finished", project_id=10, project_type_id=5, settings_version=1)
-        window = MagicMock(opened_at=datetime(2026, 11, 16, 10, 30, tzinfo=UTC),
-                           closes_at=datetime(2026, 11, 16, 10, 45, tzinfo=UTC), settings_version=1)
+        window = MagicMock(
+            opened_at=datetime(2026, 11, 16, 10, 30, tzinfo=UTC),
+            closes_at=datetime(2026, 11, 16, 10, 45, tzinfo=UTC),
+            settings_version=1,
+        )
         project = MagicMock(id=10)
         repo.get_attempt_with_window_and_project = AsyncMock(return_value=(attempt, window, project))
         repo.is_excluded = AsyncMock(return_value=(False, None))
         repo.get_workspace_participation = AsyncMock(return_value=(True, "teacher"))
         repo.get_global_role = AsyncMock(return_value="member")
-        repo.get_or_create_sheet = AsyncMock(return_value=MagicMock(id=1, updated_at=datetime(2026, 11, 16, 10, 35, tzinfo=UTC)))
+        repo.get_or_create_sheet = AsyncMock(
+            return_value=MagicMock(id=1, updated_at=datetime(2026, 11, 16, 10, 35, tzinfo=UTC))
+        )
         repo.get_answers = AsyncMock(return_value={})
         revision = MagicMock(teacher_weight=60, manager_weight=30, member_weight=10)
         exams.get_revision = AsyncMock(return_value=revision)
-        q = MagicMock(id=1, text="Q1", description="desc", position=0,
-                      levels=[MagicMock(score=s, description=f"L{s}") for s in range(1, 6)])
+        q = MagicMock(
+            id=1,
+            text="Q1",
+            description="desc",
+            position=0,
+            levels=[MagicMock(score=s, description=f"L{s}") for s in range(1, 6)],
+        )
         questions.list_questions = AsyncMock(return_value=[q])
 
-        from src.model.user import User
         user = MagicMock(spec=User, id=1)
         form = await svc.get_form(1, 1, 1, user)
         assert form.attempt_id == 1
@@ -121,18 +130,16 @@ class TestGetForm:
         repo.is_excluded = AsyncMock(return_value=(True, "own_project_manager"))
         repo.get_workspace_participation = AsyncMock(return_value=(True, "manager"))
         repo.get_global_role = AsyncMock(return_value="member")
-        from src.model.user import User
         with pytest.raises(PermissionError):
             await svc.get_form(1, 1, 1, MagicMock(spec=User, id=1))
 
 
 class TestSaveDraft:
     async def test_save_draft_upserts_and_returns(self):
-        svc, repo, attempts, questions, exams = _service()
+        svc, repo, _attempts, questions, _exams = _service()
         attempt = MagicMock(status="finished", project_type_id=5, settings_version=1)
-        window = MagicMock()
         project = MagicMock()
-        repo.get_attempt_with_window_and_project = AsyncMock(return_value=(attempt, window, project))
+        repo.get_attempt_with_window_and_project = AsyncMock(return_value=(attempt, MagicMock(), project))
         sheet = MagicMock(id=1, updated_at=datetime(2026, 11, 16, 10, 35, tzinfo=UTC))
         repo.get_sheet = AsyncMock(return_value=sheet)
         repo.is_excluded = AsyncMock(return_value=(False, None))
@@ -140,12 +147,14 @@ class TestSaveDraft:
         repo.get_global_role = AsyncMock(return_value="member")
         q = MagicMock(id=1)
         questions.list_questions = AsyncMock(return_value=[q])
-        repo.upsert_answers = AsyncMock(return_value={1: 4})
-        repo.get_answers = AsyncMock(return_value={1: 4})
+        answer = MagicMock(score=4, comment="ok")
+        repo.upsert_answers = AsyncMock(return_value={1: answer})
+        repo.get_answers = AsyncMock(return_value={1: answer})
 
         data = AssessmentDraftWrite(answers=[AnswerDraftWrite(question_id=1, score=4, comment="ok")])
         result = await svc.save_draft(1, 1, 1, MagicMock(id=1), data)
         assert result.answers[0].score == 4
+        assert result.answers[0].comment == "ok"
 
     async def test_save_draft_sheet_not_found_returns_404(self):
         svc, repo, *_ = _service()
@@ -159,7 +168,7 @@ class TestSaveDraft:
             await svc.save_draft(1, 1, 1, MagicMock(id=1), AssessmentDraftWrite(answers=[]))
 
     async def test_save_draft_ignores_unknown_question_ids(self):
-        svc, repo, attempts, questions, exams = _service()
+        svc, repo, _attempts, questions, _exams = _service()
         attempt = MagicMock(status="finished", project_type_id=5)
         repo.get_attempt_with_window_and_project = AsyncMock(return_value=(attempt, MagicMock(), MagicMock()))
         sheet = MagicMock(id=1, updated_at=datetime(2026, 11, 16, 10, 35, tzinfo=UTC))

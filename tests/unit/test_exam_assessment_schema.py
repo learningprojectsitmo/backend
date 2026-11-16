@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import pytest
 from pydantic import ValidationError
 
@@ -50,10 +52,12 @@ class TestAssessmentDraftWrite:
         assert d.answers == []
 
     def test_valid_with_answers(self):
-        d = AssessmentDraftWrite(answers=[
-            AnswerDraftWrite(question_id=1, score=4, comment="ok"),
-            AnswerDraftWrite(question_id=2, score=None, comment=None),
-        ])
+        d = AssessmentDraftWrite(
+            answers=[
+                AnswerDraftWrite(question_id=1, score=4, comment="ok"),
+                AnswerDraftWrite(question_id=2, score=None, comment=None),
+            ]
+        )
         assert len(d.answers) == 2
 
     def test_answer_field_must_be_list(self):
@@ -102,7 +106,10 @@ class TestQuestionWithLevelsRead:
 
     def test_levels_must_be_unique_scores(self):
         q = QuestionWithLevelsRead(
-            id=1, text="Q", description=None, position=0,
+            id=1,
+            text="Q",
+            description=None,
+            position=0,
             levels=[
                 QuestionLevelRead(score=1, description="A"),
                 QuestionLevelRead(score=2, description="B"),
@@ -113,9 +120,7 @@ class TestQuestionWithLevelsRead:
 
 class TestAssessmentFormRead:
     def test_full_form_structure(self):
-        from datetime import datetime, timezone
-
-        now = datetime(2026, 11, 16, 10, 35, tzinfo=timezone.utc)
+        now = datetime(2026, 11, 16, 10, 35, tzinfo=UTC)
         form = AssessmentFormRead(
             attempt_id=1,
             project_id=10,
@@ -126,19 +131,22 @@ class TestAssessmentFormRead:
                 settings_version=3,
             ),
             assessor=AssessorRead(role="teacher", weight=60, excluded=False, exclusion_reason=None),
-            questions=[QuestionWithLevelsRead(
-                id=1, text="Q1", description="desc", position=0,
-                levels=[QuestionLevelRead(score=s, description=f"L{s}") for s in range(1, 6)]
-            )],
+            questions=[
+                QuestionWithLevelsRead(
+                    id=1,
+                    text="Q1",
+                    description="desc",
+                    position=0,
+                    levels=[QuestionLevelRead(score=s, description=f"L{s}") for s in range(1, 6)],
+                )
+            ],
             draft=AssessmentDraftRead(answers=[], updated_at=now),
         )
         assert form.attempt_id == 1
         assert form.draft.answers == []
 
     def test_form_with_draft_answers(self):
-        from datetime import datetime, timezone
-
-        now = datetime(2026, 11, 16, 10, 35, tzinfo=timezone.utc)
+        now = datetime(2026, 11, 16, 10, 35, tzinfo=UTC)
         form = AssessmentFormRead(
             attempt_id=1,
             project_id=10,

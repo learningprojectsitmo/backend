@@ -34,7 +34,7 @@ class ExamAssessmentSheet(Base):
     workspace_id: Mapped[int] = mapped_column(Integer)
     exam_id: Mapped[int] = mapped_column(Integer)
     attempt_id: Mapped[int] = mapped_column(Integer)
-    user_id: Mapped[int] = mapped_column(ForeignKey('"user".id', ondelete="RESTRICT"))
+    user_id: Mapped[int] = mapped_column(ForeignKey("user.id", ondelete="RESTRICT"))
     status: Mapped[str] = mapped_column(String(20), default="draft")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

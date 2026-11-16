@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import pytest
+import test_exam_registrations_db as reg_cases
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
-import test_exam_registrations_db as reg_cases
 from src.model.exam_assessment import ExamAssessmentSheet
-from src.model.project import Project
+from src.model.project import Project, ProjectParticipation
+from src.model.project_type_question import ProjectTypeQuestion
 from src.repository.exam_assessment_repository import ExamAssessmentRepository
 from src.repository.exam_attempt_repository import ExamAttemptRepository
 from src.repository.exam_registration_repository import ExamRegistrationRepository
@@ -52,18 +53,30 @@ async def _finished_attempt(s, *, project="manager"):
             s["workspace"], s["exams"][0], RegistrationCreate(project_id=s["projects"][project]), s["users"]["teacher"]
         )
     async with s["uow"]() as u:
-        attempt, created = await attempt_service(u).start(
-            s["workspace"], s["exams"][0], AttemptStart(registration_id=reg.id, expected_version=reg.version),
+        attempt, _created = await attempt_service(u).start(
+            s["workspace"],
+            s["exams"][0],
+            AttemptStart(registration_id=reg.id, expected_version=reg.version),
             s["users"]["teacher"],
         )
     async with s["uow"]() as u:
         svc = attempt_service(u)
         attempt = await svc.get(s["workspace"], s["exams"][0], attempt.id, s["users"]["teacher"])
-        await svc.questions(s["workspace"], s["exams"][0], attempt.id, AttemptCommand(expected_version=attempt.version),
-                            s["users"]["teacher"])
+        await svc.questions(
+            s["workspace"],
+            s["exams"][0],
+            attempt.id,
+            AttemptCommand(expected_version=attempt.version),
+            s["users"]["teacher"],
+        )
         attempt2 = await svc.get(s["workspace"], s["exams"][0], attempt.id, s["users"]["teacher"])
-        return await svc.finish(s["workspace"], s["exams"][0], attempt.id, AttemptCommand(expected_version=attempt2.version),
-                                s["users"]["teacher"])
+        return await svc.finish(
+            s["workspace"],
+            s["exams"][0],
+            attempt.id,
+            AttemptCommand(expected_version=attempt2.version),
+            s["users"]["teacher"],
+        )
 
 
 class TestSheetCRUD:
@@ -72,7 +85,10 @@ class TestSheetCRUD:
         attempt = await _finished_attempt(s)
         async with s["uow"]() as u:
             sheet = await _repo(u).get_or_create_sheet(
-                workspace_id=s["workspace"], exam_id=s["exams"][0], attempt_id=attempt.id, user_id=s["users"]["member"].id
+                workspace_id=s["workspace"],
+                exam_id=s["exams"][0],
+                attempt_id=attempt.id,
+                user_id=s["users"]["member"].id,
             )
             assert sheet is not None
             assert sheet.status == "draft"
@@ -126,10 +142,8 @@ class TestSheetCRUD:
 class TestAnswerUpsert:
     async def _make_sheet(self, s, attempt):
         async with s["uow"]() as u:
-            s_ = await _repo(u).get_or_create_sheet(
-                s["workspace"], s["exams"][0], attempt.id, s["users"]["member"].id
-            )
-            qid = (await u.session.scalar(select(__import__("src.model.project_type_question", fromlist=["ProjectTypeQuestion"]).ProjectTypeQuestion.id).limit(1)))
+            s_ = await _repo(u).get_or_create_sheet(s["workspace"], s["exams"][0], attempt.id, s["users"]["member"].id)
+            qid = await u.session.scalar(select(ProjectTypeQuestion.id).limit(1))
             return s_.id, qid
 
     async def test_upsert_inserts_and_updates(self, seeded):
@@ -140,10 +154,10 @@ class TestAnswerUpsert:
             repo = _repo(u)
             await repo.upsert_answers(sheet_id, [(qid, 4, "good")])
             answers = await repo.get_answers(sheet_id)
-            assert answers == {qid: 4}
+            assert answers[qid].score == 4
             await repo.upsert_answers(sheet_id, [(qid, 5, "updated")])
             answers = await repo.get_answers(sheet_id)
-            assert answers == {qid: 5}
+            assert answers[qid].score == 5
 
     async def test_upsert_null_score_clears(self, seeded):
         s = seeded
@@ -154,7 +168,7 @@ class TestAnswerUpsert:
             await repo.upsert_answers(sheet_id, [(qid, 4, "set")])
             await repo.upsert_answers(sheet_id, [(qid, None, None)])
             answers = await repo.get_answers(sheet_id)
-            assert answers == {qid: None}
+            assert answers[qid].score is None
 
 
 class TestAccessLogic:
@@ -169,7 +183,6 @@ class TestAccessLogic:
     async def test_is_excluded_own_member(self, seeded):
         s = seeded
         async with s["uow"]() as u:
-            from src.model.project import ProjectParticipation
             project = await u.session.get(Project, s["projects"]["manager"])
             # Add member as participant of manager's project
             u.session.add(ProjectParticipation(project_id=project.id, participant_id=s["users"]["member"].id))
@@ -221,7 +234,5 @@ class TestScopedFetch:
     async def test_get_attempt_with_window_and_project_returns_none_for_missing(self, seeded):
         s = seeded
         async with s["uow"]() as u:
-            result = await _repo(u).get_attempt_with_window_and_project(
-                workspace_id=999, exam_id=999, attempt_id=999
-            )
+            result = await _repo(u).get_attempt_with_window_and_project(workspace_id=999, exam_id=999, attempt_id=999)
             assert result is None

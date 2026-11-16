@@ -74,7 +74,7 @@ class ExamAssessmentService:
             return manager
         return member
 
-    async def _load(self, workspace_id: int, exam_id: int, attempt_id: int, user: User):
+    async def _load(self, workspace_id: int, exam_id: int, attempt_id: int):
         """Fetch attempt+window+project scoped; raise 404 when missing or not finished."""
         result = await self._repo.get_attempt_with_window_and_project(workspace_id, exam_id, attempt_id)
         if result is None:
@@ -87,7 +87,7 @@ class ExamAssessmentService:
         return attempt, window, project
 
     async def get_form(self, workspace_id: int, exam_id: int, attempt_id: int, user: User) -> AssessmentFormRead:
-        attempt, window, project = await self._load(workspace_id, exam_id, attempt_id, user)
+        attempt, window, project = await self._load(workspace_id, exam_id, attempt_id)
         access = await self._determine_access(project, user.id, workspace_id)
         if access.excluded:
             raise PermissionError(f"Excluded from assessment: {access.exclusion_reason}")
@@ -109,8 +109,8 @@ class ExamAssessmentService:
             for q in questions
         ]
         answer_reads = [
-            AnswerDraftRead(question_id=qid, score=score, comment=self._comment_for(answers, qid))
-            for qid, score in answers.items()
+            AnswerDraftRead(question_id=qid, score=answer.score, comment=answer.comment)
+            for qid, answer in answers.items()
         ]
         draft = AssessmentDraftRead(answers=answer_reads, updated_at=sheet.updated_at)
 
@@ -128,15 +128,10 @@ class ExamAssessmentService:
             draft=draft,
         )
 
-    @staticmethod
-    def _comment_for(answers: dict[int, int | None], question_id: int) -> str | None:
-        # Answers dict is {question_id: score}; comment is not stored in dict — return None.
-        return None
-
     async def save_draft(
         self, workspace_id: int, exam_id: int, attempt_id: int, user: User, data: AssessmentDraftWrite
     ) -> AssessmentDraftRead:
-        attempt, window, project = await self._load(workspace_id, exam_id, attempt_id, user)
+        attempt, _window, project = await self._load(workspace_id, exam_id, attempt_id)
         access = await self._determine_access(project, user.id, workspace_id)
         if access.excluded:
             raise PermissionError(f"Excluded from assessment: {access.exclusion_reason}")
@@ -148,13 +143,14 @@ class ExamAssessmentService:
         # Filter to question_ids that belong to the attempt's project type.
         questions = await self._questions.list_questions(attempt.project_type_id)
         valid_ids = {q.id for q in questions}
-        filtered = [
-            (a.question_id, a.score, a.comment) for a in data.answers if a.question_id in valid_ids
-        ]
+        filtered = [(a.question_id, a.score, a.comment) for a in data.answers if a.question_id in valid_ids]
         await self._repo.upsert_answers(sheet.id, filtered)
 
         answers = await self._repo.get_answers(sheet.id)
         # Reload the sheet for fresh updated_at.
         sheet = await self._repo.get_sheet(workspace_id, exam_id, attempt_id, user.id)
-        answer_reads = [AnswerDraftRead(question_id=qid, score=score, comment=None) for qid, score in answers.items()]
+        answer_reads = [
+            AnswerDraftRead(question_id=qid, score=answer.score, comment=answer.comment)
+            for qid, answer in answers.items()
+        ]
         return AssessmentDraftRead(answers=answer_reads, updated_at=sheet.updated_at if sheet else self._clock())

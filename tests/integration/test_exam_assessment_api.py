@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import httpx
 import pytest
+import test_exam_assessment_db as assessment_db_cases
 from fastapi import FastAPI
 
-import test_exam_assessment_db as assessment_db_cases
 from src.api.v1.routes import routers
 from src.core.container import get_uow
 from src.core.dependencies import get_current_user
@@ -53,7 +53,7 @@ async def test_get_form_returns_200_for_admitted_teacher(seeded):
 async def test_get_form_excluded_manager_returns_403(seeded):
     s = seeded
     attempt = await _finished_attempt(s, project="manager")
-    client, actor = await _client(s, "manager")
+    client, _actor = await _client(s, "manager")
     async with client:
         resp = await client.get(
             f"/v1/workspaces/{s['workspace']}/exams/{s['exams'][0]}/attempts/{attempt.id}/assessment"
@@ -66,9 +66,7 @@ async def test_get_form_wrong_workspace_returns_404(seeded):
     attempt = await _finished_attempt(s)
     client, _actor = await _client(s, "local_teacher")
     async with client:
-        resp = await client.get(
-            f"/v1/workspaces/999999/exams/{s['exams'][0]}/attempts/{attempt.id}/assessment"
-        )
+        resp = await client.get(f"/v1/workspaces/999999/exams/{s['exams'][0]}/attempts/{attempt.id}/assessment")
     assert resp.status_code == 404
 
 

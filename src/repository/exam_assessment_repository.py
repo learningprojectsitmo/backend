@@ -36,7 +36,6 @@ class ExamAssessmentRepository:
         self.uow.session.add(sheet)
         try:
             await self.uow.session.flush()
-            return sheet
         except IntegrityError:
             await self.uow.session.rollback()
             # Re-query — another concurrent GET created the sheet
@@ -44,6 +43,8 @@ class ExamAssessmentRepository:
             if result is None:
                 raise
             return result
+        else:
+            return sheet
 
     async def get_sheet(
         self, workspace_id: int, exam_id: int, attempt_id: int, user_id: int
@@ -62,29 +63,35 @@ class ExamAssessmentRepository:
 
     # ── Answers ──────────────────────────────────────────────────────────
 
-    async def get_answers(self, sheet_id: int) -> dict[int, int | None]:
-        """Return {question_id: score} for a sheet."""
+    async def get_answers(self, sheet_id: int) -> dict[int, ExamAssessmentAnswer]:
+        """Return {question_id: answer} for a sheet."""
         rows = (
             await self.uow.session.scalars(
-                select(ExamAssessmentAnswer).where(ExamAssessmentAnswer.sheet_id == sheet_id)
+                select(ExamAssessmentAnswer)
+                .where(ExamAssessmentAnswer.sheet_id == sheet_id)
+                .execution_options(populate_existing=True)
             )
         ).all()
-        return {int(row.question_id): row.score for row in rows}
+        return {int(row.question_id): row for row in rows}
 
     async def upsert_answers(
         self, sheet_id: int, answers: list[tuple[int, int | None, str | None]]
-    ) -> dict[int, int | None]:
-        """Upsert (question_id, score, comment) tuples. Returns {question_id: score}."""
+    ) -> dict[int, ExamAssessmentAnswer]:
+        """Upsert (question_id, score, comment) tuples. Returns {question_id: answer}."""
         for question_id, score, comment in answers:
-            stmt = pg_insert(ExamAssessmentAnswer).values(
-                sheet_id=sheet_id,
-                question_id=question_id,
-                score=score,
-                comment=comment,
-                updated_at=datetime.now(UTC),
-            ).on_conflict_do_update(
-                index_elements=[ExamAssessmentAnswer.sheet_id, ExamAssessmentAnswer.question_id],
-                set_={"score": score, "comment": comment, "updated_at": datetime.now(UTC)},
+            stmt = (
+                pg_insert(ExamAssessmentAnswer)
+                .values(
+                    sheet_id=sheet_id,
+                    question_id=question_id,
+                    score=score,
+                    comment=comment,
+                    updated_at=datetime.now(UTC),
+                )
+                .on_conflict_do_update(
+                    index_elements=[ExamAssessmentAnswer.sheet_id, ExamAssessmentAnswer.question_id],
+                    set_={"score": score, "comment": comment, "updated_at": datetime.now(UTC)},
+                )
             )
             await self.uow.session.execute(stmt)
         await self.uow.session.flush()
@@ -149,10 +156,5 @@ class ExamAssessmentRepository:
 
     async def get_global_role(self, user_id: int) -> str | None:
         """Return global role name from User.role."""
-        query = (
-            select(Role.name)
-            .select_from(User)
-            .outerjoin(Role, Role.id == User.role_id)
-            .where(User.id == user_id)
-        )
+        query = select(Role.name).select_from(User).outerjoin(Role, Role.id == User.role_id).where(User.id == user_id)
         return (await self.uow.session.execute(query)).scalar_one_or_none()
