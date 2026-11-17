@@ -8,6 +8,7 @@ from src.model.exam import Exam, ExamSettingsProjectType, ExamSettingsRevision
 from src.model.exam_assessment import ExamAssessmentAnswer, ExamAssessmentSheet
 from src.model.exam_attempt import AssessmentWindow, AttemptEvent, ExamAttempt
 from src.model.exam_registration import ExamRegistration, ExamSlot, RegistrationEvent
+from src.model.exam_result import ExamResultEdition
 from src.model.ideas import Idea, IdeaComment, IdeaTag, IdeaVote
 from src.model.kanban_models import Column, Subtask, Task, TaskAssignee, TaskHistory
 from src.model.language import Language
@@ -43,6 +44,7 @@ __all__ = [
     "ExamAssessmentSheet",
     "ExamAttempt",
     "ExamRegistration",
+    "ExamResultEdition",
     "ExamSettingsProjectType",
     "ExamSettingsRevision",
     "ExamSlot",
