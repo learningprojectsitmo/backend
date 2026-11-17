@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 import pytest_asyncio
+from sqlalchemy import delete, update
 
 from src.core.exceptions import NotFoundError
 from src.model.project import Project, ProjectParticipation
@@ -197,3 +198,65 @@ async def test_get_project_relations_composite(svc):
     assert rel.member_ids == [ids["member_id"]]
     assert ids["teacher_id"] in rel.workspace_teacher_ids
     assert ids["local_teacher_id"] in rel.workspace_teacher_ids
+
+
+@pytest.mark.asyncio
+async def test_revoked_teacher_loses_access(seeded):
+    """Removing a teacher from workspace_participation revokes their teacher role.
+
+    The service reads live workspace_participation; after the row is removed,
+    the user is no longer in workspace_teacher_ids and is_workspace_teacher
+    returns False. The workspace author is unaffected (never a teacher).
+    """
+    _engine, make_uow, ids = seeded
+
+    async with make_uow() as u:
+        service = ProjectRelationsService(
+            project_repository=ProjectRepository(u),
+            workspace_repository=WorkSpaceRepository(u),
+        )
+        # Before revocation: teacher is present
+        assert await service.is_workspace_teacher(ids["teacher_id"], workspace_id=ids["ws_id"]) is True
+        assert ids["teacher_id"] in await service.get_workspace_teacher_ids(ids["ws_id"])
+
+        # Revoke: delete the workspace_participation row for the teacher
+        await u.session.execute(
+            delete(WorkSpaceParticipation).where(
+                WorkSpaceParticipation.workspace_id == ids["ws_id"],
+                WorkSpaceParticipation.participant_id == ids["teacher_id"],
+            )
+        )
+        await u.session.flush()
+
+        assert await service.is_workspace_teacher(ids["teacher_id"], workspace_id=ids["ws_id"]) is False
+        assert ids["teacher_id"] not in await service.get_workspace_teacher_ids(ids["ws_id"])
+
+        await u.rollback()
+
+
+@pytest.mark.asyncio
+async def test_role_text_never_makes_teacher(seeded):
+    """ProjectParticipation.role free text is never trusted as assessment role."""
+    _engine, make_uow, ids = seeded
+
+    async with make_uow() as u:
+        service = ProjectRelationsService(
+            project_repository=ProjectRepository(u),
+            workspace_repository=WorkSpaceRepository(u),
+        )
+        # Set the participant's free-text role to "teacher" and verify it does
+        # NOT appear in workspace_teacher_ids (member_ids unchanged).
+        await u.session.execute(
+            update(ProjectParticipation)
+            .where(ProjectParticipation.project_id == ids["project_id"])
+            .values(role="teacher")
+        )
+        await u.session.flush()
+
+        member_ids = await service.get_member_ids(ids["project_id"], workspace_id=ids["ws_id"])
+        assert ids["member_id"] in member_ids  # still a member
+
+        teacher_ids = await service.get_workspace_teacher_ids(ids["ws_id"])
+        assert ids["member_id"] not in teacher_ids  # role text not trusted
+
+        await u.rollback()
