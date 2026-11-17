@@ -27,6 +27,10 @@ def _service(**overrides):
     return ExamAssessmentService(**defaults), repo, attempts, questions, exams
 
 
+def _open_window():
+    return MagicMock(closes_at=datetime(2099, 1, 1, tzinfo=UTC))
+
+
 class TestDetermineAccess:
     @pytest.mark.parametrize("role", ["teacher", "manager", "member"])
     async def test_captured_role_is_used(self, role):
@@ -68,6 +72,7 @@ class TestGetForm:
             return_value=MagicMock(id=1, updated_at=datetime(2026, 11, 16, 10, 35, tzinfo=UTC))
         )
         repo.get_answers = AsyncMock(return_value={})
+        repo.latest_submission = AsyncMock(return_value=None)
         revision = MagicMock(teacher_weight=60, manager_weight=30, member_weight=10)
         exams.get_revision = AsyncMock(return_value=revision)
         q = MagicMock(
@@ -120,7 +125,7 @@ class TestSaveDraft:
         svc, repo, _attempts, questions, _exams = _service()
         attempt = MagicMock(status="finished", project_type_id=5, settings_version=1)
         project = MagicMock()
-        repo.get_attempt_with_window_and_project = AsyncMock(return_value=(attempt, MagicMock(), project))
+        repo.get_attempt_with_window_and_project = AsyncMock(return_value=(attempt, _open_window(), project))
         sheet = MagicMock(id=1, updated_at=datetime(2026, 11, 16, 10, 35, tzinfo=UTC))
         repo.get_sheet = AsyncMock(return_value=sheet)
         q = MagicMock(id=1)
@@ -137,7 +142,7 @@ class TestSaveDraft:
     async def test_save_draft_sheet_not_found_returns_404(self):
         svc, repo, *_ = _service()
         attempt = MagicMock(status="finished", project_type_id=5)
-        repo.get_attempt_with_window_and_project = AsyncMock(return_value=(attempt, MagicMock(), MagicMock()))
+        repo.get_attempt_with_window_and_project = AsyncMock(return_value=(attempt, _open_window(), MagicMock()))
         repo.get_sheet = AsyncMock(return_value=None)
         with pytest.raises(NotFoundError):
             await svc.save_draft(1, 1, 1, MagicMock(id=1), AssessmentDraftWrite(answers=[]))
@@ -145,7 +150,7 @@ class TestSaveDraft:
     async def test_save_draft_ignores_unknown_question_ids(self):
         svc, repo, _attempts, questions, _exams = _service()
         attempt = MagicMock(status="finished", project_type_id=5)
-        repo.get_attempt_with_window_and_project = AsyncMock(return_value=(attempt, MagicMock(), MagicMock()))
+        repo.get_attempt_with_window_and_project = AsyncMock(return_value=(attempt, _open_window(), MagicMock()))
         sheet = MagicMock(id=1, updated_at=datetime(2026, 11, 16, 10, 35, tzinfo=UTC))
         repo.get_sheet = AsyncMock(return_value=sheet)
         questions.list_questions = AsyncMock(return_value=[])  # no questions

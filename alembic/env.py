@@ -16,6 +16,7 @@ from src.model import (
     Exam, ExamSettingsRevision, ExamSettingsProjectType, ProjectTypeQuestionLock,  # noqa: F401
     ExamAttempt, AttemptEvent, AssessmentWindow,  # noqa: F401
     ExamAssessmentSheet, ExamAssessmentAnswer,  # noqa: F401
+    ExamAssessmentSubmission, ExamAssessmentSubmissionAnswer,  # noqa: F401
     ExamResultEdition,  # noqa: F401
     AppSetting,
     AuditLog,

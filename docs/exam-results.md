@@ -46,7 +46,7 @@
 4. Нет учитываемых оценок («нет расчёта») — 409 `no_calculation`; ручной итог — отдельная задача #116. Малое число ответов и пустая группа принятие не блокируют.
 5. Сохраняется редакция `kind='calculated'`: `calculated_score = final_score`, снимок параметров, `decided_by`, `decided_at` (серверное время).
 
-Другие 409: `questions_missing` (у типа проекта нет вопросов), `invalid_sheet_data` (источник отдал лист, который не проходит проверку расчёта, например сумма больше `sheet_max`), `sheet_source_not_configured` (см. ниже).
+Другие 409: `questions_missing` (у типа проекта нет вопросов), `invalid_sheet_data` (источник отдал лист, который не проходит проверку расчёта, например сумма больше `sheet_max`), `assessment_window_missing` / `audience_snapshot_unavailable` (источник листов не нашёл окно или снимок аудитории, см. ниже).
 
 ### `POST /publish`
 
@@ -109,7 +109,7 @@ WebSocket (#109): `mark_exam_changed` для принятия и публика�
 
 ## Источник листов `ExamSheetSource`
 
-`src/services/exam_sheet_source.py`. Это граница с #111/#112, пока листов нет:
+`src/services/exam_sheet_source.py`. Граница между расчётом и хранением листов (#111/#112):
 
 ```python
 class ExamSheetSource(Protocol):
@@ -124,11 +124,16 @@ class ExamSheetSource(Protocol):
 - работает в UoW вызывающего (та же сессия, без собственного commit);
 - пустой список означает «никто не оценил» — если данные недоступны, нужно падать, а не возвращать пустой список.
 
-Пока реальной реализации нет: `get_exam_sheet_source` в `src/core/container.py` возвращает `UnconfiguredExamSheetSource`, которая падает с 409 `sheet_source_not_configured`. Поэтому `accept` и `GET .../result` (для `preliminary`) работают только после подключения источника (замена фабрики) либо с подменой `dependency_overrides[get_exam_sheet_source]` в тестах. `GET .../editions` от источника не зависит.
+Реальная реализация — `SubmittedSheetSource` (#112), подключена в `get_exam_sheet_source` (`src/core/container.py`):
+берёт окно попытки и строки `assessment_window_audience` с `admitted = TRUE`, для каждого оценщика — последнюю
+отправленную редакцию листа (`exam_assessment_submission`, см. [exam-assessment.md](exam-assessment.md)); роль — только
+из снимка аудитории, сумма — сумма баллов редакции. Нет окна или снимка аудитории → 409 `assessment_window_missing` /
+`audience_snapshot_unavailable` (не пустой список). `UnconfiguredExamSheetSource` остаётся тестовой заглушкой
+(409 `sheet_source_not_configured`), по умолчанию не подключается. `GET .../editions` от источника не зависит.
 
 ## Что не входит
 
-- хранение листов, черновики, отправка и серверный дедлайн — #111/#112;
+- хранение листов, черновики, отправка и серверный дедлайн — #111/#112 (сделано, см. [exam-assessment.md](exam-assessment.md));
 - аудитория и допуск оценщиков — #104/#106;
 - ручной итог — #116 (модель и CHECK его допускают, эндпоинта нет);
 - общий реестр по экзамену, поиск, история решений — #115;

@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from datetime import UTC, datetime
 
-from src.core.exceptions import BusinessLogicError, NotFoundError, PermissionError
+from src.core.exceptions import BusinessLogicError, NotFoundError, PermissionError, ValidationError
 from src.model.user import User
 from src.repository.exam_assessment_repository import ExamAssessmentRepository
 from src.repository.exam_attempt_repository import ExamAttemptRepository
@@ -14,10 +14,13 @@ from src.schema.exam_assessment import (
     AssessmentDraftRead,
     AssessmentDraftWrite,
     AssessmentFormRead,
+    AssessmentSubmissionRead,
     AssessmentWindowRead,
     AssessorRead,
     QuestionLevelRead,
     QuestionWithLevelsRead,
+    SubmissionAnswerRead,
+    SubmissionStateRead,
 )
 
 
@@ -58,6 +61,23 @@ class ExamAssessmentService:
             excluded=not audience.admitted,
             exclusion_reason=reasons.get(audience.exclusion_reason),
         )
+
+    @staticmethod
+    def _conflict(code: str):
+        raise BusinessLogicError({"code": code, "message": code.replace("_", " ")})
+
+    def _require_open(self, window) -> None:
+        # Server clock is the only authority: the window closes exactly at closes_at.
+        if self._clock() >= window.closes_at:
+            self._conflict("assessment_window_closed")
+
+    @staticmethod
+    def _normalized(rows: dict[int, tuple[int | None, str | None]], valid_ids: set[int]):
+        return {
+            question_id: (score, comment)
+            for question_id, (score, comment) in rows.items()
+            if question_id in valid_ids and (score is not None or comment is not None)
+        }
 
     async def _weights(self, exam_id: int, settings_version: int) -> tuple[int, int, int]:
         revision = await self._exams.get_revision(exam_id, settings_version)
@@ -112,6 +132,7 @@ class ExamAssessmentService:
             for qid, answer in answers.items()
         ]
         draft = AssessmentDraftRead(answers=answer_reads, updated_at=sheet.updated_at)
+        submission_state = await self._submission_state(sheet.id, answers, {q.id for q in questions})
 
         return AssessmentFormRead(
             attempt_id=attempt.id,
@@ -125,6 +146,19 @@ class ExamAssessmentService:
             assessor=access,
             questions=question_reads,
             draft=draft,
+            submission=submission_state,
+        )
+
+    async def _submission_state(self, sheet_id: int, answers, valid_ids: set[int]) -> SubmissionStateRead | None:
+        latest = await self._repo.latest_submission(sheet_id)
+        if latest is None:
+            return None
+        submitted = await self._repo.submission_answers(latest.id)
+        draft = self._normalized({qid: (a.score, a.comment) for qid, a in answers.items()}, valid_ids)
+        return SubmissionStateRead(
+            version=latest.version,
+            submitted_at=latest.submitted_at,
+            has_unsubmitted_changes=draft != self._normalized(dict(submitted), valid_ids),
         )
 
     async def save_draft(
@@ -134,6 +168,8 @@ class ExamAssessmentService:
         access = await self._determine_access(window.id, user.id, workspace_id)
         if access.excluded:
             raise PermissionError(f"Excluded from assessment: {access.exclusion_reason}")
+
+        self._require_open(window)
 
         sheet = await self._repo.get_sheet(workspace_id, exam_id, attempt_id, user.id)
         if sheet is None:
@@ -153,3 +189,58 @@ class ExamAssessmentService:
             for qid, answer in answers.items()
         ]
         return AssessmentDraftRead(answers=answer_reads, updated_at=sheet.updated_at if sheet else self._clock())
+
+    async def submit(self, workspace_id: int, exam_id: int, attempt_id: int, user: User) -> AssessmentSubmissionRead:
+        """Snapshot the saved draft as a new immutable edition (idempotent for an unchanged draft)."""
+        attempt, window, _project = await self._load(workspace_id, exam_id, attempt_id)
+        access = await self._determine_access(window.id, user.id, workspace_id)
+        if access.excluded:
+            raise PermissionError(f"Excluded from assessment: {access.exclusion_reason}")
+        self._require_open(window)
+
+        questions = await self._questions.list_questions(attempt.project_type_id)
+        question_ids = [q.id for q in questions]
+        sheet = await self._repo.get_sheet(workspace_id, exam_id, attempt_id, user.id)
+        if sheet is None:
+            self._incomplete(question_ids)
+        # Serialize concurrent submits of this sheet, then re-check the deadline after the wait.
+        await self._repo.lock_sheet(sheet.id)
+        self._require_open(window)
+
+        drafts = await self._repo.get_answers(sheet.id)
+        missing = [qid for qid in question_ids if drafts.get(qid) is None or drafts[qid].score is None]
+        if missing:
+            self._incomplete(missing)
+        snapshot = {qid: (int(drafts[qid].score), drafts[qid].comment) for qid in question_ids}
+
+        latest = await self._repo.latest_submission(sheet.id)
+        unchanged = False
+        if latest is not None and await self._repo.submission_answers(latest.id) == snapshot:
+            submission, unchanged = latest, True
+        else:
+            submission = await self._repo.add_submission(
+                sheet,
+                version=1 if latest is None else latest.version + 1,
+                submitted_at=self._clock(),
+                answers=snapshot,
+            )
+        return AssessmentSubmissionRead(
+            version=submission.version,
+            submitted_at=submission.submitted_at,
+            total=submission.total,
+            answers=[
+                SubmissionAnswerRead(question_id=qid, score=score, comment=comment)
+                for qid, (score, comment) in sorted(snapshot.items())
+            ],
+            unchanged=unchanged,
+        )
+
+    @staticmethod
+    def _incomplete(missing_question_ids: list[int]):
+        raise ValidationError(
+            {
+                "code": "incomplete_sheet",
+                "message": "every question of the project type must have a score",
+                "missing_question_ids": sorted(missing_question_ids),
+            }
+        )

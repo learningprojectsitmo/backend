@@ -62,6 +62,31 @@ class QuestionWithLevelsRead(AssessmentDTO):
     levels: list[QuestionLevelRead]
 
 
+class AssessmentSubmitWrite(AssessmentDTO):
+    """Submit takes no data: the server snapshots the saved draft. Role, weight and scores are never accepted."""
+
+
+class SubmissionAnswerRead(AssessmentDTO):
+    question_id: int
+    score: int
+    comment: str | None
+
+
+class AssessmentSubmissionRead(AssessmentDTO):
+    version: PositiveId
+    submitted_at: datetime
+    total: int
+    answers: list[SubmissionAnswerRead]
+    # True when the draft matched the latest edition, so no new version was created.
+    unchanged: bool
+
+
+class SubmissionStateRead(AssessmentDTO):
+    version: PositiveId
+    submitted_at: datetime
+    has_unsubmitted_changes: bool
+
+
 class AssessmentFormRead(AssessmentDTO):
     attempt_id: int
     project_id: int
@@ -70,3 +95,4 @@ class AssessmentFormRead(AssessmentDTO):
     assessor: AssessorRead
     questions: list[QuestionWithLevelsRead]
     draft: AssessmentDraftRead
+    submission: SubmissionStateRead | None = None
