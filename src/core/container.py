@@ -46,7 +46,7 @@ from src.services.exam_queue_service import ExamQueueService
 from src.services.exam_registration_service import ExamRegistrationService
 from src.services.exam_result_service import ExamResultService
 from src.services.exam_service import ExamService
-from src.services.exam_sheet_source import ExamSheetSource, UnconfiguredExamSheetSource
+from src.services.exam_sheet_source import ExamSheetSource, SubmittedSheetSource
 from src.services.fixtures_service import FixtureService
 from src.services.ideas_service import IdeaService, IdeaTagService
 from src.services.invitation_service import InvitationService
@@ -616,9 +616,8 @@ async def get_exam_result_repository(uow: IUnitOfWork = Depends(get_uow, scope="
     return ExamResultRepository(uow)
 
 
-async def get_exam_sheet_source() -> ExamSheetSource:
-    # Replace with the real implementation once sheets are submitted (#112).
-    return UnconfiguredExamSheetSource()
+async def get_exam_sheet_source(repository=Depends(get_exam_assessment_repository)) -> ExamSheetSource:
+    return SubmittedSheetSource(repository)
 
 
 async def get_exam_result_service(
