@@ -71,7 +71,16 @@ POST .../attempts/31/restart  {"expected_version":4,"reason":"Продолжае
 
 Если список вопросов очистили уже после старта, `finish` вернёт 409 `questions_not_ready`; попытка остаётся идущей, окно и lock не создаются — нужно восстановить вопросы и повторить `finish`.
 
-Окно связано с попыткой и содержит срок, но **не содержит аудиторию**: допущенные/исключённые и доступ к форме — задачи #104/#106/#111. Поэтому «окно открыто допущенным» этим API не подтверждается.
+Окно связано с попыткой и содержит срок. При создании окна автоматически фиксируется **снимок аудитории** (`assessment_window_audience`):
+
+- В аудиторию включаются все участники workspace с ролью teacher, manager или member (teacher/admin с локальной или глобальной ролью; admin маппится в teacher).
+- **Исключаются** участники защищающегося проекта (`member_of_defending_team`) и его руководитель (`manager_of_defending_team`). Все преподаватели (teacher) оценивают все команды без исключений.
+- Один пользователь — одна строка в снимке, независимо от числа проектов, где он состоит.
+- `own_project_ids` — массив id проектов workspace, где пользователь manager (автор) или member (участник). Фиксируется на момент открытия окна.
+- Повторный `finish` не пересоздаёт снимок: изменение состава команды после открытия окна не переписывает историю.
+- Для окон, созданных до миграции `d104a10b20c9`, аудитория отсутствует; текущий состав workspace не подставляется.
+
+Снимок доступен через отдельный API чтения (см. `exam-attempts.md`); он не входит в ответ `AttemptRead.assessment_window` и не рассылается в live-канал. Аудитория — источник для формы (#111) и CSV участия (#122).
 
 ## Чтение и восстановление
 
@@ -97,9 +106,9 @@ GET .../attempts/31/events?limit=50&offset=0
 
 ## Хранение и границы
 
-Миграция `d107a10b20c6` от `d102a10b20c5` добавляет `exam_attempt`, `attempt_event`, `assessment_window`; #108 расширяет статус `postponed`, поля `postponed_at/postponed_phase` и действия `postponed/restarted`. Ограничения: `UNIQUE(registration_id)`, partial `UNIQUE(exam_id) WHERE status IN ('speaking','questions')` (отложенная микрофон не держит), scoped FK к регистрации/типу, CHECK статуса/времени/паузы, `UNIQUE(attempt_id,version)` событий. Downgrade теряет попытки/события/окна, сохраняя регистрации, Exam и вопросы; созданный `finish` question lock в `project_type_question_lock` при этом остаётся, поэтому цикл выполнять только в disposable БД.
+Миграция `d107a10b20c6` от `d102a10b20c5` добавляет `exam_attempt`, `attempt_event`, `assessment_window`; #108 расширяет статус `postponed`, поля `postponed_at/postponed_phase` и действия `postponed/restarted`. #104 (`d104a10b20c9`) добавляет `assessment_window_audience` — снимок аудитории при открытии окна. Ограничения: `UNIQUE(registration_id)`, partial `UNIQUE(exam_id) WHERE status IN ('speaking','questions')` (отложенная микрофон не держит), scoped FK к регистрации/типу, CHECK статуса/времени/паузы, `UNIQUE(attempt_id,version)` событий. Downgrade теряет попытки/события/окна/аудиторию, сохраняя регистрации, Exam и вопросы; созданный `finish` question lock в `project_type_question_lock` при этом остаётся, поэтому цикл выполнять только в disposable БД.
 
-Очередь, перестановка, откладывание из очереди, неявка и возврат реализованы в #108 и описаны в [`exam-queue.md`](exam-queue.md). ETA реализована в #110 и описана в [`exam-eta.md`](exam-eta.md). WebSocket #109 реализован отдельно: live-снимок отдаёт Attempt/таймер/окно, но не аудиторию и не листы ([инструкция WebSocket](exam-live.md)). Не реализовано здесь: аудитория и допуск (#104/#106), автооткрытие формы/срок/черновик (#111), отправка, редакции и серверный дедлайн (#112), пересдачи и вторая попытка — у регистрации ровно одна попытка.
+Очередь, перестановка, откладывание из очереди, неявка и возврат реализованы в #108 и описаны в [`exam-queue.md`](exam-queue.md). ETA реализована в #110 и описана в [`exam-eta.md`](exam-eta.md). WebSocket #109 реализован: live-снимок отдаёт Attempt/таймер/окно/очередь, но не аудиторию и не листы ([инструкция WebSocket](exam-live.md)). Аудитория и допуск реализованы в #104 — снимок аудитории создаётся при открытии окна оценивания; автооткрытие формы/срок/черновик (#111), отправка, редакции и серверный дедлайн (#112) — следующие задачи; пересдач нет — у регистрации ровно одна попытка.
 
 ```sh
 pytest tests/unit/test_exam_attempt_schema.py tests/unit/test_exam_attempt_api.py --no-cov
@@ -110,3 +119,7 @@ pytest --no-cov
 ```
 
 `REGISTRATION_TEST_DATABASE_URL` — PostgreSQL с CREATE DATABASE; fixture создаёт случайную `registration_test_<uuid>` и удаляет только её. Без переменной PG-тесты skip. CI проверяет PostgreSQL 18, локально возможен 14.17.
+
+### Audience integration checks (17 November 2026)
+
+Teachers/admins remain admitted even when they author or participate in the defending project. Personal project IDs are restricted to the window workspace; a composite foreign key prevents attaching audience rows to a window in another workspace. PostgreSQL audience tests run in the Migrations CI job.
