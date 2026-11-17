@@ -1,7 +1,7 @@
 """add_exam_assessment
 
 Revision ID: d111a10b20c9
-Revises: d109a10b20c8
+Revises: d104a10b20c9
 Create Date: 2026-11-16 12:00:00.000000
 
 """
@@ -16,7 +16,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "d111a10b20c9"
-down_revision: str | Sequence[str] | None = "d109a10b20c8"
+down_revision: str | Sequence[str] | None = "d104a10b20c9"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

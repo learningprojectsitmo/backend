@@ -3,8 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from datetime import UTC, datetime
 
-from src.core.exceptions import NotFoundError, PermissionError
-from src.model.project import Project
+from src.core.exceptions import BusinessLogicError, NotFoundError, PermissionError
 from src.model.user import User
 from src.repository.exam_assessment_repository import ExamAssessmentRepository
 from src.repository.exam_attempt_repository import ExamAttemptRepository
@@ -38,27 +37,27 @@ class ExamAssessmentService:
         self._exams = exams
         self._clock = clock or (lambda: datetime.now(UTC))
 
-    @staticmethod
-    def _effective_role(global_role: str | None, local_role: str | None) -> str:
-        """Return the single effective role: teacher > manager > member.
-
-        Global admin or local admin/teacher → teacher; local manager → manager;
-        local member → member; anything else → member (never allow upgrade).
-        """
-        if global_role == "admin":
-            return "teacher"
-        if local_role in {"admin", "teacher"}:
-            return "teacher"
-        if local_role == "manager":
-            return "manager"
-        return "member"
-
-    async def _determine_access(self, project: Project, user_id: int, workspace_id: int) -> AssessorRead:
-        excluded, reason = await self._repo.is_excluded(project, user_id, workspace_id)
-        _is_member, local_role = await self._repo.get_workspace_participation(workspace_id, user_id)
-        global_role = await self._repo.get_global_role(user_id)
-        role = self._effective_role(global_role, local_role)
-        return AssessorRead(role=role, weight=0, excluded=excluded, exclusion_reason=reason)
+    async def _determine_access(self, window_id: int, user_id: int, workspace_id: int) -> AssessorRead:
+        audience = await self._repo.get_audience(window_id, workspace_id, user_id)
+        if audience is None:
+            if not await self._repo.has_audience(window_id, workspace_id):
+                raise BusinessLogicError(
+                    {
+                        "code": "audience_snapshot_unavailable",
+                        "message": "Historical audience is unavailable for this assessment window",
+                    }
+                )
+            raise PermissionError("User is not in the captured assessment audience")
+        reasons = {
+            "member_of_defending_team": "own_project_member",
+            "manager_of_defending_team": "own_project_manager",
+        }
+        return AssessorRead(
+            role=audience.role,
+            weight=0,
+            excluded=not audience.admitted,
+            exclusion_reason=reasons.get(audience.exclusion_reason),
+        )
 
     async def _weights(self, exam_id: int, settings_version: int) -> tuple[int, int, int]:
         revision = await self._exams.get_revision(exam_id, settings_version)
@@ -87,11 +86,11 @@ class ExamAssessmentService:
         return attempt, window, project
 
     async def get_form(self, workspace_id: int, exam_id: int, attempt_id: int, user: User) -> AssessmentFormRead:
-        attempt, window, project = await self._load(workspace_id, exam_id, attempt_id)
-        access = await self._determine_access(project, user.id, workspace_id)
+        attempt, window, _project = await self._load(workspace_id, exam_id, attempt_id)
+        access = await self._determine_access(window.id, user.id, workspace_id)
         if access.excluded:
             raise PermissionError(f"Excluded from assessment: {access.exclusion_reason}")
-        weight = await self._weight_for(access.role, exam_id, attempt.settings_version)
+        weight = await self._weight_for(access.role, exam_id, window.settings_version)
         access = access.model_copy(update={"weight": weight})
 
         sheet = await self._repo.get_or_create_sheet(workspace_id, exam_id, attempt_id, user.id)
@@ -131,8 +130,8 @@ class ExamAssessmentService:
     async def save_draft(
         self, workspace_id: int, exam_id: int, attempt_id: int, user: User, data: AssessmentDraftWrite
     ) -> AssessmentDraftRead:
-        attempt, _window, project = await self._load(workspace_id, exam_id, attempt_id)
-        access = await self._determine_access(project, user.id, workspace_id)
+        attempt, window, _project = await self._load(workspace_id, exam_id, attempt_id)
+        access = await self._determine_access(window.id, user.id, workspace_id)
         if access.excluded:
             raise PermissionError(f"Excluded from assessment: {access.exclusion_reason}")
 

@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.core.exceptions import NotFoundError, PermissionError
+from src.core.exceptions import BusinessLogicError, NotFoundError, PermissionError
 from src.model.user import User
 from src.schema.exam_assessment import AnswerDraftWrite, AssessmentDraftWrite
 from src.services.exam_assessment_service import ExamAssessmentService
@@ -13,6 +13,7 @@ from src.services.exam_assessment_service import ExamAssessmentService
 
 def _service(**overrides):
     repo = AsyncMock()
+    repo.get_audience.return_value = MagicMock(role="teacher", admitted=True, exclusion_reason=None)
     attempts = AsyncMock()
     questions = AsyncMock()
     exams = AsyncMock()
@@ -27,46 +28,29 @@ def _service(**overrides):
 
 
 class TestDetermineAccess:
-    async def test_teacher_from_local_role(self):
+    @pytest.mark.parametrize("role", ["teacher", "manager", "member"])
+    async def test_captured_role_is_used(self, role):
         svc, repo, *_ = _service()
-        repo.is_excluded = AsyncMock(return_value=(False, None))
-        repo.get_workspace_participation = AsyncMock(return_value=(True, "teacher"))
-        repo.get_global_role = AsyncMock(return_value="member")
-        result = await svc._determine_access(MagicMock(), 1, 1)
-        assert result.role == "teacher"
+        repo.get_audience.return_value = MagicMock(role=role, admitted=True, exclusion_reason=None)
+        result = await svc._determine_access(10, 20, 30)
+        assert result.role == role
+        assert result.excluded is False
+        repo.get_audience.assert_awaited_once_with(10, 30, 20)
 
-    async def test_manager_role(self):
+    async def test_missing_historical_audience_is_reported(self):
         svc, repo, *_ = _service()
-        repo.is_excluded = AsyncMock(return_value=(False, None))
-        repo.get_workspace_participation = AsyncMock(return_value=(True, "manager"))
-        repo.get_global_role = AsyncMock(return_value="member")
-        result = await svc._determine_access(MagicMock(), 1, 1)
-        assert result.role == "manager"
+        repo.get_audience.return_value = None
+        repo.has_audience.return_value = False
+        with pytest.raises(BusinessLogicError) as error:
+            await svc._determine_access(1, 2, 3)
+        assert error.value.detail["code"] == "audience_snapshot_unavailable"
 
-    async def test_member_role(self):
+    async def test_user_absent_from_existing_audience_is_denied(self):
         svc, repo, *_ = _service()
-        repo.is_excluded = AsyncMock(return_value=(False, None))
-        repo.get_workspace_participation = AsyncMock(return_value=(True, "member"))
-        repo.get_global_role = AsyncMock(return_value="member")
-        result = await svc._determine_access(MagicMock(), 1, 1)
-        assert result.role == "member"
-
-    async def test_global_admin_without_workspace(self):
-        svc, repo, *_ = _service()
-        repo.is_excluded = AsyncMock(return_value=(False, None))
-        repo.get_workspace_participation = AsyncMock(return_value=(False, None))
-        repo.get_global_role = AsyncMock(return_value="admin")
-        result = await svc._determine_access(MagicMock(), 1, 1)
-        assert result.role == "teacher"
-
-    async def test_excluded_manager_propagates(self):
-        svc, repo, *_ = _service()
-        repo.is_excluded = AsyncMock(return_value=(True, "own_project_manager"))
-        repo.get_workspace_participation = AsyncMock(return_value=(True, "manager"))
-        repo.get_global_role = AsyncMock(return_value="member")
-        result = await svc._determine_access(MagicMock(), 1, 1)
-        assert result.excluded is True
-        assert result.exclusion_reason == "own_project_manager"
+        repo.get_audience.return_value = None
+        repo.has_audience.return_value = True
+        with pytest.raises(PermissionError):
+            await svc._determine_access(1, 2, 3)
 
 
 class TestGetForm:
@@ -80,9 +64,6 @@ class TestGetForm:
         )
         project = MagicMock(id=10)
         repo.get_attempt_with_window_and_project = AsyncMock(return_value=(attempt, window, project))
-        repo.is_excluded = AsyncMock(return_value=(False, None))
-        repo.get_workspace_participation = AsyncMock(return_value=(True, "teacher"))
-        repo.get_global_role = AsyncMock(return_value="member")
         repo.get_or_create_sheet = AsyncMock(
             return_value=MagicMock(id=1, updated_at=datetime(2026, 11, 16, 10, 35, tzinfo=UTC))
         )
@@ -127,9 +108,9 @@ class TestGetForm:
         attempt = MagicMock(status="finished")
         window = MagicMock()
         repo.get_attempt_with_window_and_project = AsyncMock(return_value=(attempt, window, MagicMock()))
-        repo.is_excluded = AsyncMock(return_value=(True, "own_project_manager"))
-        repo.get_workspace_participation = AsyncMock(return_value=(True, "manager"))
-        repo.get_global_role = AsyncMock(return_value="member")
+        repo.get_audience.return_value = MagicMock(
+            role="manager", admitted=False, exclusion_reason="manager_of_defending_team"
+        )
         with pytest.raises(PermissionError):
             await svc.get_form(1, 1, 1, MagicMock(spec=User, id=1))
 
@@ -142,9 +123,6 @@ class TestSaveDraft:
         repo.get_attempt_with_window_and_project = AsyncMock(return_value=(attempt, MagicMock(), project))
         sheet = MagicMock(id=1, updated_at=datetime(2026, 11, 16, 10, 35, tzinfo=UTC))
         repo.get_sheet = AsyncMock(return_value=sheet)
-        repo.is_excluded = AsyncMock(return_value=(False, None))
-        repo.get_workspace_participation = AsyncMock(return_value=(True, "teacher"))
-        repo.get_global_role = AsyncMock(return_value="member")
         q = MagicMock(id=1)
         questions.list_questions = AsyncMock(return_value=[q])
         answer = MagicMock(score=4, comment="ok")
@@ -160,9 +138,6 @@ class TestSaveDraft:
         svc, repo, *_ = _service()
         attempt = MagicMock(status="finished", project_type_id=5)
         repo.get_attempt_with_window_and_project = AsyncMock(return_value=(attempt, MagicMock(), MagicMock()))
-        repo.is_excluded = AsyncMock(return_value=(False, None))
-        repo.get_workspace_participation = AsyncMock(return_value=(True, "teacher"))
-        repo.get_global_role = AsyncMock(return_value="member")
         repo.get_sheet = AsyncMock(return_value=None)
         with pytest.raises(NotFoundError):
             await svc.save_draft(1, 1, 1, MagicMock(id=1), AssessmentDraftWrite(answers=[]))
@@ -173,9 +148,6 @@ class TestSaveDraft:
         repo.get_attempt_with_window_and_project = AsyncMock(return_value=(attempt, MagicMock(), MagicMock()))
         sheet = MagicMock(id=1, updated_at=datetime(2026, 11, 16, 10, 35, tzinfo=UTC))
         repo.get_sheet = AsyncMock(return_value=sheet)
-        repo.is_excluded = AsyncMock(return_value=(False, None))
-        repo.get_workspace_participation = AsyncMock(return_value=(True, "teacher"))
-        repo.get_global_role = AsyncMock(return_value="member")
         questions.list_questions = AsyncMock(return_value=[])  # no questions
         repo.upsert_answers = AsyncMock(return_value={})
         repo.get_answers = AsyncMock(return_value={})

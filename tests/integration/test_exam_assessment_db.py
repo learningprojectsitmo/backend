@@ -8,7 +8,6 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from src.model.exam_assessment import ExamAssessmentSheet
-from src.model.project import Project, ProjectParticipation
 from src.model.project_type_question import ProjectTypeQuestion
 from src.repository.exam_assessment_repository import ExamAssessmentRepository
 from src.repository.exam_attempt_repository import ExamAttemptRepository
@@ -174,62 +173,20 @@ class TestAnswerUpsert:
 
 
 class TestAccessLogic:
-    async def test_is_excluded_own_manager(self, seeded):
+    @pytest.mark.parametrize(
+        "actor, admitted, role",
+        [("manager", False, "manager"), ("local_teacher", True, "teacher"), ("member", True, "member")],
+    )
+    async def test_repository_reads_scoped_snapshot(self, seeded, actor, admitted, role):
         s = seeded
+        attempt = await _finished_attempt(s)
         async with s["uow"]() as u:
-            project = await u.session.get(Project, s["projects"]["manager"])
-            excluded, reason = await _repo(u).is_excluded(project, s["users"]["manager"].id, s["workspace"])
-            assert excluded is True
-            assert reason == "own_project_manager"
-
-    async def test_is_excluded_own_member(self, seeded):
-        s = seeded
-        async with s["uow"]() as u:
-            project = await u.session.get(Project, s["projects"]["manager"])
-            # Add member as participant of manager's project
-            u.session.add(ProjectParticipation(project_id=project.id, participant_id=s["users"]["member"].id))
-            await u.session.flush()
-            excluded, reason = await _repo(u).is_excluded(project, s["users"]["member"].id, s["workspace"])
-            assert excluded is True
-            assert reason == "own_project_member"
-
-    async def test_is_admitted_local_teacher_not_in_team(self, seeded):
-        s = seeded
-        async with s["uow"]() as u:
-            project = await u.session.get(Project, s["projects"]["manager"])
-            # local_teacher is workspace local teacher, not in manager's team
-            excluded, reason = await _repo(u).is_excluded(project, s["users"]["local_teacher"].id, s["workspace"])
-            assert excluded is False
-            assert reason is None
-
-    async def test_is_excluded_not_workspace_member(self, seeded):
-        s = seeded
-        async with s["uow"]() as u:
-            project = await u.session.get(Project, s["projects"]["manager"])
-            # outsider is not a workspace[0] participant
-            excluded, reason = await _repo(u).is_excluded(project, s["users"]["outsider"].id, s["workspace"])
-            assert excluded is True
-            assert reason == "not_workspace_member"
-
-    async def test_get_workspace_participation_returns_role(self, seeded):
-        s = seeded
-        async with s["uow"]() as u:
-            is_member, role = await _repo(u).get_workspace_participation(s["workspace"], s["users"]["member"].id)
-            assert is_member is True
-            assert role == "member"
-
-    async def test_get_workspace_participation_none_for_missing(self, seeded):
-        s = seeded
-        async with s["uow"]() as u:
-            is_member, role = await _repo(u).get_workspace_participation(s["workspace"], 999999)
-            assert is_member is False
-            assert role is None
-
-    async def test_get_global_role(self, seeded):
-        s = seeded
-        async with s["uow"]() as u:
-            role = await _repo(u).get_global_role(s["users"]["admin"].id)
-            assert role == "admin"
+            repo = _repo(u)
+            window = (await repo.get_attempt_with_window_and_project(s["workspace"], s["exams"][0], attempt.id))[1]
+            row = await repo.get_audience(window.id, s["workspace"], s["users"][actor].id)
+            assert (row.admitted, row.role) == (admitted, role)
+            assert await repo.get_audience(window.id, s["foreign_workspace"], s["users"][actor].id) is None
+            assert await repo.get_audience(window.id, s["workspace"], s["users"]["outsider"].id) is None
 
 
 class TestScopedFetch:

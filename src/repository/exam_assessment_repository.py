@@ -2,16 +2,13 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.exc import IntegrityError
 
 from src.core.uow import IUnitOfWork
 from src.model.exam_assessment import ExamAssessmentAnswer, ExamAssessmentSheet
-from src.model.exam_attempt import AssessmentWindow, ExamAttempt
-from src.model.project import Project, ProjectParticipation
-from src.model.user import Role, User
-from src.model.workspace import WorkSpaceParticipation
+from src.model.exam_attempt import AssessmentWindow, AssessmentWindowAudience, ExamAttempt
+from src.model.project import Project
 
 
 class ExamAssessmentRepository:
@@ -26,25 +23,21 @@ class ExamAssessmentRepository:
         existing = await self.get_sheet(workspace_id, exam_id, attempt_id, user_id)
         if existing is not None:
             return existing
-        sheet = ExamAssessmentSheet(
-            workspace_id=workspace_id,
-            exam_id=exam_id,
-            attempt_id=attempt_id,
-            user_id=user_id,
-            status="draft",
+        statement = (
+            pg_insert(ExamAssessmentSheet)
+            .values(workspace_id=workspace_id, exam_id=exam_id, attempt_id=attempt_id, user_id=user_id, status="draft")
+            .on_conflict_do_nothing(index_elements=[ExamAssessmentSheet.user_id, ExamAssessmentSheet.attempt_id])
+            .returning(ExamAssessmentSheet)
         )
-        self.uow.session.add(sheet)
-        try:
-            await self.uow.session.flush()
-        except IntegrityError:
-            await self.uow.session.rollback()
-            # Re-query — another concurrent GET created the sheet
-            result = await self.get_sheet(workspace_id, exam_id, attempt_id, user_id)
-            if result is None:
-                raise
-            return result
-        else:
-            return sheet
+        created = (await self.uow.session.scalars(statement)).one_or_none()
+        if created is not None:
+            return created
+        # A concurrent creator committed the same personal sheet. Never roll back
+        # the caller's transaction: it may contain other legitimate changes.
+        existing = await self.get_sheet(workspace_id, exam_id, attempt_id, user_id)
+        if existing is None:
+            raise RuntimeError("Concurrent assessment sheet is outside the requested scope")
+        return existing
 
     async def get_sheet(
         self, workspace_id: int, exam_id: int, attempt_id: int, user_id: int
@@ -69,6 +62,7 @@ class ExamAssessmentRepository:
             await self.uow.session.scalars(
                 select(ExamAssessmentAnswer)
                 .where(ExamAssessmentAnswer.sheet_id == sheet_id)
+                .order_by(ExamAssessmentAnswer.question_id)
                 .execution_options(populate_existing=True)
             )
         ).all()
@@ -78,7 +72,10 @@ class ExamAssessmentRepository:
         self, sheet_id: int, answers: list[tuple[int, int | None, str | None]]
     ) -> dict[int, ExamAssessmentAnswer]:
         """Upsert (question_id, score, comment) tuples. Returns {question_id: answer}."""
-        for question_id, score, comment in answers:
+        changed = False
+        # Stable row-lock order prevents reverse-order autosaves from deadlocking.
+        latest = {answer[0]: answer for answer in answers}
+        for question_id, score, comment in sorted(latest.values(), key=lambda answer: answer[0]):
             stmt = (
                 pg_insert(ExamAssessmentAnswer)
                 .values(
@@ -91,9 +88,21 @@ class ExamAssessmentRepository:
                 .on_conflict_do_update(
                     index_elements=[ExamAssessmentAnswer.sheet_id, ExamAssessmentAnswer.question_id],
                     set_={"score": score, "comment": comment, "updated_at": datetime.now(UTC)},
+                    where=or_(
+                        ExamAssessmentAnswer.score.is_distinct_from(score),
+                        ExamAssessmentAnswer.comment.is_distinct_from(comment),
+                    ),
                 )
+                .returning(ExamAssessmentAnswer.sheet_id)
             )
-            await self.uow.session.execute(stmt)
+            result = await self.uow.session.execute(stmt)
+            changed = result.scalar_one_or_none() is not None or changed
+        if changed:
+            await self.uow.session.execute(
+                update(ExamAssessmentSheet)
+                .where(ExamAssessmentSheet.id == sheet_id)
+                .values(updated_at=datetime.now(UTC))
+            )
         await self.uow.session.flush()
         return await self.get_answers(sheet_id)
 
@@ -119,42 +128,23 @@ class ExamAssessmentRepository:
         project = await self.uow.session.get(Project, attempt.project_id)
         return (attempt, window, project)
 
-    # ── Access / exclusion ───────────────────────────────────────────────
-
-    async def is_excluded(self, project: Project, user_id: int, workspace_id: int) -> tuple[bool, str | None]:
-        """Check if user is excluded from assessing this project."""
-        if project.author_id == user_id:
-            return True, "own_project_manager"
-        participation = await self.uow.session.scalar(
-            select(ProjectParticipation).where(
-                ProjectParticipation.project_id == project.id,
-                ProjectParticipation.participant_id == user_id,
+    # Historical access is captured atomically when the window opens.
+    async def get_audience(self, window_id: int, workspace_id: int, user_id: int) -> AssessmentWindowAudience | None:
+        return await self.uow.session.scalar(
+            select(AssessmentWindowAudience).where(
+                AssessmentWindowAudience.window_id == window_id,
+                AssessmentWindowAudience.workspace_id == workspace_id,
+                AssessmentWindowAudience.user_id == user_id,
             )
         )
-        if participation is not None:
-            return True, "own_project_member"
-        is_member, _role = await self.get_workspace_participation(workspace_id, user_id)
-        if not is_member:
-            return True, "not_workspace_member"
-        return False, None
 
-    async def get_workspace_participation(self, workspace_id: int, user_id: int) -> tuple[bool, str | None]:
-        """Return (is_member, local_role_name)."""
-        query = (
-            select(Role.name)
-            .select_from(WorkSpaceParticipation)
-            .outerjoin(Role, Role.id == WorkSpaceParticipation.role_id)
+    async def has_audience(self, window_id: int, workspace_id: int) -> bool:
+        row = await self.uow.session.scalar(
+            select(AssessmentWindowAudience.id)
             .where(
-                WorkSpaceParticipation.workspace_id == workspace_id,
-                WorkSpaceParticipation.participant_id == user_id,
+                AssessmentWindowAudience.window_id == window_id,
+                AssessmentWindowAudience.workspace_id == workspace_id,
             )
+            .limit(1)
         )
-        row = (await self.uow.session.execute(query)).first()
-        if row is None:
-            return False, None
-        return True, row[0]
-
-    async def get_global_role(self, user_id: int) -> str | None:
-        """Return global role name from User.role."""
-        query = select(Role.name).select_from(User).outerjoin(Role, Role.id == User.role_id).where(User.id == user_id)
-        return (await self.uow.session.execute(query)).scalar_one_or_none()
+        return row is not None
