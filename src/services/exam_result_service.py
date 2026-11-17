@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy.exc import IntegrityError
 
-from src.core.exceptions import BusinessLogicError, NotFoundError
+from src.core.exceptions import BusinessLogicError, NotFoundError, PermissionError
 from src.model.exam import Exam
 from src.model.exam_attempt import ExamAttempt
 from src.model.exam_result import ExamResultEdition
@@ -28,6 +28,7 @@ from src.schema.exam_result import (
 from src.services.exam_score import ExamScoreError, ExamScoreResult, ScoreWeights, calculate_exam_score
 from src.services.exam_service import ExamService
 from src.services.exam_sheet_source import ExamSheetSource
+from src.services.project_relations import ProjectRelationsService
 
 SHEET_CRITERION_MAX = 5
 
@@ -40,6 +41,7 @@ class ExamResultService:
         exams: ExamRepository,
         exam_service: ExamService,
         sheets: ExamSheetSource,
+        relations: ProjectRelationsService,
         *,
         clock: Callable[[], datetime] | None = None,
     ):
@@ -48,26 +50,35 @@ class ExamResultService:
         self._exams = exams
         self._exam_service = exam_service
         self._sheets = sheets
+        self._relations = relations
         self._clock = clock or (lambda: datetime.now(UTC))
 
     @staticmethod
     def _conflict(code: str):
         raise BusinessLogicError({"code": code, "message": code.replace("_", " ")})
 
+    async def _require_teacher(self, workspace_id: int, user: User) -> None:
+        # Effective teacher/admin role of this very workspace (see docs/project-relations.md).
+        if not await self._relations.is_workspace_teacher(user.id, workspace_id=workspace_id):
+            raise PermissionError("Only workspace teacher/admin can manage exam results")
+
     async def _lock_attempt(self, workspace_id: int, exam_id: int, attempt_id: int, user: User) -> ExamAttempt:
-        await self._exam_service.require_organizer(workspace_id, exam_id, user)
+        # Hidden or foreign exams are 404 before the role check; a visible exam without the role is 403.
+        await self._exam_service.require_read_access(workspace_id, exam_id, user)
+        await self._require_teacher(workspace_id, user)
         exam = await self._exams.get_scoped(workspace_id, exam_id, lock=True)
         if exam is None:
             raise NotFoundError("Exam not found")
-        # Re-check the role after the lock wait, like the attempt service does.
-        await self._exam_service.require_organizer(workspace_id, exam_id, user)
+        # Re-check the role after the lock wait: it may have changed while we waited.
+        await self._require_teacher(workspace_id, user)
         attempt = await self._attempts.get(workspace_id, exam_id, attempt_id, lock=True)
         if attempt is None:
             raise NotFoundError("Attempt not found")
         return attempt
 
     async def _attempt(self, workspace_id: int, exam_id: int, attempt_id: int, user: User) -> ExamAttempt:
-        await self._exam_service.require_organizer(workspace_id, exam_id, user)
+        await self._exam_service.require_read_access(workspace_id, exam_id, user)
+        await self._require_teacher(workspace_id, user)
         attempt = await self._attempts.get(workspace_id, exam_id, attempt_id)
         if attempt is None:
             raise NotFoundError("Attempt not found")

@@ -627,5 +627,6 @@ async def get_exam_result_service(
     exams=Depends(get_exam_repository),
     exam_service=Depends(get_exam_service),
     sheets=Depends(get_exam_sheet_source),
+    relations=Depends(get_project_relations_service),
 ):
-    return ExamResultService(repository, attempts, exams, exam_service, sheets)
+    return ExamResultService(repository, attempts, exams, exam_service, sheets, relations)
