@@ -5,6 +5,7 @@ from src.model.audit import AuditLog
 from src.model.auth import NewUser, PasswordReset, Session
 from src.model.education import Education
 from src.model.exam import Exam, ExamSettingsProjectType, ExamSettingsRevision
+from src.model.exam_assessment import ExamAssessmentAnswer, ExamAssessmentSheet
 from src.model.exam_attempt import AssessmentWindow, AttemptEvent, ExamAttempt
 from src.model.exam_registration import ExamRegistration, ExamSlot, RegistrationEvent
 from src.model.exam_result import ExamResultEdition
@@ -39,6 +40,8 @@ __all__ = [
     "Column",
     "Education",
     "Exam",
+    "ExamAssessmentAnswer",
+    "ExamAssessmentSheet",
     "ExamAttempt",
     "ExamRegistration",
     "ExamResultEdition",
