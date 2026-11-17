@@ -99,7 +99,7 @@ GET .../attempts/31/events?limit=50&offset=0
 
 Миграция `d107a10b20c6` от `d102a10b20c5` добавляет `exam_attempt`, `attempt_event`, `assessment_window`; #108 расширяет статус `postponed`, поля `postponed_at/postponed_phase` и действия `postponed/restarted`. Ограничения: `UNIQUE(registration_id)`, partial `UNIQUE(exam_id) WHERE status IN ('speaking','questions')` (отложенная микрофон не держит), scoped FK к регистрации/типу, CHECK статуса/времени/паузы, `UNIQUE(attempt_id,version)` событий. Downgrade теряет попытки/события/окна, сохраняя регистрации, Exam и вопросы; созданный `finish` question lock в `project_type_question_lock` при этом остаётся, поэтому цикл выполнять только в disposable БД.
 
-Очередь, перестановка, откладывание из очереди, неявка и возврат реализованы в #108 и описаны в [`exam-queue.md`](exam-queue.md). ETA реализована в #110 и описана в [`exam-eta.md`](exam-eta.md). Не реализовано здесь: WebSocket (#109), аудитория и допуск (#104/#106), автооткрытие формы/срок/черновик (#111), отправка, редакции и серверный дедлайн (#112), пересдачи и вторая попытка — у регистрации ровно одна попытка.
+Очередь, перестановка, откладывание из очереди, неявка и возврат реализованы в #108 и описаны в [`exam-queue.md`](exam-queue.md). ETA реализована в #110 и описана в [`exam-eta.md`](exam-eta.md). WebSocket #109 реализован отдельно: live-снимок отдаёт Attempt/таймер/окно, но не аудиторию и не листы ([инструкция WebSocket](exam-live.md)). Не реализовано здесь: аудитория и допуск (#104/#106), автооткрытие формы/срок/черновик (#111), отправка, редакции и серверный дедлайн (#112), пересдачи и вторая попытка — у регистрации ровно одна попытка.
 
 ```sh
 pytest tests/unit/test_exam_attempt_schema.py tests/unit/test_exam_attempt_api.py --no-cov

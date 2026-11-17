@@ -81,6 +81,9 @@ class ExamAttemptService:
         return await attempt_read(self._repository, attempt, now=self._clock() if now is None else now)
 
     def _event(self, attempt: ExamAttempt, *, action: str, user: User, now: datetime, reason: str | None = None):
+        self._repository.uow.mark_exam_changed(attempt.exam_id, "attempt")
+        if action == "finished":
+            self._repository.uow.mark_exam_changed(attempt.exam_id, "window")
         self._repository.uow.session.add(
             AttemptEvent(
                 workspace_id=attempt.workspace_id,

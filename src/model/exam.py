@@ -4,6 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import (
+    BigInteger,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -34,6 +35,7 @@ class Exam(Base):
         ),
         CheckConstraint("status IN ('draft','published')", name="ck_exam_status"),
         CheckConstraint("queue_revision>=0", name="ck_exam_queue_revision"),
+        CheckConstraint("stream_seq>=0", name="ck_exam_stream_seq"),
         CheckConstraint(
             "(status='draft' AND published_at IS NULL AND published_by IS NULL) OR (status='published' AND published_at IS NOT NULL AND published_by IS NOT NULL)",
             name="ck_exam_publication",
@@ -44,6 +46,7 @@ class Exam(Base):
     status: Mapped[str] = mapped_column(String(20), default="draft")
     current_settings_version: Mapped[int] = mapped_column(Integer, default=1)
     queue_revision: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
+    stream_seq: Mapped[int] = mapped_column(BigInteger, default=0, server_default=text("0"))
     created_by: Mapped[int] = mapped_column(ForeignKey("user.id", ondelete="RESTRICT"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     published_by: Mapped[int | None] = mapped_column(ForeignKey("user.id", ondelete="RESTRICT"))
