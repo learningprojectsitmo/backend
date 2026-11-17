@@ -16,6 +16,8 @@ from src.core.logging_config import get_logger, setup_logging
 from src.core.metrics import setup_metrics
 from src.core.middleware.logging_middleware import setup_logging_middleware
 from src.core.sentry import setup_sentry
+from src.core.uow import SqlAlchemyUoW
+from src.services.exam_live_hub import ExamLiveConfig, ExamLiveHub, database_dsn
 
 # Инициализация Sentry/GlitchTip до создания приложения
 setup_sentry()
@@ -54,10 +56,26 @@ async def lifespan(_app: FastAPI):
     # Базовые справочные данные + пользователь-администратор
     await seed_fixtures_on_startup()
 
+    _app.state.exam_live_hub = ExamLiveHub(
+        uow_factory=SqlAlchemyUoW,
+        dsn=database_dsn(settings.DATABASE_URL),
+        config=ExamLiveConfig(
+            heartbeat_seconds=settings.EXAM_LIVE_HEARTBEAT_SECONDS,
+            reconcile_seconds=settings.EXAM_LIVE_RECONCILE_SECONDS,
+            access_check_seconds=settings.EXAM_LIVE_ACCESS_CHECK_SECONDS,
+            auth_timeout_seconds=settings.EXAM_LIVE_AUTH_TIMEOUT_SECONDS,
+            send_timeout_seconds=settings.EXAM_LIVE_SEND_TIMEOUT_SECONDS,
+            coalesce_seconds=settings.EXAM_LIVE_COALESCE_SECONDS,
+            max_connections_per_exam=settings.EXAM_LIVE_MAX_CONNECTIONS_PER_EXAM,
+            max_connections_per_process=settings.EXAM_LIVE_MAX_CONNECTIONS_PER_PROCESS,
+        ),
+    )
+
     logger.info("API startup completed successfully")
     yield
 
     logger.info("API shutdown initiated")
+    await _app.state.exam_live_hub.stop()
 
 
 app = FastAPI(

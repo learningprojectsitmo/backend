@@ -178,6 +178,7 @@ class ExamRegistrationService:
         related=None,
         transfer_id=None,
     ):
+        self._repository.uow.mark_exam_changed(row.exam_id, "queue")
         self._repository.uow.session.add(
             RegistrationEvent(
                 workspace_id=row.workspace_id,
