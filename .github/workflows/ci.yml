@@ -115,7 +115,7 @@ jobs:
       - name: Verify registrations and attempts on disposable PostgreSQL
         run: |
           test -n "$REGISTRATION_TEST_DATABASE_URL"
-          pytest tests/integration/test_exam_registrations_db.py tests/integration/test_exam_organizer_db.py tests/integration/test_exam_attempts_db.py tests/integration/test_exam_queue_db.py tests/integration/test_exam_eta_db.py --no-cov
+          pytest tests/integration/test_exam_registrations_db.py tests/integration/test_exam_organizer_db.py tests/integration/test_exam_attempts_db.py tests/integration/test_exam_queue_db.py tests/integration/test_exam_eta_db.py tests/integration/test_exam_assessment_db.py tests/integration/test_exam_assessment_api.py --no-cov
 
       - name: Verify exams on disposable PostgreSQL
         run: pytest tests/integration/test_exams_db.py --no-cov
