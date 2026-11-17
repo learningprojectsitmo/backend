@@ -5,6 +5,7 @@ from datetime import timedelta
 from decimal import Decimal
 
 import pytest
+import pytest_asyncio
 import test_exam_attempts_db as attempt_cases
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
@@ -14,16 +15,51 @@ from src.core.exceptions import BusinessLogicError, NotFoundError, PermissionErr
 from src.repository.exam_attempt_repository import ExamAttemptRepository
 from src.repository.exam_repository import ExamRepository
 from src.repository.exam_result_repository import ExamResultRepository
+from src.repository.project_repository import ProjectRepository
 from src.repository.project_type_question_repository import ProjectTypeQuestionRepository
+from src.repository.workspace_repository import WorkSpaceRepository
 from src.schema.exam import ExamWeights
 from src.schema.exam_result import ResultAccept, ResultPublish
 from src.services.exam_result_service import ExamResultService
 from src.services.exam_score import SheetScore
 from src.services.exam_service import ExamService
+from src.services.project_relations import ProjectRelationsService
 
 pytestmark = pytest.mark.integration
 
-seeded = attempt_cases.seeded
+
+seeded_base = attempt_cases.seeded
+
+
+@pytest_asyncio.fixture(loop_scope="function")
+async def seeded(seeded_base):
+    """Seeded workspace where the author-teacher also participates (NULL local role -> global teacher).
+
+    Result operations need *participation* with an effective teacher/admin role, and the shared
+    fixture only makes `teacher` the workspace author, so the participation row is added here.
+    """
+    s = seeded_base
+    await set_participation(s, "teacher", local=None)
+    return s
+
+
+async def set_participation(s, name, *, local: str | None | bool):
+    """Create/replace a participation row; `local=False` removes it, `None` makes the role NULL."""
+    user_id = s["users"][name].id
+    async with s["uow"]() as u:
+        await u.session.execute(
+            text("DELETE FROM workspace_participation WHERE workspace_id = :w AND participant_id = :u"),
+            {"w": s["workspace"], "u": user_id},
+        )
+        if local is not False:
+            await u.session.execute(
+                text(
+                    "INSERT INTO workspace_participation (workspace_id, participant_id, role_id) "
+                    "VALUES (:w, :u, (SELECT id FROM role WHERE name = :r))"
+                ),
+                {"w": s["workspace"], "u": user_id, "r": local},
+            )
+
 
 AFTER_WINDOW = NOW + timedelta(minutes=10 + 3)
 
@@ -47,6 +83,7 @@ def result_service(uow, *, now=AFTER_WINDOW, sheets=None):
         ExamRepository(uow),
         ExamService(ExamRepository(uow), ProjectTypeQuestionRepository(uow)),
         Sheets(DEFAULT_SHEETS if sheets is None else sheets),
+        ProjectRelationsService(ProjectRepository(uow), WorkSpaceRepository(uow)),
         clock=lambda: now,
     )
 
@@ -174,7 +211,7 @@ async def test_publish_marks_once_and_is_idempotent(seeded):
     attempt = await finished_attempt(s)
     await accept(s, attempt)
     first = await publish(s, attempt, now=AFTER_WINDOW + timedelta(minutes=1))
-    again = await publish(s, attempt, now=AFTER_WINDOW + timedelta(hours=1), actor="admin")
+    again = await publish(s, attempt, now=AFTER_WINDOW + timedelta(hours=1), actor="local_admin")
     assert first.edition.published_at == AFTER_WINDOW + timedelta(minutes=1)
     assert again.edition.published_at == first.edition.published_at
     assert again.edition.published_by == s["users"]["teacher"].id
@@ -184,7 +221,7 @@ async def test_concurrent_publish_keeps_one_mark(seeded):
     s = seeded
     attempt = await finished_attempt(s)
     await accept(s, attempt)
-    await asyncio.gather(publish(s, attempt), publish(s, attempt, actor="admin"))
+    await asyncio.gather(publish(s, attempt), publish(s, attempt, actor="local_admin"))
     async with s["engine"].connect() as connection:
         rows = (await connection.execute(text("SELECT published_at, published_by FROM exam_result_edition"))).all()
     assert len(rows) == 1 and rows[0][0] is not None and rows[0][1] is not None
@@ -211,8 +248,84 @@ async def test_permissions_and_isolation(seeded):
         await accept(s, attempt, exam=1)
     assert await count(s, "exam_result_edition") == 0
     await accept(s, attempt, actor="local_teacher")
-    await accept(s, attempt, version=1, reason="Админ", actor="admin")
+    await accept(s, attempt, version=1, reason="Админ", actor="local_admin")
     assert await count(s, "exam_result_edition") == 2
+
+
+async def all_calls(s, attempt, actor):
+    """Run every result operation as *actor*; return the exception class (or None) per operation."""
+    outcomes = {}
+    user = s["users"][actor]
+    ids = (s["workspace"], s["exams"][0], attempt.id)
+    calls = {
+        "get": lambda u: result_service(u).get(*ids, user),
+        "editions": lambda u: result_service(u).editions(*ids, user),
+        "accept": lambda u: result_service(u).accept(*ids, ResultAccept(expected_version=0), user),
+        "publish": lambda u: result_service(u).publish(*ids, ResultPublish(expected_version=1), user),
+    }
+    for name, call in calls.items():
+        try:
+            async with s["uow"]() as u:
+                await call(u)
+        except (PermissionError, NotFoundError, BusinessLogicError) as error:
+            outcomes[name] = type(error)
+    return outcomes
+
+
+@pytest.mark.parametrize("actor", ["admin", "manager", "member", "demoted"])
+async def test_global_admin_outside_workspace_and_participants_are_forbidden(seeded, actor):
+    # `admin` has the global admin role but no participation in the workspace: no access (403, not 404,
+    # because the exam is visible to a global admin; the role check then fails).
+    s = seeded
+    attempt = await finished_attempt(s)
+    outcomes = await all_calls(s, attempt, actor)
+    assert outcomes == dict.fromkeys(["get", "editions", "accept", "publish"], PermissionError)
+    assert await count(s, "exam_result_edition") == 0
+
+
+@pytest.mark.parametrize("local", ["teacher", "admin", None])
+async def test_effective_teacher_or_admin_of_the_workspace_may_decide_and_publish(seeded, local):
+    # `outsider` is a global teacher: local teacher/admin and NULL (-> global teacher) all qualify.
+    s = seeded
+    attempt = await finished_attempt(s)
+    await set_participation(s, "outsider", local=local)
+    await accept(s, attempt, actor="outsider")
+    published = await publish(s, attempt, actor="outsider")
+    assert published.edition.published_by == s["users"]["outsider"].id
+
+
+async def test_local_member_beats_global_teacher_role(seeded):
+    s = seeded
+    attempt = await finished_attempt(s)
+    await set_participation(s, "outsider", local="member")
+    outcomes = await all_calls(s, attempt, "outsider")
+    assert outcomes == dict.fromkeys(["get", "editions", "accept", "publish"], PermissionError)
+
+
+async def test_non_participant_global_teacher_cannot_see_the_workspace(seeded):
+    s = seeded
+    attempt = await finished_attempt(s)
+    outcomes = await all_calls(s, attempt, "outsider")
+    assert outcomes == dict.fromkeys(["get", "editions", "accept", "publish"], NotFoundError)
+
+
+async def test_workspace_author_without_participation_is_forbidden(seeded):
+    # The author-teacher sees the workspace but without participation has no effective role.
+    s = seeded
+    attempt = await finished_attempt(s)
+    await set_participation(s, "teacher", local=False)
+    outcomes = await all_calls(s, attempt, "teacher")
+    assert outcomes == dict.fromkeys(["get", "editions", "accept", "publish"], PermissionError)
+
+
+async def test_foreign_attempt_or_exam_is_not_found_for_a_teacher(seeded):
+    s = seeded
+    attempt = await finished_attempt(s)
+    with pytest.raises(NotFoundError):
+        await accept(s, attempt, exam=1)
+    async with s["uow"]() as u:
+        with pytest.raises(NotFoundError):
+            await result_service(u).get(s["workspace"], s["exams"][0], attempt.id + 999, s["users"]["teacher"])
 
 
 async def insert_row(s, attempt, **overrides):

@@ -29,7 +29,10 @@ class Fakes:
     """In-memory stand-ins for the repositories and collaborators of ExamResultService."""
 
     def __init__(self):
-        self.role_error: Exception | None = None
+        self.visibility_error: Exception | None = None
+        self.is_teacher = True
+        self.teacher_calls: list[tuple[int, int]] = []
+        self.revoke_after_calls: int | None = None
         self.exam = SimpleNamespace(id=EXAM, workspace_id=WS, current_settings_version=1)
         self.revision = SimpleNamespace(
             teacher_weight=60, manager_weight=30, member_weight=10, max_score=Decimal("25.00")
@@ -41,10 +44,17 @@ class Fakes:
         self.editions: list[ExamResultEdition] = []
         self.uow = SimpleNamespace(session=Flush())
 
-    # exam service
-    async def require_organizer(self, workspace_id, exam_id, user):
-        if self.role_error is not None:
-            raise self.role_error
+    # exam service (visibility of the exam in the workspace: 404 for foreign or hidden ones)
+    async def require_read_access(self, workspace_id, exam_id, user):
+        if self.visibility_error is not None:
+            raise self.visibility_error
+
+    # project relations service (effective teacher/admin role of the workspace)
+    async def is_workspace_teacher(self, user_id, *, workspace_id):
+        self.teacher_calls.append((user_id, workspace_id))
+        if self.revoke_after_calls is not None and len(self.teacher_calls) > self.revoke_after_calls:
+            return False
+        return self.is_teacher
 
     # exam repository
     async def get_scoped(self, workspace_id, exam_id, *, lock=False):
@@ -104,7 +114,7 @@ class Exams:
 def make(fakes: Fakes | None = None, *, now: datetime = NOW, sheets=None):
     fakes = fakes or Fakes()
     service = ExamResultService(
-        Results(fakes), Attempts(fakes), Exams(fakes), fakes, sheets or fakes, clock=lambda: now
+        Results(fakes), Attempts(fakes), Exams(fakes), fakes, sheets or fakes, fakes, clock=lambda: now
     )
     return service, fakes
 
@@ -288,7 +298,7 @@ async def test_publish_marks_current_edition_and_is_idempotent():
     first = await service.publish(WS, EXAM, ATTEMPT, ResultPublish(expected_version=1), USER)
     assert first.edition.published_at == NOW and first.edition.published_by == USER.id
     later = ExamResultService(
-        Results(fakes), Attempts(fakes), Exams(fakes), fakes, fakes, clock=lambda: NOW + timedelta(hours=1)
+        Results(fakes), Attempts(fakes), Exams(fakes), fakes, fakes, fakes, clock=lambda: NOW + timedelta(hours=1)
     )
     again = await later.publish(WS, EXAM, ATTEMPT, ResultPublish(expected_version=1), OTHER)
     assert again.edition.published_at == NOW and again.edition.published_by == USER.id
@@ -322,27 +332,74 @@ async def test_publish_of_older_edition_after_new_decision_conflicts():
     )
 
 
-@pytest.mark.parametrize("call", ["accept", "publish", "get", "editions"])
-async def test_permission_error_is_propagated(call):
-    service, fakes = make()
-    await accept(service)
-    fakes.role_error = PermissionError("Only workspace teacher/admin can manage exams")
-    calls = {
+def calls_for(service):
+    return {
         "accept": lambda: accept(service, version=1, reason="x"),
         "publish": lambda: service.publish(WS, EXAM, ATTEMPT, ResultPublish(expected_version=1), USER),
         "get": lambda: service.get(WS, EXAM, ATTEMPT, USER),
         "editions": lambda: service.editions(WS, EXAM, ATTEMPT, USER),
     }
+
+
+@pytest.mark.parametrize("call", ["accept", "publish", "get", "editions"])
+async def test_user_without_workspace_teacher_role_is_forbidden(call):
+    # Covers: global admin outside the workspace, local member with a global teacher role,
+    # a plain participant: all of them are `False` from is_workspace_teacher.
+    service, fakes = make()
+    await accept(service)
+    fakes.is_teacher = False
     with pytest.raises(PermissionError):
-        await calls[call]()
+        await calls_for(service)[call]()
     assert len(fakes.editions) == 1 and fakes.editions[0].published_at is None
+
+
+async def test_role_is_checked_for_the_requested_workspace_and_user():
+    service, fakes = make()
+    await service.get(WS, EXAM, ATTEMPT, USER)
+    assert fakes.teacher_calls == [(USER.id, WS)]
+
+
+async def test_workspace_teacher_is_allowed_for_every_operation():
+    service, fakes = make()
+    await accept(service)
+    for call in ["publish", "get", "editions"]:
+        await calls_for(service)[call]()
+    assert fakes.editions[0].published_at == NOW
+
+
+async def test_visibility_is_checked_before_role():
+    service, fakes = make()
+    fakes.visibility_error = NotFoundError("Workspace not found")
+    fakes.is_teacher = False
+    with pytest.raises(NotFoundError):
+        await service.get(WS, EXAM, ATTEMPT, USER)
+    assert fakes.teacher_calls == []
 
 
 async def test_foreign_scope_is_not_found():
     service, fakes = make()
-    fakes.role_error = NotFoundError("Workspace not found")
-    with pytest.raises(NotFoundError):
-        await service.get(WS, EXAM, ATTEMPT, USER)
+    fakes.visibility_error = NotFoundError("Exam not found")
+    for call in ["accept", "publish", "get", "editions"]:
+        with pytest.raises(NotFoundError):
+            await calls_for(service)[call]()
+
+
+async def test_accept_rechecks_role_after_the_lock_and_stores_nothing():
+    service, fakes = make()
+    fakes.revoke_after_calls = 1  # first check passes, the check after the lock wait fails
+    with pytest.raises(PermissionError):
+        await accept(service)
+    assert fakes.editions == [] and len(fakes.teacher_calls) == 2
+
+
+async def test_publish_rechecks_role_after_the_lock_and_keeps_edition_unpublished():
+    service, fakes = make()
+    await accept(service)
+    fakes.teacher_calls.clear()
+    fakes.revoke_after_calls = 1
+    with pytest.raises(PermissionError):
+        await service.publish(WS, EXAM, ATTEMPT, ResultPublish(expected_version=1), USER)
+    assert fakes.editions[0].published_at is None and len(fakes.teacher_calls) == 2
 
 
 @pytest.mark.parametrize("ids", [(WS, EXAM, 99), (WS, 99, ATTEMPT), (99, EXAM, ATTEMPT)])
