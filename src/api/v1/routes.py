@@ -18,6 +18,7 @@ from src.api.v1.endpoints.notification import notification_router
 from src.api.v1.endpoints.profile import profile_router
 from src.api.v1.endpoints.project import invitation_router as project_invitation_router
 from src.api.v1.endpoints.project import project_router, response_router
+from src.api.v1.endpoints.project_relations import project_relations_router
 from src.api.v1.endpoints.project_type_question import project_type_question_router, question_template_router
 from src.api.v1.endpoints.resume import resume_router
 from src.api.v1.endpoints.role import role_permission_router, role_router
@@ -43,6 +44,7 @@ router_list = [
     resume_router,
     profile_router,
     project_router,
+    project_relations_router,
     sessions_router,
     audit_router,
     workspace_router,
