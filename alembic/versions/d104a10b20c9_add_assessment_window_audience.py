@@ -23,6 +23,7 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     """Upgrade schema."""
+    op.create_unique_constraint("uq_window_scope", "assessment_window", ["id", "workspace_id"])
     op.create_table(
         "assessment_window_audience",
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
@@ -49,8 +50,8 @@ def upgrade() -> None:
         "fk_audience_window",
         "assessment_window_audience",
         "assessment_window",
-        ["window_id"],
-        ["id"],
+        ["window_id", "workspace_id"],
+        ["id", "workspace_id"],
         ondelete="RESTRICT",
     )
     op.create_check_constraint(
@@ -69,3 +70,4 @@ def upgrade() -> None:
 def downgrade() -> None:
     """Downgrade schema."""
     op.drop_table("assessment_window_audience")
+    op.drop_constraint("uq_window_scope", "assessment_window", type_="unique")

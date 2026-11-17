@@ -389,7 +389,9 @@ class ExamAttemptService:
                 LEFT JOIN role lr ON lr.id = wp.role_id
                 LEFT JOIN role gr ON gr.id = u.role_id
                 LEFT JOIN LATERAL (
-                    SELECT pp.project_id FROM project_participation pp WHERE pp.participant_id = u.id
+                    SELECT pp.project_id FROM project_participation pp
+                    JOIN project owned_project ON owned_project.id = pp.project_id
+                    WHERE pp.participant_id = u.id AND owned_project.workspace_id = :workspace_id
                     UNION
                     SELECT p.id FROM project p WHERE p.author_id = u.id AND p.workspace_id = :workspace_id
                 ) owned ON TRUE
@@ -428,7 +430,7 @@ class ExamAttemptService:
             # Determine exclusion: priority member_of > manager_of.
             admitted = True
             exclusion_reason = None
-            if is_member:
+            if is_member and snapshot_role != "teacher":
                 admitted = False
                 exclusion_reason = "member_of_defending_team"
             elif is_manager and snapshot_role != "teacher":

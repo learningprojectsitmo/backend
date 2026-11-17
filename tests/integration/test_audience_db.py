@@ -5,9 +5,11 @@ from datetime import timedelta
 import pytest
 import test_exam_registrations_db as registration_cases
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from test_exam_registrations_db import NOW, count, reg_service
 
-from src.model.project import ProjectParticipation
+from src.model.exam_attempt import AssessmentWindowAudience
+from src.model.project import Project, ProjectParticipation
 from src.repository.exam_attempt_repository import ExamAttemptRepository
 from src.repository.exam_registration_repository import ExamRegistrationRepository
 from src.repository.exam_repository import ExamRepository
@@ -462,3 +464,70 @@ class TestAudienceMigration:
                 (await conn.execute(text("SELECT tablename FROM pg_tables WHERE schemaname='public'"))).scalars()
             )
         assert "assessment_window_audience" in tables
+
+
+async def test_teacher_who_is_project_participant_remains_admitted(seeded):
+    s = seeded
+    teacher = s["users"]["local_teacher"].id
+    async with s["uow"]() as u:
+        u.session.add(ProjectParticipation(project_id=s["projects"]["manager"], participant_id=teacher, role="member"))
+    _, _, window_id = await _start_and_finish(s)
+    async with s["engine"].connect() as conn:
+        row = (
+            await conn.execute(
+                text(
+                    "SELECT role, admitted, exclusion_reason, own_project_ids "
+                    "FROM assessment_window_audience WHERE window_id=:wid AND user_id=:uid"
+                ),
+                {"wid": window_id, "uid": teacher},
+            )
+        ).one()
+    assert row.role == "teacher"
+    assert row.admitted is True
+    assert row.exclusion_reason is None
+    assert s["projects"]["manager"] in row.own_project_ids
+
+
+async def test_own_projects_do_not_include_another_workspace(seeded):
+    s = seeded
+    uid = s["users"]["member"].id
+    async with s["uow"]() as u:
+        project = Project(
+            name="Foreign participation",
+            author_id=s["users"]["outsider"].id,
+            workspace_id=s["foreign_workspace"],
+            project_type_id=s["types"][2],
+        )
+        u.session.add(project)
+        await u.session.flush()
+        foreign_id = project.id
+        u.session.add(ProjectParticipation(project_id=foreign_id, participant_id=uid, role="member"))
+    _, _, window_id = await _start_and_finish(s)
+    async with s["engine"].connect() as conn:
+        own_ids = (
+            await conn.execute(
+                text("SELECT own_project_ids FROM assessment_window_audience WHERE window_id=:wid AND user_id=:uid"),
+                {"wid": window_id, "uid": uid},
+            )
+        ).scalar_one()
+    assert foreign_id not in own_ids
+
+
+async def test_audience_rejects_window_from_another_workspace(seeded):
+    s = seeded
+    _, _, window_id = await _start_and_finish(s)
+    with pytest.raises(IntegrityError):
+        async with s["uow"]() as u:
+            u.session.add(
+                AssessmentWindowAudience(
+                    window_id=window_id,
+                    workspace_id=s["foreign_workspace"],
+                    user_id=s["users"]["outsider"].id,
+                    role="teacher",
+                    own_project_ids=[],
+                    admitted=True,
+                    exclusion_reason=None,
+                    created_at=NOW,
+                )
+            )
+            await u.session.flush()

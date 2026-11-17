@@ -120,6 +120,7 @@ class AssessmentWindow(Base):
     __tablename__ = "assessment_window"
     __table_args__ = (
         UniqueConstraint("attempt_id", name="uq_window_attempt"),
+        UniqueConstraint("id", "workspace_id", name="uq_window_scope"),
         ForeignKeyConstraint(
             ["attempt_id", "exam_id", "workspace_id"],
             ["exam_attempt.id", "exam_attempt.exam_id", "exam_attempt.workspace_id"],
@@ -152,8 +153,8 @@ class AssessmentWindowAudience(Base):
     __table_args__ = (
         UniqueConstraint("window_id", "user_id", name="uq_audience_user"),
         ForeignKeyConstraint(
-            ["window_id"],
-            ["assessment_window.id"],
+            ["window_id", "workspace_id"],
+            ["assessment_window.id", "assessment_window.workspace_id"],
             name="fk_audience_window",
             ondelete="RESTRICT",
         ),

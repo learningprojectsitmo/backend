@@ -119,3 +119,7 @@ pytest --no-cov
 ```
 
 `REGISTRATION_TEST_DATABASE_URL` — PostgreSQL с CREATE DATABASE; fixture создаёт случайную `registration_test_<uuid>` и удаляет только её. Без переменной PG-тесты skip. CI проверяет PostgreSQL 18, локально возможен 14.17.
+
+### Audience integration checks (17 November 2026)
+
+Teachers/admins remain admitted even when they author or participate in the defending project. Personal project IDs are restricted to the window workspace; a composite foreign key prevents attaching audience rows to a window in another workspace. PostgreSQL audience tests run in the Migrations CI job.
