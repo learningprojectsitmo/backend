@@ -15,8 +15,19 @@ def remaining_seconds(attempt: ExamAttempt, now: datetime) -> int:
     return math.floor((attempt.phase_deadline - frozen).total_seconds())
 
 
-async def attempt_read(repository: ExamAttemptRepository, attempt: ExamAttempt, *, now: datetime) -> AttemptRead:
-    window = await repository.window(attempt.id) if attempt.status == "finished" else None
+async def attempt_read(
+    repository: ExamAttemptRepository,
+    attempt: ExamAttempt,
+    *,
+    now: datetime,
+    windows=None,
+) -> AttemptRead:
+    if attempt.status != "finished":
+        window = None
+    elif windows is not None:
+        window = windows.get(attempt.id)
+    else:
+        window = await repository.window(attempt.id)
     return AttemptRead(
         id=attempt.id,
         workspace_id=attempt.workspace_id,
