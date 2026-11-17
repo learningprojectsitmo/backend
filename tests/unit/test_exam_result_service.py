@@ -7,9 +7,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.core.exceptions import BusinessLogicError, NotFoundError, PermissionError
+from src.core.exceptions import BusinessLogicError, NotFoundError, PermissionError, ValidationError
 from src.model.exam_result import ExamResultEdition
-from src.schema.exam_result import ResultAccept, ResultPublish
+from src.schema.exam_result import ResultAccept, ResultManual, ResultPublish
 from src.services.exam_result_service import ExamResultService
 from src.services.exam_score import SheetScore
 from src.services.exam_sheet_source import UnconfiguredExamSheetSource
@@ -121,6 +121,11 @@ def make(fakes: Fakes | None = None, *, now: datetime = NOW, sheets=None):
 
 async def accept(service, version=0, reason=None, user=USER):
     return await service.accept(WS, EXAM, ATTEMPT, ResultAccept(expected_version=version, reason=reason), user)
+
+
+async def manual(service, score="20", version=0, reason="oral defense", user=USER):
+    data = ResultManual(expected_version=version, final_score=score, reason=reason)
+    return await service.manual(WS, EXAM, ATTEMPT, data, user)
 
 
 async def code_of(awaitable) -> str:
@@ -335,13 +340,14 @@ async def test_publish_of_older_edition_after_new_decision_conflicts():
 def calls_for(service):
     return {
         "accept": lambda: accept(service, version=1, reason="x"),
+        "manual": lambda: manual(service, version=1),
         "publish": lambda: service.publish(WS, EXAM, ATTEMPT, ResultPublish(expected_version=1), USER),
         "get": lambda: service.get(WS, EXAM, ATTEMPT, USER),
         "editions": lambda: service.editions(WS, EXAM, ATTEMPT, USER),
     }
 
 
-@pytest.mark.parametrize("call", ["accept", "publish", "get", "editions"])
+@pytest.mark.parametrize("call", ["accept", "manual", "publish", "get", "editions"])
 async def test_user_without_workspace_teacher_role_is_forbidden(call):
     # Covers: global admin outside the workspace, local member with a global teacher role,
     # a plain participant: all of them are `False` from is_workspace_teacher.
@@ -379,7 +385,7 @@ async def test_visibility_is_checked_before_role():
 async def test_foreign_scope_is_not_found():
     service, fakes = make()
     fakes.visibility_error = NotFoundError("Exam not found")
-    for call in ["accept", "publish", "get", "editions"]:
+    for call in ["accept", "manual", "publish", "get", "editions"]:
         with pytest.raises(NotFoundError):
             await calls_for(service)[call]()
 
@@ -409,3 +415,162 @@ async def test_unknown_attempt_or_exam_is_not_found(ids):
         await service.accept(*ids, ResultAccept(expected_version=0), USER)
     with pytest.raises(NotFoundError):
         await service.get(*ids, USER)
+
+
+# ---- manual result (#116) ----
+
+
+async def test_manual_stores_both_values_reason_author_and_snapshot():
+    service, fakes = make()
+    result = await manual(service, "17.5")
+    edition = result.edition
+    assert (edition.version, edition.kind) == (1, "manual")
+    assert edition.final_score == Decimal("17.50") and edition.calculated_score == Decimal("19.00")
+    assert edition.reason == "oral defense" and edition.decided_by == USER.id and edition.decided_at == NOW
+    assert edition.snapshot.sheet_max == 25 and edition.snapshot.used_weight == 100
+    assert edition.snapshot.weights.teacher == 60 and edition.snapshot.max_score == Decimal("25.00")
+    assert (edition.snapshot.sheets.teacher, edition.snapshot.sheets.manager) == (1, 1)
+    assert len(fakes.editions) == 1 and fakes.editions[0].kind == "manual"
+
+
+async def test_manual_without_calculation_is_allowed_with_null_calculated_score():
+    fakes = Fakes()
+    fakes.sheets = []
+    service, fakes = make(fakes)
+    assert await code_of(accept(service)) == "no_calculation"
+    result = await manual(service, "12")
+    assert result.edition.calculated_score is None and result.edition.final_score == Decimal("12.00")
+    assert result.edition.snapshot.used_weight == 0
+    assert result.preliminary.no_calculation is True
+
+
+async def test_manual_without_calculation_is_not_outdated_until_votes_appear():
+    fakes = Fakes()
+    fakes.sheets = []
+    service, fakes = make(fakes)
+    await manual(service, "12")
+    assert (await service.get(WS, EXAM, ATTEMPT, USER)).outdated is False
+    fakes.sheets = [SheetScore("teacher", 20)]
+    assert (await service.get(WS, EXAM, ATTEMPT, USER)).outdated is True
+
+
+async def test_manual_final_score_is_not_compared_with_the_calculation():
+    service, fakes = make()
+    await manual(service, "3")  # far from the calculated 19.00
+    assert (await service.get(WS, EXAM, ATTEMPT, USER)).outdated is False
+    fakes.revision.max_score = Decimal("50.00")
+    assert (await service.get(WS, EXAM, ATTEMPT, USER)).outdated is True
+
+
+@pytest.mark.parametrize("score", ["0", "25", "25.00", "0.01"])
+async def test_manual_range_bounds_are_inclusive(score):
+    service, _ = make()
+    assert (await manual(service, score)).edition.final_score == Decimal(score).quantize(Decimal("0.01"))
+
+
+async def test_manual_above_max_score_is_422_and_stores_nothing():
+    service, fakes = make()
+    with pytest.raises(ValidationError) as error:
+        await manual(service, "25.01")
+    assert error.value.detail["code"] == "final_score_out_of_range" and error.value.detail["max_score"] == "25.00"
+    assert fakes.editions == []
+
+
+async def test_manual_range_uses_current_settings_max_score():
+    fakes = Fakes()
+    fakes.revision.max_score = Decimal("100.00")
+    service, _ = make(fakes)
+    assert (await manual(service, "76")).edition.final_score == Decimal("76.00")
+    assert (await manual(service, "100", version=1)).edition.snapshot.max_score == Decimal("100.00")
+
+
+async def test_manual_value_is_not_rounded_to_integer():
+    service, _ = make()
+    assert (await manual(service, "19.45")).edition.final_score == Decimal("19.45")
+
+
+async def test_manual_requires_finished_attempt_and_closed_window():
+    fakes = Fakes()
+    fakes.attempt.status = "questions"
+    service, _ = make(fakes)
+    assert await code_of(manual(service)) == "attempt_not_finished"
+    fakes.attempt.status = "finished"
+    fakes.window = None
+    assert await code_of(manual(service)) == "assessment_window_missing"
+    fakes.window = SimpleNamespace(closes_at=NOW + timedelta(seconds=1))
+    assert await code_of(manual(service)) == "assessment_window_open"
+    assert fakes.editions == []
+
+
+async def test_manual_at_exact_close_time_is_allowed():
+    fakes = Fakes()
+    fakes.window.closes_at = NOW
+    service, _ = make(fakes)
+    assert (await manual(service)).edition.version == 1
+
+
+async def test_manual_version_conflicts():
+    service, fakes = make()
+    assert await code_of(manual(service, version=1)) == "result_version_conflict"
+    await manual(service)
+    assert await code_of(manual(service, version=0)) == "result_version_conflict"
+    assert await code_of(manual(service, version=2)) == "result_version_conflict"
+    assert len(fakes.editions) == 1
+
+
+async def test_manual_propagates_source_and_data_conflicts():
+    fakes = Fakes()
+    fakes.sheets = [SheetScore("teacher", 26)]
+    service, _ = make(fakes)
+    assert await code_of(manual(service)) == "invalid_sheet_data"
+    service, fakes = make(sheets=UnconfiguredExamSheetSource())
+    assert await code_of(manual(service)) == "sheet_source_not_configured"
+    assert fakes.editions == []
+
+
+async def test_manual_is_forbidden_for_non_teachers_and_stores_nothing():
+    service, fakes = make()
+    fakes.is_teacher = False
+    with pytest.raises(PermissionError):
+        await manual(service)
+    assert fakes.editions == []
+
+
+async def test_manual_rechecks_role_after_the_lock():
+    service, fakes = make()
+    fakes.revoke_after_calls = 1
+    with pytest.raises(PermissionError):
+        await manual(service)
+    assert fakes.editions == [] and len(fakes.teacher_calls) == 2
+
+
+async def test_accept_after_manual_and_manual_after_accept_make_next_versions():
+    service, fakes = make()
+    await manual(service, "10")
+    after_accept = await accept(service, version=1, reason="recalculated")
+    assert (after_accept.edition.version, after_accept.edition.kind) == (2, "calculated")
+    after_manual = await manual(service, "21", version=2, reason="regrade")
+    assert (after_manual.edition.version, after_manual.edition.kind) == (3, "manual")
+    first, second, third = fakes.editions
+    assert (first.kind, first.final_score, first.reason) == ("manual", Decimal("10.00"), "oral defense")
+    assert (second.kind, second.final_score, second.calculated_score) == (
+        "calculated",
+        Decimal("19.00"),
+        Decimal("19.00"),
+    )
+    assert third.final_score == Decimal("21.00") and len(fakes.editions) == 3
+
+
+async def test_publish_works_for_manual_edition():
+    service, _ = make()
+    await manual(service, "18")
+    result = await service.publish(WS, EXAM, ATTEMPT, ResultPublish(expected_version=1), USER)
+    assert result.edition.kind == "manual" and result.edition.published_at == NOW
+    assert result.edition.published_by == USER.id and result.edition.final_score == Decimal("18.00")
+
+
+async def test_manual_does_not_touch_sheets_source_data():
+    service, fakes = make()
+    before = list(fakes.sheets)
+    await manual(service, "5")
+    assert fakes.sheets == before
