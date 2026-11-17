@@ -11,6 +11,7 @@ from src.repository.education_repository import EducationRepository
 from src.repository.exam_attempt_repository import ExamAttemptRepository
 from src.repository.exam_registration_repository import ExamRegistrationRepository
 from src.repository.exam_repository import ExamRepository
+from src.repository.exam_result_repository import ExamResultRepository
 from src.repository.ideas_repository import IdeaCommentRepository, IdeaRepository, IdeaTagRepository
 from src.repository.invitation_repository import InvitationRepository
 from src.repository.kanban_repository import KanbanColumnRepository, KanbanSubtaskRepository, KanbanTaskRepository
@@ -41,7 +42,9 @@ from src.services.education_service import EducationService
 from src.services.exam_attempt_service import ExamAttemptService
 from src.services.exam_queue_service import ExamQueueService
 from src.services.exam_registration_service import ExamRegistrationService
+from src.services.exam_result_service import ExamResultService
 from src.services.exam_service import ExamService
+from src.services.exam_sheet_source import ExamSheetSource, UnconfiguredExamSheetSource
 from src.services.fixtures_service import FixtureService
 from src.services.ideas_service import IdeaService, IdeaTagService
 from src.services.invitation_service import InvitationService
@@ -584,3 +587,22 @@ async def get_exam_attempt_service(
     registrations_repository=Depends(get_exam_registration_repository),
 ):
     return ExamAttemptService(repository, exams, registrations, exam_service, queue, registrations_repository)
+
+
+async def get_exam_result_repository(uow: IUnitOfWork = Depends(get_uow, scope="function")):
+    return ExamResultRepository(uow)
+
+
+async def get_exam_sheet_source() -> ExamSheetSource:
+    # Replace with the real implementation once sheets exist (#111/#112).
+    return UnconfiguredExamSheetSource()
+
+
+async def get_exam_result_service(
+    repository=Depends(get_exam_result_repository),
+    attempts=Depends(get_exam_attempt_repository),
+    exams=Depends(get_exam_repository),
+    exam_service=Depends(get_exam_service),
+    sheets=Depends(get_exam_sheet_source),
+):
+    return ExamResultService(repository, attempts, exams, exam_service, sheets)
