@@ -9,6 +9,7 @@ from src.schema.exam_result import (
     PG_INTEGER_MAX,
     ResultAccept,
     ResultEditionListRead,
+    ResultManual,
     ResultPublish,
     ResultRead,
 )
@@ -53,6 +54,18 @@ async def accept_result(
     service: ExamResultService = Depends(get_exam_result_service),
 ):
     return await service.accept(workspace_id, exam_id, attempt_id, data, user)
+
+
+@exam_result_router.post("/manual", response_model=ResultRead)
+async def set_manual_result(
+    data: ResultManual,
+    workspace_id: int = Path(ge=1, le=PG_INTEGER_MAX),
+    exam_id: int = Path(ge=1, le=PG_INTEGER_MAX),
+    attempt_id: int = Path(ge=1, le=PG_INTEGER_MAX),
+    user: User = Depends(get_current_user),
+    service: ExamResultService = Depends(get_exam_result_service),
+):
+    return await service.manual(workspace_id, exam_id, attempt_id, data, user)
 
 
 @exam_result_router.post("/publish", response_model=ResultRead)
