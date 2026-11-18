@@ -197,6 +197,8 @@ GET /v1/workspaces/7/exams/12/results?q=алго&state=accepted&limit=2
 
 Примечание: регистронезависимость `ILIKE` для кириллицы зависит от локали БД (в UTF-8-кластерах с `en_US.UTF-8`, как в CI и docker-compose, работает).
 
+Участие оценщиков (кто отправил, кто нет, кто исключён) — [exam-participation.md](exam-participation.md); матрица приёмки AC-01…AC-08 — [exam-acceptance.md](exam-acceptance.md).
+
 ## Хранение
 
 Таблица `exam_result_edition` (миграция `d114a10b20c9`, модель `src/model/exam_result.py`):
