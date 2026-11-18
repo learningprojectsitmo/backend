@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _BACKEND_DIR = Path(__file__).resolve().parent.parent.parent
@@ -11,6 +12,11 @@ class Settings(BaseSettings):
     # Database
     # NOTE: db url is correct, you should not change postgres to localhost
     DATABASE_URL: str = "postgresql+asyncpg://postgres:password@localhost/backend_db"
+    # Per-process SQLAlchemy pool. Production runs several uvicorn workers against one PostgreSQL, so the sum
+    # workers * (DB_POOL_SIZE + DB_MAX_OVERFLOW + 1 LISTEN) must stay below max_connections (docs/exam-reliability.md).
+    DB_POOL_SIZE: int = Field(default=10, ge=1)
+    DB_MAX_OVERFLOW: int = Field(default=10, ge=0)
+    DB_POOL_TIMEOUT_SECONDS: float = Field(default=30.0, gt=0)
     DEBUG: str = "false"
 
     # Environment

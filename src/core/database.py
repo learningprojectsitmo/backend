@@ -13,8 +13,9 @@ engine = create_async_engine(
     echo=settings.DEBUG.lower() == "true",
     future=True,  # TODO: consider removing, as this options is True by default
     pool_pre_ping=True,
-    pool_size=20,
-    max_overflow=30,
+    pool_size=settings.DB_POOL_SIZE,
+    max_overflow=settings.DB_MAX_OVERFLOW,
+    pool_timeout=settings.DB_POOL_TIMEOUT_SECONDS,
 )
 
 AsyncSessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False, autoflush=False)
