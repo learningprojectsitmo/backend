@@ -15,11 +15,6 @@ from src.model.exam_attempt import AssessmentWindow, AssessmentWindowAudience
 from src.model.user import User
 
 ROLE_ORDER = {"teacher": 0, "manager": 1, "member": 2}
-# Snapshot reasons -> the public names used by the assessment form.
-PUBLIC_EXCLUSION_REASONS = {
-    "member_of_defending_team": "own_project_member",
-    "manager_of_defending_team": "own_project_manager",
-}
 
 
 @dataclass(frozen=True)
@@ -44,7 +39,7 @@ class ParticipationRow:
     """One member of the audience snapshot; independent of the HTTP schemas (reused by the CSV, #122).
 
     `submission` is set only for admitted assessors that submitted; a draft is never reflected here.
-    `exclusion_reason` is the raw snapshot value (see PUBLIC_EXCLUSION_REASONS).
+    `exclusion_reason` is the snapshot value (`manager_of_defending_team` / `member_of_defending_team`), as in the CSV.
     """
 
     user_id: int
@@ -114,7 +109,12 @@ class ExamParticipationRepository:
 
         latest_version = (
             select(func.max(ExamAssessmentSubmission.version))
-            .where(ExamAssessmentSubmission.sheet_id == ExamAssessmentSheet.id)
+            .where(
+                ExamAssessmentSubmission.sheet_id == ExamAssessmentSheet.id,
+                # Only submissions inside the window count, the same rule as the CSV exports.
+                ExamAssessmentSubmission.submitted_at >= window.opened_at,
+                ExamAssessmentSubmission.submitted_at < window.closes_at,
+            )
             .correlate(ExamAssessmentSheet)
             .scalar_subquery()
         )

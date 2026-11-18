@@ -9,7 +9,7 @@ PG_INTEGER_MAX = 2**31 - 1
 ParticipationState = Literal["not_offered", "open", "closed"]
 ParticipantRole = Literal["teacher", "manager", "member"]
 ParticipantStatus = Literal["excluded", "submitted", "not_submitted"]
-ParticipantExclusionReason = Literal["own_project_manager", "own_project_member"]
+ParticipantExclusionReason = Literal["manager_of_defending_team", "member_of_defending_team"]
 
 
 class ParticipationWindowRead(ExamDTO):

@@ -8,11 +8,13 @@ from src.core.audit_context import set_audit_context
 from src.core.container import (
     get_auth_service,
     get_permission_repository,
+    get_uow,
 )
 from src.core.logging_config import get_logger
 from src.core.security import oauth2_scheme, optional_oauth2_scheme
 
 if TYPE_CHECKING:
+    from src.core.uow import IUnitOfWork
     from src.model.user import User
     from src.repository.permission_repository import PermissionRepository
     from src.services.auth_service import AuthService
@@ -21,6 +23,7 @@ if TYPE_CHECKING:
 async def get_current_user(
     token: str = Depends(oauth2_scheme),
     auth_service: AuthService = Depends(get_auth_service),
+    uow: IUnitOfWork = Depends(get_uow),
 ) -> User:
     """Получить текущего пользователя с использованием AuthService (асинхронно)"""
     logger = get_logger(__name__)
@@ -31,6 +34,12 @@ async def get_current_user(
         logger.warning(f"Failed to get current user - Status: {e.status_code}, Detail: {e.detail}")
         raise
     else:
+        # Authentication only read data: end its transaction so the pooled connection is free again. Handlers
+        # that open their own unit of work (exam endpoints) would otherwise need two connections per request,
+        # which starves the pool once in-flight requests reach its size (docs/exam-reliability.md).
+        commit = getattr(uow, "commit", None)  # test doubles of the unit of work may not have one
+        if commit is not None:
+            await commit()
         logger.debug(f"Successfully retrieved current user: {user.email} (ID: {user.id})")
         return user
 

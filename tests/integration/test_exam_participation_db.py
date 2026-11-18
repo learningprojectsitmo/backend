@@ -52,7 +52,7 @@ async def participation(s, attempt, *, actor="teacher", now=OPEN, workspace=None
 
 
 async def team_attempt(s, *, team_member="demoted"):
-    """Finished attempt whose defending team also has a plain member (excluded as own_project_member)."""
+    """Finished attempt whose defending team also has a plain member (excluded as member_of_defending_team)."""
     registration = await organized(s, project="manager")
     attempt, _ = await start(s, registration)
     async with s["uow"]() as u:
@@ -88,8 +88,8 @@ async def test_mixed_audience_statuses_reasons_and_submissions(seeded):
     draft_only = items["manager2"]
     assert draft_only.status == "not_submitted" and draft_only.submission is None
     assert "secret draft" not in result.model_dump_json()
-    assert items["manager"].status == "excluded" and items["manager"].exclusion_reason == "own_project_manager"
-    assert items["demoted"].status == "excluded" and items["demoted"].exclusion_reason == "own_project_member"
+    assert items["manager"].status == "excluded" and items["manager"].exclusion_reason == "manager_of_defending_team"
+    assert items["demoted"].status == "excluded" and items["demoted"].exclusion_reason == "member_of_defending_team"
     assert items["manager"].submission is None
     # Teachers are never excluded, even the author of the exam workspace.
     assert items["teacher"].status == "not_submitted"

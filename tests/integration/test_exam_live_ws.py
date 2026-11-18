@@ -65,7 +65,9 @@ async def wait_http(port: int, proc: subprocess.Popen) -> None:
 
 
 @contextlib.asynccontextmanager
-async def run_server(database_url: str, *, max_per_exam: int = 250) -> AsyncIterator[str]:
+async def run_server(
+    database_url: str, *, max_per_exam: int = 250, extra_env: dict[str, str] | None = None
+) -> AsyncIterator[str]:
     port = free_port()
     env = {
         **os.environ,
@@ -81,6 +83,7 @@ async def run_server(database_url: str, *, max_per_exam: int = 250) -> AsyncIter
         "EXAM_LIVE_COALESCE_SECONDS": "0.02",
         "EXAM_LIVE_MAX_CONNECTIONS_PER_EXAM": str(max_per_exam),
         "LOG_LEVEL": "WARNING",
+        **(extra_env or {}),
     }
     log = REPO_ROOT / ".superpowers" / "sdd" / "2026-11-13-exam-live" / f"ws-{port}.log"
     log.parent.mkdir(parents=True, exist_ok=True)

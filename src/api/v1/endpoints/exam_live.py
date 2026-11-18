@@ -100,6 +100,7 @@ async def exam_live(websocket: WebSocket, workspace_id: str, exam_id: str) -> No
         if getattr(error, "status_code", None) == HTTP_UNAUTHORIZED:
             await _close_with_error(websocket, "unauthorized", "Invalid token", 4401)
         else:
+            logger.exception("Exam live authentication failed")
             await _close_with_error(websocket, "snapshot_unavailable", "Authentication is unavailable", 1011)
         return
 
@@ -121,4 +122,5 @@ async def exam_live(websocket: WebSocket, workspace_id: str, exam_id: str) -> No
     except ExamLiveLimitError:
         await _close_with_error(websocket, "too_many_connections", "Connection limit reached", 4429)
     except Exception:
+        logger.exception("Exam live snapshot failed")
         await _close_with_error(websocket, "snapshot_unavailable", "Snapshot is unavailable", 1011)

@@ -126,6 +126,12 @@ jobs:
       - name: Verify paired exam CSV exports on disposable PostgreSQL
         run: pytest tests/integration/test_exam_csv_db.py tests/integration/test_exam_csv_http.py --no-cov
 
+      - name: Verify exam reliability and load on disposable PostgreSQL
+        env:
+          EXAM_LOAD_CLIENTS: "40"
+          EXAM_LOAD_ASSESSORS: "40"
+        run: pytest tests/integration/test_exam_reliability_db.py tests/integration/test_exam_live_load_ws.py --no-cov
+
       - name: Verify exams on disposable PostgreSQL
         run: pytest tests/integration/test_exams_db.py --no-cov
 
