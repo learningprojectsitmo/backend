@@ -136,7 +136,66 @@
 
 ### `GET /editions`
 
-`{"items": [<edition>, ...]}`, по возрастанию `version`. Общий реестр по экзамену, поиск по команде и расширенная история — #115.
+`{"items": [<edition>, ...]}`, по возрастанию `version`. Реестр по всему экзамену — раздел «Реестр результатов по экзамену» ниже.
+
+## Реестр результатов по экзамену (#115)
+
+`GET /v1/workspaces/{workspace_id}/exams/{exam_id}/results` — список итогов **по всему экзамену** с поиском по команде и фильтром по состоянию решения. История одной попытки по-прежнему отдаётся `GET .../attempts/{attempt_id}/result/editions` (этот эндпоинт не менялся); реестр её не дублирует, а показывает текущую редакцию, число редакций и предыдущий итог.
+
+Права — те же, что у остальных операций результата (`require_read_access` → 404, затем `is_workspace_teacher` → 403). Member, manager и global admin вне пространства реестр не видят.
+
+### Query
+
+| Параметр | По умолчанию | Смысл |
+|---|---|---|
+| `q` | — | Подстрока в названии проекта (`project.name`), без учёта регистра, до 200 символов; пробелы по краям обрезаются, пустая строка = без фильтра. `%`, `_` и `\` ищутся как обычные символы (экранируются) |
+| `state` | — | `undecided` — решения ещё нет; `accepted` — есть редакция, текущая не опубликована; `published` — текущая редакция опубликована |
+| `limit` | 50 | 1…100 |
+| `offset` | 0 | ≥ 0 |
+
+Неверные значения (`limit` вне 1…100, `offset < 0`, неизвестный `state`, `q` длиннее 200, id пути < 1) → 422.
+
+### Что входит в строку
+
+Одна строка на **завершённую** попытку экзамена (`status='finished'` и есть окно оценивания): только по таким попыткам возможно решение. Попытки без редакций присутствуют со `state='undecided'`. Незавершённые и отложенные попытки и регистрации без попытки в реестр **не входят** — их полные состояния относятся к ведомости (#121). Порядок строгий: `attempt.started_at`, затем `attempt.id`. Ответ без `total`: `{items, limit, offset, has_more}`.
+
+Поля строки: `attempt_id`, `registration_id`, `project_id`, `project_name`, `project_type_id`, `finished_at`, `state`, `editions_count`, `previous_final_score` (итог предыдущей версии; `null` для версии 1 и без решения), `settings_outdated`, `current` (`null` при `undecided`, иначе: `version`, `kind`, `calculated_score` (может быть `null`), `final_score`, `max_score`, `reason` (может быть `null`), `decided_by_id`, `decided_by_name` (`имя фамилия`, без висящих пробелов, если фамилии нет), `decided_at`, `published_at`, `published_by_id`). Баллы — строки с двумя знаками (`"19.00"`).
+
+### `settings_outdated`, а не `outdated`
+
+`settings_outdated = true`, если текущая редакция **настроек экзамена** отличается от снимка принятой редакции: другой `settings_version`, веса или `max_score`. Считается одним SQL по настройкам, без чтения листов; для `undecided` всегда `false`. Это дешёвый признак «настройки менялись после решения». Точный `outdated` (с учётом новых голосов: пересчёт по листам и сравнение с баллом) остаётся только в детальном `GET .../result`: в реестр его не включили, потому что он требует пересчёта по листам для каждой строки страницы.
+
+### Пример
+
+```
+GET /v1/workspaces/7/exams/12/results?q=алго&state=accepted&limit=2
+```
+
+```json
+{
+  "items": [
+    {
+      "attempt_id": 31, "registration_id": 18, "project_id": 9, "project_name": "Алгоритмы маршрутизации",
+      "project_type_id": 3, "finished_at": "2026-11-30T07:00:00Z", "state": "accepted", "editions_count": 2,
+      "previous_final_score": "19.00", "settings_outdated": false,
+      "current": {
+        "version": 2, "kind": "manual", "calculated_score": "19.00", "final_score": "20.50", "max_score": "25.00",
+        "reason": "Устная защита", "decided_by_id": 5, "decided_by_name": "Анна Петрова",
+        "decided_at": "2026-11-30T07:20:00Z", "published_at": null, "published_by_id": null
+      }
+    }
+  ],
+  "limit": 2, "offset": 0, "has_more": false
+}
+```
+
+### Репозиторный метод (для переиспользования в #121)
+
+`ExamResultRepository.list_results(workspace_id, exam_id, *, q=None, state=None, limit, offset) -> list[ExamResultRegistryRow]` (`src/repository/exam_result_repository.py`). Возвращает frozen-dataclass `ExamResultRegistryRow` (поля как у строки реестра; `state` — свойство) с вложенным `ExamResultRegistryCurrent`; HTTP-схем не касается. Метод отдаёт до `limit + 1` строк, чтобы вызывающий вычислил `has_more`; для выгрузки целиком можно вызывать страницами.
+
+Один SQL без N+1: редакции ранжируются один раз подзапросом с оконными функциями (`row_number() ... ORDER BY version DESC` — текущая редакция, `lag(final_score)` — предыдущий итог, `count(*)` — число редакций по попытке), попытки соединяются с окном оценивания, проектом, текущей редакцией настроек экзамена и автором решения. Изоляция по `workspace_id` и `exam_id` — в подзапросе и в основном запросе. Новых индексов и миграций не потребовалось: выборка идёт по `exam_id` (индекс `ix_attempt_exam_finished`, уникальный индекс `(attempt_id, version)`).
+
+Примечание: регистронезависимость `ILIKE` для кириллицы зависит от локали БД (в UTF-8-кластерах с `en_US.UTF-8`, как в CI и docker-compose, работает).
 
 ## Хранение
 
@@ -181,6 +240,6 @@ class ExamSheetSource(Protocol):
 
 - хранение листов, черновики, отправка и серверный дедлайн — #111/#112 (сделано, см. [exam-assessment.md](exam-assessment.md));
 - аудитория и допуск оценщиков — #104/#106;
-- общий реестр по экзамену, поиск, история решений — #115;
+- полные состояния всех команд (незавершённые попытки, регистрации без попытки) — ведомость #121;
 - видимость итога студентам и вес admin-оценщика — Q5;
 - CSV-выгрузки — #121/#122.

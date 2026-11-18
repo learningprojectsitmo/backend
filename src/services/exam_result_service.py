@@ -13,7 +13,11 @@ from src.model.exam_result import ExamResultEdition
 from src.model.user import User
 from src.repository.exam_attempt_repository import ExamAttemptRepository
 from src.repository.exam_repository import ExamRepository
-from src.repository.exam_result_repository import ExamResultRepository
+from src.repository.exam_result_repository import (
+    ExamResultRegistryRow,
+    ExamResultRepository,
+    RegistryState,
+)
 from src.schema.exam import ExamWeights
 from src.schema.exam_result import (
     ResultAccept,
@@ -23,6 +27,9 @@ from src.schema.exam_result import (
     ResultPreliminaryRead,
     ResultPublish,
     ResultRead,
+    ResultRegistryCurrentRead,
+    ResultRegistryItemRead,
+    ResultRegistryRead,
     ResultRoleRead,
     ResultSheetCounts,
     ResultSnapshot,
@@ -205,6 +212,63 @@ class ExamResultService:
         attempt = await self._attempt(workspace_id, exam_id, attempt_id, user)
         rows = await self._repository.editions(attempt.id)
         return ResultEditionListRead(items=[self._edition_read(row) for row in rows])
+
+    @staticmethod
+    def _registry_item(row: ExamResultRegistryRow) -> ResultRegistryItemRead:
+        current = None
+        if row.current is not None:
+            c = row.current
+            name = " ".join(part for part in (c.decided_by_first_name, c.decided_by_last_name) if part and part.strip())
+            current = ResultRegistryCurrentRead(
+                version=c.version,
+                kind=c.kind,
+                calculated_score=c.calculated_score,
+                final_score=c.final_score,
+                max_score=c.max_score,
+                reason=c.reason,
+                decided_by_id=c.decided_by_id,
+                decided_by_name=name,
+                decided_at=c.decided_at,
+                published_at=c.published_at,
+                published_by_id=c.published_by_id,
+            )
+        return ResultRegistryItemRead(
+            attempt_id=row.attempt_id,
+            registration_id=row.registration_id,
+            project_id=row.project_id,
+            project_name=row.project_name,
+            project_type_id=row.project_type_id,
+            finished_at=row.finished_at,
+            state=row.state,
+            editions_count=row.editions_count,
+            current=current,
+            previous_final_score=row.previous_final_score,
+            settings_outdated=row.settings_outdated,
+        )
+
+    async def registry(
+        self,
+        workspace_id: int,
+        exam_id: int,
+        user: User,
+        *,
+        q: str | None,
+        state: RegistryState | None,
+        limit: int,
+        offset: int,
+    ) -> ResultRegistryRead:
+        # Same order as the other result operations: hidden/foreign exam -> 404, visible without the role -> 403.
+        await self._exam_service.require_read_access(workspace_id, exam_id, user)
+        await self._require_teacher(workspace_id, user)
+        rows = await self._repository.list_results(
+            workspace_id, exam_id, q=(q or "").strip() or None, state=state, limit=limit, offset=offset
+        )
+        return ResultRegistryRead(
+            items=[self._registry_item(row) for row in rows[:limit]],
+            limit=limit,
+            offset=offset,
+            has_more=len(rows) > limit,
+        )
 
     @staticmethod
     def _new_edition(
