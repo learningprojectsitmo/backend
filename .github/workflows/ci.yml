@@ -121,7 +121,7 @@ jobs:
         run: pytest tests/integration/test_audience_db.py tests/integration/test_assessment_snapshot_db.py tests/integration/test_project_relations_db.py --no-cov
 
       - name: Verify exam results on disposable PostgreSQL
-        run: pytest tests/integration/test_exam_results_db.py tests/integration/test_exam_manual_result_db.py --no-cov
+        run: pytest tests/integration/test_exam_results_db.py tests/integration/test_exam_manual_result_db.py tests/integration/test_exam_results_registry_db.py --no-cov
 
       - name: Verify exams on disposable PostgreSQL
         run: pytest tests/integration/test_exams_db.py --no-cov
