@@ -218,10 +218,15 @@ class ExamAssessmentRepository:
 
     async def counted_sheets(self, attempt_id: int) -> list[tuple[str, int]]:
         """(role from the audience snapshot, total of the latest submission) per admitted submitted assessor."""
+        # Only submissions inside [opened_at, closes_at) count, the same rule as the CSV exports.
         latest = (
             select(func.max(ExamAssessmentSubmission.version))
-            .where(ExamAssessmentSubmission.sheet_id == ExamAssessmentSheet.id)
-            .correlate(ExamAssessmentSheet)
+            .where(
+                ExamAssessmentSubmission.sheet_id == ExamAssessmentSheet.id,
+                ExamAssessmentSubmission.submitted_at >= AssessmentWindow.opened_at,
+                ExamAssessmentSubmission.submitted_at < AssessmentWindow.closes_at,
+            )
+            .correlate(ExamAssessmentSheet, AssessmentWindow)
             .scalar_subquery()
         )
         rows = await self.uow.session.execute(

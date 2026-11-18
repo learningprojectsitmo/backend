@@ -43,7 +43,7 @@ AC-07 (#105, #117). Teacher/admin видят по одной защите (по�
       }
     },
     {"user_id": 9, "name": "Пётр Сидоров", "role": "manager", "status": "excluded",
-     "exclusion_reason": "own_project_manager", "submission": null}
+     "exclusion_reason": "manager_of_defending_team", "submission": null}
   ]
 }
 ```
@@ -51,12 +51,12 @@ AC-07 (#105, #117). Teacher/admin видят по одной защите (по�
 - `state`: `not_offered` — окно оценивания не открывалось (попытка не завершена): `window: null`, `items: []`, нулевая
   сводка; `open` — `now < closes_at`; `closed` — иначе (серверные часы, как при отправке).
 - `status` оценщика: `excluded` («не должен оценивать», `admitted = false`); `submitted` — допущен и есть хотя бы одна
-  отправка; `not_submitted` — допущен, отправки нет. **Черновик не голос**: допущенный только с черновиком — это
+  отправка внутри окна `[opened_at, closes_at)` (отправка вне окна не голос, как в CSV); `not_submitted` — допущен, отправки нет. **Черновик не голос**: допущенный только с черновиком — это
   `not_submitted`, текст и сам факт черновика не раскрываются. Отсутствие права тоже не голос: лист исключённого, если он
   каким-то образом есть, не показывается и не считается.
 - `role` — из снимка (`teacher|manager|member`, admin входит в teacher), `name` — `first_name last_name` без висящих
   пробелов.
-- `exclusion_reason` — `own_project_manager` / `own_project_member` (те же значения, что в форме оценщика), иначе `null`.
+- `exclusion_reason` — `manager_of_defending_team` / `member_of_defending_team` (хранимые значения снимка, те же, что в CSV), иначе `null`.
 - `submission` — последняя редакция отправленного листа (`version`, `submitted_at`, `total`, все `answers`); баллы и
   комментарии видны teacher/admin. Предыдущие редакции здесь не выдаются.
 - Время: момент исключения — это `window.opened_at` (снимок аудитории создаётся одной транзакцией с открытием окна);
@@ -78,7 +78,7 @@ ExamParticipationRepository(uow).list_participation(*, workspace_id, exam_id, at
 
 Не более трёх SQL независимо от числа оценщиков (окно; аудитория LEFT JOIN лист LEFT JOIN последняя редакция; ответы
 последних редакций одним запросом по `IN`). Dataclass-строки не зависят от HTTP-схем; `exclusion_reason` в строке —
-сырое значение снимка (`PUBLIC_EXCLUSION_REASONS` переводит в публичное). Для CSV по всему экзамену метод вызывается на
+значение снимка, без перевода. Для CSV по всему экзамену метод вызывается на
 каждую попытку (или расширяется списком `attempt_id` отдельной задачей).
 
 ## Что не входит

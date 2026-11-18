@@ -29,6 +29,7 @@ from src.core.exceptions import BusinessLogicError, NotFoundError
 from src.model.exam import Exam
 from src.model.user import User
 from src.model.workspace import WorkSpaceParticipation
+from src.repository.exam_assessment_repository import ExamAssessmentRepository
 from src.repository.exam_result_repository import ExamResultRepository
 from src.schema.exam_attempt import AttemptCommand, AttemptPause, AttemptPostpone, AttemptRestart, AttemptStart
 from src.schema.exam_queue import QueuePlace, QueueReason
@@ -45,11 +46,11 @@ five = acceptance_cases.five
 NOW = registration_cases.NOW
 OPEN = submit_cases.OPEN
 LAST_SECOND = AFTER_WINDOW - timedelta(seconds=1)
-# The CSV file carries the stored snapshot codes, the endpoint the API codes of the assessor form (documented).
+# The CSV file and the endpoint carry the same stored snapshot codes.
 EXCLUSION_CODES = {
     "": None,
-    "manager_of_defending_team": "own_project_manager",
-    "member_of_defending_team": "own_project_member",
+    "manager_of_defending_team": "manager_of_defending_team",
+    "member_of_defending_team": "member_of_defending_team",
 }
 
 
@@ -485,7 +486,7 @@ async def test_ac09_export_taken_while_assessors_keep_submitting_is_always_one_c
 # ── rules shared by the CSV participation file and the participation endpoint ────────────────────────
 
 
-async def test_csv_and_endpoint_participation_rules_agree_and_the_known_differences_are_pinned(five):
+async def test_csv_and_endpoint_participation_rules_agree(five):
     s = five
     attempt = await finished(s, team_member="demoted")
     await fill(s, attempt, "teacher", 4, now=OPEN)  # submitted, then edited: version 2
@@ -501,13 +502,12 @@ async def test_csv_and_endpoint_participation_rules_agree_and_the_known_differen
     for user_id, item in by_id.items():
         assert csv_people[user_id]["response_status"] == item.status
     assert by_id[s["users"]["local_teacher"].id].status == "not_submitted"
-    assert by_id[s["users"]["demoted"].id].exclusion_reason == "own_project_member"
+    assert by_id[s["users"]["demoted"].id].exclusion_reason == "member_of_defending_team"
     assert csv_people[s["users"]["demoted"].id]["exclusion_reason"] == "member_of_defending_team"
     assert int(csv_people[s["users"]["teacher"].id]["submission_version"]) == 2
 
-    # Known difference 1: a submission stamped outside [opened_at, closes_at) (impossible through the API, the
-    # deadline is checked on the server) is still "submitted" for the endpoint and the calculation source, but the
-    # CSV file ignores it. Pinned so that nobody changes one side silently.
+    # A submission stamped outside [opened_at, closes_at) (impossible through the API, the deadline is checked on
+    # the server) is not a vote for the endpoint, the calculation source and the CSV file alike.
     async with s["uow"]() as u:
         await u.session.execute(
             text(
@@ -519,8 +519,11 @@ async def test_csv_and_endpoint_participation_rules_agree_and_the_known_differen
     part = await participation(s, attempt, now=AFTER_WINDOW)
     _, people = csv_pair(await download(s))
     teacher_id = s["users"]["teacher"].id
-    assert {i.user_id: i for i in part.items}[teacher_id].status == "submitted"
+    assert {i.user_id: i for i in part.items}[teacher_id].status == "not_submitted"
     assert next(p for p in people if int(p["assessor_id"]) == teacher_id)["response_status"] == "not_submitted"
+    async with s["uow"]() as u:
+        counted = await ExamAssessmentRepository(u).counted_sheets(attempt.id)
+    assert "teacher" not in [role for role, _ in counted]
 
 
 async def test_attempt_without_a_window_is_not_offered_for_the_endpoint_and_a_preview_for_the_csv(seeded):

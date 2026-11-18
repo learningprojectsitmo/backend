@@ -83,8 +83,8 @@ async def test_statuses_reasons_and_submission_are_mapped():
     by_id = {item.user_id: item for item in result.items}
     assert by_id[1].status == "submitted" and by_id[1].submission.version == 2 and by_id[1].submission.total == 5
     assert by_id[1].submission.answers[0].comment == "ok"
-    assert by_id[2].status == "excluded" and by_id[2].exclusion_reason == "own_project_manager"
-    assert by_id[4].status == "excluded" and by_id[4].exclusion_reason == "own_project_member"
+    assert by_id[2].status == "excluded" and by_id[2].exclusion_reason == "manager_of_defending_team"
+    assert by_id[4].status == "excluded" and by_id[4].exclusion_reason == "member_of_defending_team"
     assert by_id[3].status == by_id[5].status == "not_submitted"
     assert by_id[3].exclusion_reason is None and by_id[3].submission is None
     assert result.window.settings_version == 3

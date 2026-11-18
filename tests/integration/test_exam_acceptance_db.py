@@ -151,8 +151,8 @@ async def test_ac02_own_manager_and_member_get_403_on_form_draft_and_submit(seed
     assert await raw(s, "SELECT * FROM exam_assessment_submission") == []
     items = by_name(await participation(s, attempt))
     assert (items["manager"].exclusion_reason, items["demoted"].exclusion_reason) == (
-        "own_project_manager",
-        "own_project_member",
+        "manager_of_defending_team",
+        "member_of_defending_team",
     )
 
 

@@ -7,7 +7,6 @@ from src.core.exceptions import BusinessLogicError, NotFoundError, PermissionErr
 from src.model.user import User
 from src.repository.exam_attempt_repository import ExamAttemptRepository
 from src.repository.exam_participation_repository import (
-    PUBLIC_EXCLUSION_REASONS,
     ExamParticipationRepository,
     ParticipationRow,
 )
@@ -51,7 +50,7 @@ class ExamParticipationService:
             name=row.name,
             role=row.role,
             status=row.status,
-            exclusion_reason=None if row.admitted else PUBLIC_EXCLUSION_REASONS.get(row.exclusion_reason or ""),
+            exclusion_reason=None if row.admitted else row.exclusion_reason,
             submission=(
                 None
                 if submission is None
