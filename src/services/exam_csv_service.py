@@ -4,8 +4,10 @@ from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from functools import partial
 from uuid import uuid4
 
+import anyio
 from sqlalchemy import text
 
 from src.core.exceptions import BusinessLogicError, PermissionError
@@ -17,7 +19,8 @@ from src.repository.project_repository import ProjectRepository
 from src.repository.project_type_question_repository import ProjectTypeQuestionRepository
 from src.repository.workspace_repository import WorkSpaceRepository
 from src.services.exam_csv_participation import participation_rows
-from src.services.exam_score import ScoreWeights, SheetScore, calculate_exam_score
+from src.services.exam_csv_profiles import MAX_CSV_BYTES, render_archive
+from src.services.exam_score import ExamScoreError, ScoreWeights, SheetScore, calculate_exam_score
 from src.services.exam_service import ExamService
 from src.services.project_relations import ProjectRelationsService
 
@@ -34,9 +37,17 @@ class ExamCsvSnapshot:
 
 
 class ExamCsvService:
-    def __init__(self, uow_factory: Callable[[], IUnitOfWork], *, max_rows: int = MAX_SOURCE_ROWS):
+    def __init__(
+        self, uow_factory: Callable[[], IUnitOfWork], *, max_rows: int = MAX_SOURCE_ROWS, max_bytes: int = MAX_CSV_BYTES
+    ):
         self._uow_factory = uow_factory
         self._max_rows = max_rows
+        self._max_bytes = max_bytes
+
+    async def download(self, workspace_id: int, exam_id: int, user: User) -> bytes:
+        data = await self.snapshot(workspace_id, exam_id, user)
+        # Snapshot's UoW has closed; worker serialization never holds a database connection.
+        return await anyio.to_thread.run_sync(partial(render_archive, data, max_bytes=self._max_bytes))
 
     async def snapshot(self, workspace_id: int, exam_id: int, user: User) -> ExamCsvSnapshot:
         # A separate UoW is essential: authentication may already have SELECTed in its own session.
@@ -100,6 +111,7 @@ class ExamCsvService:
         eligible = sum(a["admitted"] for a in audience)
         state = "undecided"
         calculated = None
+        calculation = None
         source = edition or settings
         if edition:
             state = "published" if edition["published_at"] else "accepted"
@@ -107,12 +119,16 @@ class ExamCsvService:
         elif row["defense_status"] == "finished" and known:
             if not questions:
                 raise BusinessLogicError({"code": "questions_missing", "message": "Questions missing"})
-            calculated = calculate_exam_score(
-                sheets=[SheetScore(a["role"], a["total"]) for a in submitted],
-                weights=ScoreWeights(settings.teacher_weight, settings.manager_weight, settings.member_weight),
-                sheet_max=5 * len(questions),
-                max_score=settings.max_score,
-            ).score
+            try:
+                calculation = calculate_exam_score(
+                    sheets=[SheetScore(a["role"], a["total"]) for a in submitted],
+                    weights=ScoreWeights(settings.teacher_weight, settings.manager_weight, settings.member_weight),
+                    sheet_max=5 * len(questions),
+                    max_score=settings.max_score,
+                )
+            except ExamScoreError as error:
+                raise BusinessLogicError({"code": "invalid_sheet_data", "message": "Invalid sheet data"}) from error
+            calculated = calculation.score
             state = "preliminary" if calculated is not None else "no_calculation"
 
         def value(key):
@@ -152,7 +168,15 @@ class ExamCsvService:
             "settings_version": edition["settings_version"] if edition else settings.version,
             **{key: value(key) for key in ("teacher_weight", "manager_weight", "member_weight")},
             "sheet_max": edition["sheet_max"] if edition else 5 * len(questions),
+            "result_id": edition["id"] if edition else None,
             "result_version": edition["version"] if edition else None,
+            "used_weight": edition["used_weight"] if edition else (calculation.used_weight if calculation else None),
+            **{
+                f"result_{role}_sheets": edition[f"{role}_sheets"]
+                if edition
+                else (next(r.sheets_count for r in calculation.roles if r.role == role) if calculation else None)
+                for role in ("teacher", "manager", "member")
+            },
             "result_kind": edition["kind"] if edition else None,
             **{
                 key: edition[key] if edition else None

@@ -8,6 +8,7 @@ from fastapi import HTTPException
 from src.core.exceptions import BusinessLogicError
 
 MAX_OUTPUT_CELLS = 1_000_000
+MAX_AFFILIATION_BYTES = 50 * 1024 * 1024
 
 
 def participation_rows(registrations, audience, preview, questions, answers, common, criterion_count):
@@ -22,6 +23,8 @@ def participation_rows(registrations, audience, preview, questions, answers, com
     if output_count * (3 * criterion_count + 24) > MAX_OUTPUT_CELLS:
         raise HTTPException(413, detail={"code": "csv_export_limit_exceeded", "message": "Too many output cells"})
     output = []
+    affiliations = {}
+    affiliation_bytes = 0
     for row in registrations:
         if row["attempt_id"] is None:
             continue
@@ -29,6 +32,23 @@ def participation_rows(registrations, audience, preview, questions, answers, com
         people = audience[row["attempt_id"]] if historical else preview
         criteria = questions[row["project_type_id"]]
         for person in people:
+            # Preview people are reused across attempts. Cache once instead of copying a potentially
+            # large affiliation string into each row before the HTTP byte budget gets a chance to run.
+            person_key = id(person)
+            if person_key not in affiliations:
+                affiliations[person_key] = json.dumps(
+                    sorted(set(person["own_project_ids"] or [])), separators=(",", ":")
+                )
+            encoded_ids = affiliations[person_key]
+            affiliation_bytes += len(encoded_ids)  # JSON integer IDs are ASCII.
+            if affiliation_bytes > MAX_AFFILIATION_BYTES:
+                raise HTTPException(
+                    413,
+                    detail={
+                        "code": "csv_export_limit_exceeded",
+                        "message": "Affiliation expansion exceeds byte budget",
+                    },
+                )
             status = "not_requested"
             if historical:
                 status = (
@@ -50,7 +70,7 @@ def participation_rows(registrations, audience, preview, questions, answers, com
                 "assessor_id": person["user_id"],
                 "assessor_name": person["assessor_name"],
                 "role": person["role"],
-                "own_project_ids": json.dumps(sorted(set(person["own_project_ids"] or [])), separators=(",", ":")),
+                "own_project_ids": encoded_ids,
                 "audience_source": "snapshot" if historical else "preview",
                 "admitted": person["admitted"] if historical else None,
                 "exclusion_reason": person["exclusion_reason"] if historical else None,
