@@ -133,3 +133,43 @@ class ResultRead(ExamDTO):
 
 class ResultEditionListRead(ExamDTO):
     items: list[ResultEditionRead]
+
+
+ResultRegistryState = Literal["undecided", "accepted", "published"]
+
+
+class ResultRegistryCurrentRead(ExamDTO):
+    """The latest accepted edition of an attempt, flattened for the registry."""
+
+    version: int
+    kind: ResultKind
+    calculated_score: Decimal | None
+    final_score: Decimal
+    max_score: Decimal
+    reason: str | None
+    decided_by_id: int
+    decided_by_name: str
+    decided_at: datetime
+    published_at: datetime | None
+    published_by_id: int | None
+
+
+class ResultRegistryItemRead(ExamDTO):
+    attempt_id: int
+    registration_id: int
+    project_id: int
+    project_name: str
+    project_type_id: int
+    finished_at: datetime
+    state: ResultRegistryState
+    editions_count: int
+    current: ResultRegistryCurrentRead | None
+    previous_final_score: Decimal | None
+    settings_outdated: bool
+
+
+class ResultRegistryRead(ExamDTO):
+    items: list[ResultRegistryItemRead]
+    limit: int
+    offset: int
+    has_more: bool
