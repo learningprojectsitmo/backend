@@ -1,7 +1,7 @@
 # Приёмка: матрица AC → автотесты
 
 Сквозные негативные проверки (#105, #117). Здесь — какие автотесты закрывают AC-01…AC-03, AC-06…AC-08 и пункты приёмки
-#105/#117. AC-04, AC-05, AC-09, AC-10 в этом документе не рассматриваются. Файлы: `U` — `tests/unit/`,
+#105/#117. AC-05 и AC-09 — в [exam-reliability.md](exam-reliability.md) (#118); AC-04, AC-10 здесь не рассматриваются. Файлы: `U` — `tests/unit/`,
 `I` — `tests/integration/` (нужен Postgres, см. `EXAM_TEST_DATABASE_URL` в `CLAUDE.md`). Сквозной файл —
 `I/test_exam_acceptance_db.py` (имена тестов содержат `ac01`, `ac02`, …); снятие «листов» и «принятие» там идут по
 реальной цепочке: экзамен → попытка завершена → окно и снимок аудитории → форма/черновик → отправка → принятие/ручной итог.
@@ -33,6 +33,8 @@
 | AC-08 | accept/manual хранят оба значения, причину, автора, версию; старые версии неизменны | `I/test_exam_results_db.py::test_accept_stores_first_edition_with_snapshot`, `test_new_decision_is_a_new_version_and_old_one_is_untouched`; `I/test_exam_manual_result_db.py::test_manual_is_stored_with_both_values_reason_and_snapshot`, `test_versions_are_append_only_and_old_editions_are_untouched`; `I/test_exam_acceptance_db.py::test_ac08_accept_and_manual_keep_both_values_reason_author_and_version_and_sheets_stay` |
 | AC-08 | member/manager (и admin вне workspace) не принимают и не меняют итог | `I/test_exam_acceptance_db.py::test_ac08_members_and_managers_cannot_decide` (×5); `I/test_exam_results_db.py::test_permissions_and_isolation`, `test_global_admin_outside_workspace_and_participants_are_forbidden`; `I/test_exam_manual_result_db.py::test_non_teachers_cannot_set_manual_result` |
 | AC-08 | исходные листы не меняются решением | `I/test_exam_acceptance_db.py::test_ac08_accept_and_manual_...` (сравнение таблиц листов до/после); `U/test_exam_result_service.py::test_manual_does_not_touch_sheets_source_data` |
+| AC-05 | пауза, пропуск, возврат, reload/reconnect: состояние и ETA в HTTP и WebSocket-снимке совпадают; чужой workspace недоступен | `I/test_exam_reliability_db.py::test_ac05_pause_postpone_return_and_reload_give_one_state_and_forecast`, `test_ac05_foreign_workspace_and_outsiders_see_nothing_through_either_channel`, `test_ac05_concurrent_commands_keep_every_team_and_count_one_event_each`; `I/test_exam_live_load_ws.py::test_consistent_load_with_mutations_and_mass_reconnect` |
+| AC-09 | ведомость и участие из одного снимка, баллы и версии согласованы с реестром и участием | `I/test_exam_reliability_db.py::test_ac09_many_assessors_around_the_close_then_accept_and_csv_match_registry_and_participation`, `test_ac09_export_taken_while_assessors_keep_submitting_is_always_one_consistent_snapshot`; `I/test_exam_live_load_ws.py::test_burst_of_submits_with_parallel_websocket_keeps_the_pool_bounded_and_the_export_consistent` |
 | #117 | пустые ответы: `score: null` допустим в черновике и не ответ; неполный лист → 422 `incomplete_sheet` со списком вопросов | `I/test_exam_acceptance_db.py::test_ac_empty_answers_are_not_answers_incomplete_sheet_is_rejected_with_question_ids`; `I/test_exam_assessment_submit_db.py::test_incomplete_sheet_is_rejected_with_missing_questions`, `test_submit_without_opening_the_form_is_incomplete`; `I/test_exam_assessment_api.py::test_put_draft_null_score_clears_answer` |
 
 ## Что остаётся вне автотестов
