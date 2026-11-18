@@ -40,6 +40,31 @@ class ResultAccept(ExamDTO):
         return self
 
 
+class ResultManual(ExamDTO):
+    """Manual (official) result decided by the teacher. The reason is always required."""
+
+    expected_version: Annotated[StrictInt, Field(ge=0, le=PG_INTEGER_MAX)]
+    final_score: Annotated[Decimal, Field(ge=0, max_digits=12, decimal_places=2, allow_inf_nan=False)]
+    reason: Reason
+
+    @field_validator("final_score", mode="before")
+    @classmethod
+    def score_input(cls, value: object) -> object:
+        if isinstance(value, bool):
+            raise ValueError("Boolean is not a score")  # noqa: TRY004 -- Pydantic requires ValueError for 422
+        return value
+
+    @field_validator("final_score")
+    @classmethod
+    def score_scale(cls, value: Decimal) -> Decimal:
+        return value.quantize(Decimal("0.01"))
+
+    @field_validator("reason", mode="before")
+    @classmethod
+    def trim_reason(cls, value: object) -> object:
+        return _clean_reason(value)
+
+
 class ResultPublish(ExamDTO):
     expected_version: Annotated[StrictInt, Field(ge=1, le=PG_INTEGER_MAX)]
 

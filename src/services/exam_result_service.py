@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import UTC, datetime
+from decimal import Decimal
 
 from sqlalchemy.exc import IntegrityError
 
-from src.core.exceptions import BusinessLogicError, NotFoundError, PermissionError
+from src.core.exceptions import BusinessLogicError, NotFoundError, PermissionError, ValidationError
 from src.model.exam import Exam
 from src.model.exam_attempt import ExamAttempt
 from src.model.exam_result import ExamResultEdition
@@ -18,6 +19,7 @@ from src.schema.exam_result import (
     ResultAccept,
     ResultEditionListRead,
     ResultEditionRead,
+    ResultManual,
     ResultPreliminaryRead,
     ResultPublish,
     ResultRead,
@@ -204,6 +206,51 @@ class ExamResultService:
         rows = await self._repository.editions(attempt.id)
         return ResultEditionListRead(items=[self._edition_read(row) for row in rows])
 
+    @staticmethod
+    def _new_edition(
+        attempt: ExamAttempt,
+        *,
+        version: int,
+        kind: str,
+        calculated_score: Decimal | None,
+        final_score: Decimal,
+        snapshot: ResultSnapshot,
+        reason: str | None,
+        user: User,
+        now: datetime,
+    ) -> ExamResultEdition:
+        return ExamResultEdition(
+            workspace_id=attempt.workspace_id,
+            exam_id=attempt.exam_id,
+            attempt_id=attempt.id,
+            version=version,
+            kind=kind,
+            calculated_score=calculated_score,
+            final_score=final_score,
+            settings_version=snapshot.settings_version,
+            teacher_weight=snapshot.weights.teacher,
+            manager_weight=snapshot.weights.manager,
+            member_weight=snapshot.weights.member,
+            max_score=snapshot.max_score,
+            sheet_max=snapshot.sheet_max,
+            teacher_sheets=snapshot.sheets.teacher,
+            manager_sheets=snapshot.sheets.manager,
+            member_sheets=snapshot.sheets.member,
+            used_weight=snapshot.used_weight,
+            reason=reason,
+            decided_by=user.id,
+            decided_at=now,
+        )
+
+    async def _save(self, edition: ExamResultEdition) -> None:
+        try:
+            await self._repository.add(edition)
+        except IntegrityError as error:
+            cause = getattr(error.orig, "__cause__", None)
+            if getattr(cause, "constraint_name", None) == "uq_result_edition_version":
+                self._conflict("result_version_conflict")
+            raise
+
     async def accept(
         self, workspace_id: int, exam_id: int, attempt_id: int, data: ResultAccept, user: User
     ) -> ResultRead:
@@ -220,35 +267,55 @@ class ExamResultService:
         result, snapshot = await self._calculate(exam, attempt)
         if result.score is None:
             self._conflict("no_calculation")
-        edition = ExamResultEdition(
-            workspace_id=workspace_id,
-            exam_id=exam_id,
-            attempt_id=attempt.id,
+        edition = self._new_edition(
+            attempt,
             version=current_version + 1,
             kind="calculated",
             calculated_score=result.score,
             final_score=result.score,
-            settings_version=snapshot.settings_version,
-            teacher_weight=snapshot.weights.teacher,
-            manager_weight=snapshot.weights.manager,
-            member_weight=snapshot.weights.member,
-            max_score=snapshot.max_score,
-            sheet_max=snapshot.sheet_max,
-            teacher_sheets=snapshot.sheets.teacher,
-            manager_sheets=snapshot.sheets.manager,
-            member_sheets=snapshot.sheets.member,
-            used_weight=snapshot.used_weight,
+            snapshot=snapshot,
             reason=data.reason,
-            decided_by=user.id,
-            decided_at=now,
+            user=user,
+            now=now,
         )
-        try:
-            await self._repository.add(edition)
-        except IntegrityError as error:
-            cause = getattr(error.orig, "__cause__", None)
-            if getattr(cause, "constraint_name", None) == "uq_result_edition_version":
-                self._conflict("result_version_conflict")
-            raise
+        await self._save(edition)
+        return await self._read(exam_id, attempt, edition)
+
+    async def manual(
+        self, workspace_id: int, exam_id: int, attempt_id: int, data: ResultManual, user: User
+    ) -> ResultRead:
+        attempt = await self._lock_attempt(workspace_id, exam_id, attempt_id, user)
+        now = self._clock()
+        await self._require_closed_window(attempt, now)
+        latest = await self._repository.latest(attempt.id)
+        current_version = 0 if latest is None else latest.version
+        if data.expected_version != current_version:
+            self._conflict("result_version_conflict")
+        exam = await self._exams.get_scoped(workspace_id, exam_id)
+        if exam is None:
+            raise NotFoundError("Exam not found")
+        # The fresh calculation is stored for comparison only; "no calculation" (None) is a valid state here.
+        result, snapshot = await self._calculate(exam, attempt)
+        if data.final_score > snapshot.max_score:
+            raise ValidationError(
+                {
+                    "code": "final_score_out_of_range",
+                    "message": "final score must be between 0 and the exam max score",
+                    "max_score": str(snapshot.max_score),
+                }
+            )
+        edition = self._new_edition(
+            attempt,
+            version=current_version + 1,
+            kind="manual",
+            calculated_score=result.score,
+            final_score=data.final_score,
+            snapshot=snapshot,
+            reason=data.reason,
+            user=user,
+            now=now,
+        )
+        await self._save(edition)
         return await self._read(exam_id, attempt, edition)
 
     async def publish(

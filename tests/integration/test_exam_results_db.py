@@ -368,7 +368,8 @@ async def insert_row(s, attempt, **overrides):
         ({"version": 2, "reason": None}, "ck_result_edition_reason_required"),
         ({"reason": "   "}, "ck_result_edition_reason_nonblank"),
         ({"teacher_weight": 50}, "ck_result_edition_weights"),
-        ({"kind": "manual", "final_score": Decimal("26.00")}, "ck_result_edition_final_range"),
+        ({"kind": "manual", "final_score": Decimal("26.00"), "reason": "Причина"}, "ck_result_edition_final_range"),
+        ({"kind": "manual", "calculated_score": None, "reason": None}, "ck_result_edition_manual_reason"),
         ({"final_score": Decimal("18.00")}, "ck_result_edition_calculated_kind"),
         ({"calculated_score": None}, "ck_result_edition_calculated_kind"),
         (
@@ -392,7 +393,9 @@ async def test_database_rejects_invalid_rows(seeded, overrides, constraint):
 async def test_manual_kind_fits_the_same_table(seeded):
     s = seeded
     attempt = await finished_attempt(s)
-    await insert_row(s, attempt, kind="manual", calculated_score=None, final_score=Decimal("7.50"), used_weight=0)
+    await insert_row(
+        s, attempt, kind="manual", calculated_score=None, final_score=Decimal("7.50"), used_weight=0, reason="Причина"
+    )
     assert await count(s, "exam_result_edition") == 1
 
 

@@ -71,6 +71,9 @@ class ExamResultEdition(Base):
         CheckConstraint(
             "version=1 OR (reason IS NOT NULL AND btrim(reason)<>'')", name="ck_result_edition_reason_required"
         ),
+        CheckConstraint(
+            "kind<>'manual' OR (reason IS NOT NULL AND btrim(reason)<>'')", name="ck_result_edition_manual_reason"
+        ),
         CheckConstraint("(published_at IS NULL) = (published_by IS NULL)", name="ck_result_edition_published_pair"),
     )
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
