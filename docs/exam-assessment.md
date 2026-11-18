@@ -24,6 +24,8 @@
 `audience_snapshot_unavailable`. Текущие связи не подставляются вместо истории;
 лист при таком запросе не создаётся.
 
+Кто из допущенных отправил лист, а кто нет, видят teacher/admin в [exam-participation.md](exam-participation.md); матрица приёмки AC — [exam-acceptance.md](exam-acceptance.md).
+
 ## Endpoints
 
 ### GET `/v1/workspaces/{workspace_id}/exams/{exam_id}/attempts/{attempt_id}/assessment`

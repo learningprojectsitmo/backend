@@ -10,6 +10,7 @@ from src.repository.audit_repository import AuditRepository
 from src.repository.education_repository import EducationRepository
 from src.repository.exam_assessment_repository import ExamAssessmentRepository
 from src.repository.exam_attempt_repository import ExamAttemptRepository
+from src.repository.exam_participation_repository import ExamParticipationRepository
 from src.repository.exam_registration_repository import ExamRegistrationRepository
 from src.repository.exam_repository import ExamRepository
 from src.repository.exam_result_repository import ExamResultRepository
@@ -43,6 +44,7 @@ from src.services.education_service import EducationService
 from src.services.exam_assessment_service import ExamAssessmentService
 from src.services.exam_attempt_service import ExamAttemptService
 from src.services.exam_csv_service import ExamCsvService
+from src.services.exam_participation_service import ExamParticipationService
 from src.services.exam_queue_service import ExamQueueService
 from src.services.exam_registration_service import ExamRegistrationService
 from src.services.exam_result_service import ExamResultService
@@ -630,6 +632,19 @@ async def get_exam_result_service(
     relations=Depends(get_project_relations_service),
 ):
     return ExamResultService(repository, attempts, exams, exam_service, sheets, relations)
+
+
+async def get_exam_participation_repository(uow: IUnitOfWork = Depends(get_uow, scope="function")):
+    return ExamParticipationRepository(uow)
+
+
+async def get_exam_participation_service(
+    repository=Depends(get_exam_participation_repository),
+    attempts=Depends(get_exam_attempt_repository),
+    exam_service=Depends(get_exam_service),
+    relations=Depends(get_project_relations_service),
+):
+    return ExamParticipationService(repository, attempts, exam_service, relations)
 
 
 def get_exam_csv_uow_factory() -> Callable[[], IUnitOfWork]:

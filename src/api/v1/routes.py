@@ -11,6 +11,7 @@ from src.api.v1.endpoints.exam_assessment import exam_assessment_router
 from src.api.v1.endpoints.exam_attempt import exam_attempt_router
 from src.api.v1.endpoints.exam_csv import exam_csv_router
 from src.api.v1.endpoints.exam_live import exam_live_router
+from src.api.v1.endpoints.exam_participation import exam_participation_router
 from src.api.v1.endpoints.exam_queue import exam_queue_router
 from src.api.v1.endpoints.exam_registration import exam_registration_router
 from src.api.v1.endpoints.exam_result import exam_result_router
@@ -45,6 +46,7 @@ router_list = [
     exam_queue_router,
     exam_result_router,
     exam_result_registry_router,
+    exam_participation_router,
     exam_live_router,
     auth_router,
     user_router,
