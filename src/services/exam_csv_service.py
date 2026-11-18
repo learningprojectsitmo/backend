@@ -16,6 +16,7 @@ from src.repository.exam_repository import ExamRepository
 from src.repository.project_repository import ProjectRepository
 from src.repository.project_type_question_repository import ProjectTypeQuestionRepository
 from src.repository.workspace_repository import WorkSpaceRepository
+from src.services.exam_csv_participation import participation_rows
 from src.services.exam_score import ScoreWeights, SheetScore, calculate_exam_score
 from src.services.exam_service import ExamService
 from src.services.project_relations import ProjectRelationsService
@@ -60,6 +61,11 @@ class ExamCsvService:
             audience = defaultdict(list)
             for assessor in await repo.audience():
                 audience[assessor["attempt_id"]].append(assessor)
+            answers = await repo.answers(
+                [a["submission_id"] for people in audience.values() for a in people if a["submission_id"] is not None]
+            )
+            preview = await repo.preview() if any(r["attempt_id"] and not r["window_id"] for r in registrations) else []
+            criterion_count = max(5, max((len(q) for q in questions.values()), default=0))
             common = {
                 "export_id": str(uuid4()),
                 "snapshot_at": snapshot_at.astimezone(UTC),
@@ -78,7 +84,10 @@ class ExamCsvService:
                 )
                 for row in registrations
             ]
-        return ExamCsvSnapshot(common["export_id"], common["snapshot_at"], register, [], 5)
+            participation = participation_rows(
+                registrations, audience, preview, questions, answers, common, criterion_count
+            )
+        return ExamCsvSnapshot(common["export_id"], common["snapshot_at"], register, participation, criterion_count)
 
     @staticmethod
     def _register(row, edition, audience, questions, settings, common):

@@ -83,3 +83,34 @@ class ExamCsvRepository:
             WHERE w.workspace_id=:workspace_id AND w.exam_id=:exam_id
             ORDER BY w.attempt_id, a.user_id
         """)
+
+    async def answers(self, submission_ids: list[int]) -> list[dict]:
+        if not submission_ids:
+            return []
+        self.params["submission_ids"] = submission_ids
+        return await self.rows("""
+            SELECT a.submission_id, a.question_id, a.score
+            FROM exam_assessment_submission_answer a
+            WHERE a.submission_id=ANY(CAST(:submission_ids AS int[]))
+            ORDER BY a.submission_id, a.question_id
+        """)
+
+    async def preview(self) -> list[dict]:
+        # Same effective-role and own-project rules as ExamAttemptService._build_audience.
+        # This is explicitly a current preview, never a replacement for historical admission.
+        return await self.rows("""
+            SELECT u.id AS user_id,
+                CASE WHEN COALESCE(lr.name,gr.name)='admin' THEN 'teacher'
+                     ELSE COALESCE(lr.name,gr.name) END AS role,
+                concat_ws(' ',NULLIF(u.first_name,''),NULLIF(u.last_name,''),NULLIF(u.middle_name,'')) AS assessor_name,
+                ARRAY(SELECT owned.project_id FROM (
+                    SELECT pp.project_id FROM project_participation pp
+                    JOIN project p ON p.id=pp.project_id
+                    WHERE pp.participant_id=u.id AND p.workspace_id=:workspace_id
+                    UNION SELECT p.id FROM project p WHERE p.author_id=u.id AND p.workspace_id=:workspace_id
+                ) owned ORDER BY owned.project_id) AS own_project_ids
+            FROM workspace_participation wp JOIN "user" u ON u.id=wp.participant_id
+            LEFT JOIN role lr ON lr.id=wp.role_id LEFT JOIN role gr ON gr.id=u.role_id
+            WHERE wp.workspace_id=:workspace_id AND COALESCE(lr.name,gr.name) IN ('teacher','admin','manager','member')
+            ORDER BY u.id
+        """)
