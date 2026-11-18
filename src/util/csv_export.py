@@ -23,6 +23,10 @@ class CsvExportError(ValueError):
     """Invalid export schema, options or row data; the caller discards the output."""
 
 
+class CsvExportLimitError(CsvExportError):
+    """A valid input exceeds the configured serialization size budget."""
+
+
 @dataclass(frozen=True)
 class CsvColumn:
     key: str
@@ -106,7 +110,7 @@ def _validate_columns(columns: tuple[CsvColumn, ...], options: CsvOptions) -> No
         if not isinstance(column.header, str) or not column.header:
             raise CsvExportError("Column headers must be non-empty strings")
         if len(column.key) > options.max_field_chars or len(column.header) > options.max_field_chars:
-            raise CsvExportError("Column key or header exceeds max_field_chars")
+            raise CsvExportLimitError("Column key or header exceeds max_field_chars")
         _validate_text(column.key)
         _validate_text(column.header)
         if not isinstance(column.kind, str) or column.kind not in _KINDS or type(column.nullable) is not bool:
@@ -134,11 +138,11 @@ def _serialize(column: CsvColumn, value: CsvScalar, options: CsvOptions) -> str:
     if column.kind == "integer" and type(value) is int:
         limit = min(options.max_field_chars, options.max_row_chars)
         if value.bit_length() > limit * _BITS_PER_DECIMAL_DIGIT_BOUND:
-            raise CsvExportError("Integer exceeds the field or row budget")
+            raise CsvExportLimitError("Integer exceeds the field or row budget")
         try:
             return str(value)
         except ValueError as error:
-            raise CsvExportError("Integer exceeds the interpreter's conversion limit") from error
+            raise CsvExportLimitError("Integer exceeds the interpreter's conversion limit") from error
     if column.kind == "decimal" and isinstance(value, Decimal) and value.is_finite():
         _check_decimal_size(value, min(options.max_field_chars, options.max_row_chars))
         return format(value, "f")
@@ -151,7 +155,7 @@ def _serialize(column: CsvColumn, value: CsvScalar, options: CsvOptions) -> str:
 
 def _spreadsheet_text(value: str, options: CsvOptions) -> str:
     if len(value) > min(options.max_field_chars, options.max_row_chars):
-        raise CsvExportError("Text exceeds max_field_chars")
+        raise CsvExportLimitError("Text exceeds max_field_chars")
     if not options.spreadsheet_safe:
         return value
     dangerous = value.startswith(("\t", "\r", "\n"))
@@ -169,14 +173,14 @@ def _check_decimal_size(value: Decimal, limit: int) -> None:
     # comparison also rejects lost trailing zeros before as_tuple copies digits.
     bounded = Decimal(format(value, f".{limit}g"))
     if value.compare_total(bounded) != 0:
-        raise CsvExportError("Decimal coefficient exceeds the field or row budget")
+        raise CsvExportLimitError("Decimal coefficient exceeds the field or row budget")
     sign, digits, exponent = value.as_tuple()
     if exponent >= 0:
         length = sign + (1 if value.is_zero() else len(digits) + exponent)
     else:
         length = sign + max(len(digits) + exponent, 1) + 1 - exponent
     if length > limit:
-        raise CsvExportError("Decimal exceeds max_field_chars")
+        raise CsvExportLimitError("Decimal exceeds max_field_chars")
 
 
 def _render_record(values: Iterable[str], options: CsvOptions) -> str:
@@ -184,10 +188,10 @@ def _render_record(values: Iterable[str], options: CsvOptions) -> str:
     length = len(options.lineterminator)
     for value in values:
         if len(value) > options.max_field_chars:
-            raise CsvExportError("Field exceeds max_field_chars")
+            raise CsvExportLimitError("Field exceeds max_field_chars")
         length += len(value) + bool(cells)
         if length > options.max_row_chars:
-            raise CsvExportError("Row exceeds max_row_chars")
+            raise CsvExportLimitError("Row exceeds max_row_chars")
         cells.append(value)
     buffer = StringIO(newline="")
     csv.writer(
@@ -198,5 +202,5 @@ def _render_record(values: Iterable[str], options: CsvOptions) -> str:
     ).writerow(cells)
     record = buffer.getvalue()
     if len(record) > options.max_row_chars:
-        raise CsvExportError("CSV quoting exceeds max_row_chars")
+        raise CsvExportLimitError("CSV quoting exceeds max_row_chars")
     return record

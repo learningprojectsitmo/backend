@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Callable
 
 from fastapi import Depends
 
@@ -43,6 +43,7 @@ from src.services.auth_service import AuthService
 from src.services.education_service import EducationService
 from src.services.exam_assessment_service import ExamAssessmentService
 from src.services.exam_attempt_service import ExamAttemptService
+from src.services.exam_csv_service import ExamCsvService
 from src.services.exam_participation_service import ExamParticipationService
 from src.services.exam_queue_service import ExamQueueService
 from src.services.exam_registration_service import ExamRegistrationService
@@ -644,3 +645,11 @@ async def get_exam_participation_service(
     relations=Depends(get_project_relations_service),
 ):
     return ExamParticipationService(repository, attempts, exam_service, relations)
+
+
+def get_exam_csv_uow_factory() -> Callable[[], IUnitOfWork]:
+    return SqlAlchemyUoW
+
+
+async def get_exam_csv_service(uow_factory: Callable[[], IUnitOfWork] = Depends(get_exam_csv_uow_factory)):
+    return ExamCsvService(uow_factory)
