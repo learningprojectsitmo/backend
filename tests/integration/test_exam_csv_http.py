@@ -11,6 +11,7 @@ from decimal import Decimal
 
 import httpx
 import pytest
+import test_exam_live_ws as live_cases
 import test_exam_results_db as results_cases
 import uvicorn
 from fastapi import FastAPI
@@ -151,6 +152,27 @@ async def test_live_tcp_http_pair_reconciles_every_attempt_and_all_registered_st
 )
 async def test_http_permissions(seeded, actor, code):
     assert (await download(seeded, actor=actor)).status_code == code
+
+
+async def test_api_startup_preserves_workspace_roles_for_results_and_exports(seeded):
+    await results_cases.set_participation(seeded, "teacher", local="member")
+    registry = url(seeded).removesuffix("/exports/csv") + "/results"
+
+    async with live_cases.run_server(seeded["url"]) as base, httpx.AsyncClient(base_url=base) as client:
+        for actor, expected in (("teacher", 403), ("local_teacher", 200), ("local_admin", 200), ("admin", 403)):
+            token = live_cases.token_for(seeded["users"][actor])
+            for path in (registry, url(seeded)):
+                response = await client.get(path, headers={"Authorization": f"Bearer {token}"})
+                assert response.status_code == expected, (actor, path, response.text)
+
+    async with seeded["engine"].connect() as connection:
+        role = (
+            await connection.execute(
+                text("SELECT role_id FROM workspace_participation WHERE workspace_id=:w AND participant_id=:u"),
+                {"w": seeded["workspace"], "u": seeded["users"]["null_manager"].id},
+            )
+        ).scalar_one()
+    assert role is None
 
 
 async def test_http_foreign_workspace_and_invalid_ids(seeded):
