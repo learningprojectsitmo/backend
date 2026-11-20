@@ -133,7 +133,7 @@ jobs:
         run: pytest tests/integration/test_exam_reliability_db.py tests/integration/test_exam_live_load_ws.py --no-cov
 
       - name: Verify exams on disposable PostgreSQL
-        run: pytest tests/integration/test_exams_db.py --no-cov
+        run: pytest tests/integration/test_exams_db.py tests/integration/test_exam_demo_api.py --no-cov
 
       - name: Verify project type questions on disposable PostgreSQL
         run: pytest tests/integration/test_project_type_questions_db.py --no-cov

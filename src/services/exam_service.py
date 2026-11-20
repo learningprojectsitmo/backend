@@ -120,11 +120,18 @@ class ExamService:
             self._conflict("settings_version_conflict")
         old = (await self._read(exam)).configuration
         config = data.configuration
-        if exam.status == "published" and any(
-            getattr(old, k) != getattr(config, k)
-            for k in ["starts_at", "project_type_ids", "registration_opens_at", "registration_closes_at"]
-        ):
-            self._conflict("published_schedule_locked")
+        if exam.status == "published":
+            if (
+                old.project_type_ids != config.project_type_ids
+                or old.registration_opens_at != config.registration_opens_at
+                or old.registration_closes_at != config.registration_closes_at
+            ):
+                self._conflict("published_schedule_locked")
+            if old.starts_at != config.starts_at and (
+                datetime.now(UTC) >= min(old.starts_at, config.starts_at)
+                or await self._repository.has_attempts(exam_id)
+            ):
+                self._conflict("published_schedule_locked")
         if old != config:
             earliest = await self._repository.earliest_slot_start(exam_id)
             if earliest is not None and earliest < config.starts_at:

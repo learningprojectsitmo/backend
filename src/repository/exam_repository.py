@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from sqlalchemy import func, select, update
+from sqlalchemy import exists, func, select, update
 
 from src.core.uow import IUnitOfWork
 from src.model.exam import Exam, ExamSettingsProjectType, ExamSettingsRevision
+from src.model.exam_attempt import ExamAttempt
 from src.model.exam_registration import ExamSlot
 from src.schema.exam import ExamConfiguration, ExamWeights
 
@@ -145,6 +146,9 @@ class ExamRepository:
                 )
             ).scalars()
         )
+
+    async def has_attempts(self, exam_id: int) -> bool:
+        return bool(await self.uow.session.scalar(select(exists().where(ExamAttempt.exam_id == exam_id))))
 
     async def earliest_slot_start(self, exam_id: int):
         return await self.uow.session.scalar(select(func.min(ExamSlot.starts_at)).where(ExamSlot.exam_id == exam_id))

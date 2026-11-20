@@ -45,7 +45,7 @@ PUT `/{exam_id}/settings` принимает expected_version, непустую 
 
 Ответ200 с новой current_settings_version. Старые редакции сохраняются; актуальный no-op не создаёт новую. Stale expected_version →409, включая повтор прежнего PUT после успешного изменения. Веса — целые0…100, сумма100; max_score положительный Decimal ≤2 знаков, JSON number/string; в ответе строка. Boolean/NaN/Infinity не допускаются. Длительности: выступление/окно1…1440, вопросы/переход0…1440 минут. Ноль отключает соответствующую фазу.
 
-После публикации starts_at, project_type_ids, registration_opens_at/closes_at менять нельзя: нужен отдельный будущий сценарий переноса с учётом регистраций. Остальное меняется новой редакцией с причиной. Title1…200, description null либо1…5000, connection_url null либо http/https≤2048, reason1…1000; строки trim. Типы только своего workspace, без повторов; системный тип с NULL workspace не принимается. При наличии registration timestamps: opens<closes≤starts_at, каждое≤starts_at.
+У будущего опубликованного экзамена можно изменить `starts_at`, пока ни одна защита не начиналась и новая дата тоже в будущем. Существующие слоты и записи сохраняют свои ID и время. Если первый слот оказался бы раньше нового начала, сервер возвращает `409 slot_schedule_conflict`. Типы и явные границы регистрации после публикации зафиксированы (`409 published_schedule_locked`). Если `registration_closes_at` равен null, конец самостоятельной записи определяется новым `starts_at`. Неподходящий период регистрации возвращает 422. После фактического или планового начала смена даты недоступна. Изменение создаёт редакцию с причиной. Title1…200, description null либо1…5000, connection_url null либо http/https≤2048, reason1…1000; строки trim. Типы только своего workspace, без повторов; системный тип с NULL workspace не принимается. При наличии registration timestamps: opens<closes≤starts_at, каждое≤starts_at.
 
 ## Интеграция записи и окна
 
@@ -64,6 +64,7 @@ PUT `/{exam_id}/settings` принимает expected_version, непустую 
 - settings_version_conflict;
 - questions_not_ready;
 - published_schedule_locked;
+- slot_schedule_conflict;
 - exam_not_published / registration_closed (внутренний guard);
 - questions_locked (изменение списка вопросов);
 - project_type_in_use (старый CRUD типа).
