@@ -54,11 +54,11 @@ class ExamService:
             raise PermissionError("Only workspace teacher/admin can manage exams")
         return exam
 
-    def require_not_archived(self, exam: Exam) -> None:
+    def require_not_archived(self, exam: Exam | ExamRead) -> None:
         if exam.archived_at is not None:
             self._conflict("exam_archived")
 
-    def require_queue_open(self, exam: Exam) -> None:
+    def require_queue_open(self, exam: Exam | ExamRead) -> None:
         self.require_not_archived(exam)
         if exam.completed_at is not None:
             self._conflict("exam_completed")

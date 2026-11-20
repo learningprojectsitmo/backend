@@ -294,3 +294,46 @@ async def test_archive_serializes_with_registration_and_first_attempt(api, seede
             assert (await finish(client, path, created))["status"] == "finished"
     second = await client.post(path + "/registrations", json={"project_id": seeded["projects"]["manager2"]})
     assert body(second, 409)["detail"]["code"] == "exam_archived"
+
+
+@pytest.mark.parametrize("closed", ["archived", "completed"])
+@pytest.mark.parametrize("command", ["cancel", "move"])
+async def test_organizer_can_release_unstarted_registration_from_closed_exam(api, seeded, closed, command):
+    client, base, _now = api
+    source = f"{base}/{seeded['exams'][0]}"
+    target = f"{base}/{seeded['exams'][1]}"
+    reg = await register(client, source, seeded)
+    if closed == "archived":
+        assert (await client.delete(source, params={"x_test_actor": "admin"})).status_code == 204
+    else:
+        mutation = body(
+            await client.post(
+                f"{source}/queue/{reg['id']}/no-show",
+                json={"expected_version": reg["version"], "reason": "Team did not attend"},
+            )
+        )
+        reg["version"] = mutation["item"]["registration_version"]
+        body(await client.post(source + "/complete"))
+
+    url = f"{source}/registrations/{reg['id']}"
+    request = {"expected_version": reg["version"], "reason": "Team will attend another exam"}
+    if command == "cancel":
+        changed = body(await client.post(url + "/cancel", json=request))
+        assert changed["status"] == "cancelled"
+        added = await register(client, target, seeded)
+    else:
+        blocked = await client.post(url + "/move", json={**request, "target_exam_id": reg["exam_id"]})
+        assert body(blocked, 409)["detail"]["code"] == f"exam_{closed}"
+        moved = body(await client.post(url + "/move", json={**request, "target_exam_id": seeded["exams"][1]}))
+        changed, added = moved["source"], moved["target"]
+        assert changed["status"] == "moved"
+    assert changed["id"] == reg["id"] and added["project_id"] == reg["project_id"]
+    assert body(await client.get(source + "/registrations"))["items"] == [changed]
+    assert body(await client.get(target + "/registrations"))["items"] == [added]
+
+    other = await register(client, target, seeded, "manager2")
+    move_in = await client.post(
+        f"{target}/registrations/{other['id']}/move",
+        json={"expected_version": other["version"], "reason": "Try closed exam", "target_exam_id": reg["exam_id"]},
+    )
+    assert body(move_in, 409)["detail"]["code"] == f"exam_{closed}"

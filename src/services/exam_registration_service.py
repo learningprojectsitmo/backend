@@ -128,13 +128,14 @@ class ExamRegistrationService:
                 raise PermissionError("Only the team's manager can change its registration")
         return project
 
-    async def _configuration(self, workspace_id, exam_id, user, now, *, organized):
+    async def _configuration(self, workspace_id, exam_id, user, now, *, organized, allow_closed=False):
         if not organized:
             return (
                 await self._exam_service.require_self_registration_open(workspace_id, exam_id, user, now=now)
             ).configuration
         exam = await self._exam_service.get(workspace_id, exam_id, user)
-        self._exam_service.require_queue_open(exam)
+        if not allow_closed:
+            self._exam_service.require_queue_open(exam)
         if exam.status != "published":
             self._conflict("exam_not_published")
         return exam.configuration
@@ -254,7 +255,17 @@ class ExamRegistrationService:
             self._conflict("registration_not_active")
 
     async def _change(
-        self, workspace_id, exam_id, registration_id, data, user, *, organized, target_exam_id, target_slot_id=None
+        self,
+        workspace_id,
+        exam_id,
+        registration_id,
+        data,
+        user,
+        *,
+        organized,
+        target_exam_id,
+        target_slot_id=None,
+        release_source=False,
     ):
         for eid in sorted({exam_id, target_exam_id}):
             await self._access(workspace_id, eid, user, organized=organized)
@@ -272,7 +283,9 @@ class ExamRegistrationService:
         project = await self._project(workspace_id, project.id, user, organized=organized)
         now = self._clock()
         for eid in sorted({exam_id, target_exam_id}):
-            config = await self._configuration(workspace_id, eid, user, now, organized=organized)
+            config = await self._configuration(
+                workspace_id, eid, user, now, organized=organized, allow_closed=release_source and eid == exam_id
+            )
             self._project_type(project, config)
         return row, project, now, slots
 
@@ -284,7 +297,14 @@ class ExamRegistrationService:
 
     async def _cancel(self, workspace_id, exam_id, registration_id, data, user, *, organized):
         row, _, now, _ = await self._change(
-            workspace_id, exam_id, registration_id, data, user, organized=organized, target_exam_id=exam_id
+            workspace_id,
+            exam_id,
+            registration_id,
+            data,
+            user,
+            organized=organized,
+            target_exam_id=exam_id,
+            release_source=True,
         )
         row.status = "cancelled"
         row.queue_hold = None
@@ -309,6 +329,7 @@ class ExamRegistrationService:
         return await self._cancel(workspace_id, exam_id, registration_id, data, user, organized=False)
 
     async def _move(self, workspace_id, exam_id, registration_id, data, user, *, organized):
+        same_exam = exam_id == data.target_exam_id
         row, project, now, slots = await self._change(
             workspace_id,
             exam_id,
@@ -318,8 +339,8 @@ class ExamRegistrationService:
             organized=organized,
             target_exam_id=data.target_exam_id,
             target_slot_id=data.target_slot_id,
+            release_source=not same_exam,
         )
-        same_exam = exam_id == data.target_exam_id
         await self._slot(data.target_exam_id, data.target_slot_id, locked=slots, current=row if same_exam else None)
         if same_exam and row.slot_id == data.target_slot_id:
             saved = RegistrationRead.model_validate(row)
