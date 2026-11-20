@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from typing import Literal
-
-from fastapi import APIRouter, Depends, Path, Query
+from fastapi import APIRouter, Depends, Path, Query, Response
 
 from src.core.container import get_exam_service
 from src.core.dependencies import get_current_user, setup_audit
@@ -10,6 +8,7 @@ from src.model.user import User
 from src.schema.exam import (
     ExamCreate,
     ExamListRead,
+    ExamListStatus,
     ExamPublish,
     ExamRead,
     ExamSettingsHistoryRead,
@@ -34,7 +33,7 @@ async def create_exam(
 @exam_router.get("", response_model=ExamListRead)
 async def list_exams(
     workspace_id: int = Path(ge=1),
-    status: Literal["draft", "published"] | None = None,
+    status: ExamListStatus | None = None,
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
     user: User = Depends(get_current_user),
@@ -51,6 +50,27 @@ async def get_exam(
     service: ExamService = Depends(get_exam_service),
 ):
     return await service.get(workspace_id, exam_id, user)
+
+
+@exam_router.delete("/{exam_id}", status_code=204)
+async def remove_exam(
+    workspace_id: int = Path(ge=1),
+    exam_id: int = Path(ge=1),
+    user: User = Depends(get_current_user),
+    service: ExamService = Depends(get_exam_service),
+):
+    await service.remove(workspace_id, exam_id, user)
+    return Response(status_code=204)
+
+
+@exam_router.post("/{exam_id}/complete", response_model=ExamRead)
+async def complete_exam(
+    workspace_id: int = Path(ge=1),
+    exam_id: int = Path(ge=1),
+    user: User = Depends(get_current_user),
+    service: ExamService = Depends(get_exam_service),
+):
+    return await service.complete(workspace_id, exam_id, user)
 
 
 @exam_router.put("/{exam_id}/settings", response_model=ExamRead)

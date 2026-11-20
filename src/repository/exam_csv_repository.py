@@ -54,8 +54,8 @@ class ExamCsvRepository:
 
     async def questions(self) -> list[dict]:
         return await self.rows("""
-            SELECT q.id, q.project_type_id, q.position, q.text
-            FROM project_type_question q
+            SELECT q.id, q.project_type_id, q.position, q.text, t.question_max_score
+            FROM project_type_question q JOIN project_type t ON t.id=q.project_type_id
             WHERE q.project_type_id IN (
                 SELECT COALESCE(a.project_type_id, r.project_type_id_at_registration)
                 FROM exam_registration r LEFT JOIN exam_attempt a ON a.registration_id=r.id

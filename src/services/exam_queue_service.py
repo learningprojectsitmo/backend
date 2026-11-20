@@ -56,6 +56,7 @@ class ExamQueueService:
             raise NotFoundError("Exam not found")
         # Re-check the current role after the lock wait, like other exam mutations.
         await self._exam_service.require_organizer(workspace_id, exam_id, user)
+        self._exam_service.require_queue_open(exam)
         return exam
 
     @staticmethod

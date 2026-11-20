@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, exists, func, select, update
 
 from src.core.uow import IUnitOfWork
 from src.model.exam import Exam, ExamSettingsProjectType, ExamSettingsRevision
-from src.model.exam_registration import ExamSlot
-from src.schema.exam import ExamConfiguration, ExamWeights
+from src.model.exam_attempt import ExamAttempt
+from src.model.exam_registration import ExamRegistration, ExamSlot
+from src.schema.exam import ExamConfiguration, ExamListStatus, ExamWeights
 
 
 class ExamRepository:
@@ -21,6 +22,15 @@ class ExamRepository:
         if lock:
             query = query.with_for_update()
         return (await self.uow.session.execute(query)).scalar_one_or_none()
+
+    async def delete_empty_draft(self, exam: Exam) -> None:
+        # The current-revision FK is deferred. Delete the selected types and revisions before the root.
+        await self.uow.session.execute(
+            delete(ExamSettingsProjectType).where(ExamSettingsProjectType.exam_id == exam.id)
+        )
+        await self.uow.session.execute(delete(ExamSettingsRevision).where(ExamSettingsRevision.exam_id == exam.id))
+        await self.uow.session.delete(exam)
+        await self.uow.session.flush()
 
     async def create_root(self, workspace_id: int, user_id: int) -> Exam:
         exam = Exam(workspace_id=workspace_id, created_by=user_id, status="draft", current_settings_version=1)
@@ -110,7 +120,7 @@ class ExamRepository:
         )
 
     async def list_scoped(
-        self, workspace_id: int, *, include_drafts: bool, status: str | None, limit: int, offset: int
+        self, workspace_id: int, *, include_drafts: bool, status: ExamListStatus | None, limit: int, offset: int
     ) -> list[Exam]:
         query = (
             select(Exam)
@@ -121,10 +131,18 @@ class ExamRepository:
             )
             .where(Exam.workspace_id == workspace_id)
         )
-        if not include_drafts:
-            query = query.where(Exam.status == "published")
-        if status is not None:
-            query = query.where(Exam.status == status)
+        if status == "archived":
+            if not include_drafts:
+                return []
+            query = query.where(Exam.archived_at.is_not(None))
+        else:
+            query = query.where(Exam.archived_at.is_(None))
+            if not include_drafts:
+                query = query.where(Exam.status == "published")
+            if status == "completed":
+                query = query.where(Exam.completed_at.is_not(None))
+            elif status is not None:
+                query = query.where(Exam.status == status)
         return list(
             (
                 await self.uow.session.execute(
@@ -145,6 +163,25 @@ class ExamRepository:
                 )
             ).scalars()
         )
+
+    async def has_unresolved_registrations(self, exam_id: int) -> bool:
+        finished = exists().where(
+            ExamAttempt.registration_id == ExamRegistration.id,
+            ExamAttempt.status == "finished",
+        )
+        unresolved = exists().where(
+            ExamRegistration.exam_id == exam_id,
+            ExamRegistration.status == "active",
+            ExamRegistration.queue_hold.is_distinct_from("no_show"),
+            ~finished,
+        )
+        return bool(await self.uow.session.scalar(select(unresolved)))
+
+    async def has_registrations(self, exam_id: int) -> bool:
+        return bool(await self.uow.session.scalar(select(exists().where(ExamRegistration.exam_id == exam_id))))
+
+    async def has_attempts(self, exam_id: int) -> bool:
+        return bool(await self.uow.session.scalar(select(exists().where(ExamAttempt.exam_id == exam_id))))
 
     async def earliest_slot_start(self, exam_id: int):
         return await self.uow.session.scalar(select(func.min(ExamSlot.starts_at)).where(ExamSlot.exam_id == exam_id))

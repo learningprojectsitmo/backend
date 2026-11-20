@@ -51,6 +51,8 @@ class Exam(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     published_by: Mapped[int | None] = mapped_column(ForeignKey("user.id", ondelete="RESTRICT"))
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class ExamSettingsRevision(Base):

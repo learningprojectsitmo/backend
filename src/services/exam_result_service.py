@@ -39,8 +39,6 @@ from src.services.exam_service import ExamService
 from src.services.exam_sheet_source import ExamSheetSource
 from src.services.project_relations import ProjectRelationsService
 
-SHEET_CRITERION_MAX = 5
-
 
 class ExamResultService:
     def __init__(
@@ -106,10 +104,9 @@ class ExamResultService:
         revision = await self._exams.get_revision(exam.id, exam.current_settings_version)
         if revision is None:
             raise NotFoundError("Settings revision not found")
-        questions = await self._repository.question_count(attempt.project_type_id)
-        if questions == 0:
+        sheet_max = await self._repository.sheet_max(attempt.project_type_id)
+        if sheet_max == 0:
             self._conflict("questions_missing")
-        sheet_max = SHEET_CRITERION_MAX * questions
         sheets = await self._sheets.load_submitted_sheets(attempt_id=attempt.id)
         weights = ExamWeights(
             teacher=revision.teacher_weight, manager=revision.manager_weight, member=revision.member_weight

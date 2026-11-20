@@ -83,7 +83,14 @@ def make(repo=None, now=NOW):
     repo = repo or FakeRepo()
     questions = AsyncMock()
     questions.list_questions.return_value = [
-        SimpleNamespace(id=q, text="t", description=None, position=q, levels=[]) for q in QUESTIONS
+        SimpleNamespace(
+            id=q,
+            text="t",
+            description=None,
+            position=q,
+            levels=[SimpleNamespace(score=s, description=f"Level {s}") for s in range(1, 6)],
+        )
+        for q in QUESTIONS
     ]
     exams = AsyncMock()
     exams.get_revision.return_value = SimpleNamespace(teacher_weight=60, manager_weight=30, member_weight=10)

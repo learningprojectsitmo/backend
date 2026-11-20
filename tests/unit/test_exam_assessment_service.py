@@ -128,7 +128,7 @@ class TestSaveDraft:
         repo.get_attempt_with_window_and_project = AsyncMock(return_value=(attempt, _open_window(), project))
         sheet = MagicMock(id=1, updated_at=datetime(2026, 11, 16, 10, 35, tzinfo=UTC))
         repo.get_sheet = AsyncMock(return_value=sheet)
-        q = MagicMock(id=1)
+        q = MagicMock(id=1, levels=[MagicMock(score=s) for s in range(1, 6)])
         questions.list_questions = AsyncMock(return_value=[q])
         answer = MagicMock(score=4, comment="ok")
         repo.upsert_answers = AsyncMock(return_value={1: answer})

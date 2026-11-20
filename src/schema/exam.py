@@ -7,6 +7,7 @@ from typing import Annotated, Literal, Self
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, StrictInt, field_validator, model_validator
 
 PERCENT_TOTAL = 100
+ExamListStatus = Literal["draft", "published", "completed", "archived"]
 
 PositiveId = Annotated[StrictInt, Field(ge=1)]
 Minute = Annotated[StrictInt, Field(ge=0, le=1440)]
@@ -130,6 +131,8 @@ class ExamRead(ExamDTO):
     created_at: datetime
     published_by: int | None
     published_at: datetime | None
+    completed_at: datetime | None = None
+    archived_at: datetime | None = None
 
 
 class ExamSettingsRevisionRead(ExamDTO):

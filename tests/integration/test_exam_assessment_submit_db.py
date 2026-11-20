@@ -12,7 +12,7 @@ from test_exam_results_db import AFTER_WINDOW, NOW, finished_attempt, set_partic
 
 from src.core.exceptions import BusinessLogicError, NotFoundError, PermissionError, ValidationError
 from src.model.exam_assessment import ExamAssessmentSubmission, ExamAssessmentSubmissionAnswer
-from src.model.project_type_question import ProjectTypeQuestion
+from src.model.project_type_question import ProjectTypeQuestion, ProjectTypeQuestionLevel
 from src.repository.exam_assessment_repository import ExamAssessmentRepository
 from src.repository.exam_attempt_repository import ExamAttemptRepository
 from src.repository.exam_repository import ExamRepository
@@ -175,12 +175,17 @@ async def test_deadline_uses_server_clock_for_submit_and_draft(seeded):
 
 async def test_incomplete_sheet_is_rejected_with_missing_questions(seeded):
     s = seeded
-    attempt = await finished_attempt(s)
-    async with s["uow"]() as u:  # a second question appears (bypassing the lock, only to build the case)
-        extra = ProjectTypeQuestion(project_type_id=attempt.project_type_id, text="Extra", position=50)
+    async with s["uow"]() as u:
+        extra = ProjectTypeQuestion(
+            project_type_id=s["types"][0],
+            text="Extra",
+            position=50,
+            levels=[ProjectTypeQuestionLevel(score=score, description=f"Level {score}") for score in range(1, 6)],
+        )
         u.session.add(extra)
         await u.session.flush()
         extra_id = extra.id
+    attempt = await finished_attempt(s)
     await draft(s, attempt, "local_teacher", 4)
     with pytest.raises(ValidationError) as error:
         await submit(s, attempt, "local_teacher")

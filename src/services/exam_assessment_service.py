@@ -161,6 +161,17 @@ class ExamAssessmentService:
             has_unsubmitted_changes=draft != self._normalized(dict(submitted), valid_ids),
         )
 
+    @staticmethod
+    def _validate_score(question, score: int | None) -> None:
+        if score is not None and all(level.score != score for level in question.levels):
+            raise ValidationError(
+                {
+                    "code": "score_out_of_scale",
+                    "message": "Score is outside the criterion scale",
+                    "question_id": question.id,
+                }
+            )
+
     async def save_draft(
         self, workspace_id: int, exam_id: int, attempt_id: int, user: User, data: AssessmentDraftWrite
     ) -> AssessmentDraftRead:
@@ -177,8 +188,12 @@ class ExamAssessmentService:
 
         # Filter to question_ids that belong to the attempt's project type.
         questions = await self._questions.list_questions(attempt.project_type_id)
-        valid_ids = {q.id for q in questions}
-        filtered = [(a.question_id, a.score, a.comment) for a in data.answers if a.question_id in valid_ids]
+        by_id = {q.id: q for q in questions}
+        filtered = []
+        for answer in data.answers:
+            if question := by_id.get(answer.question_id):
+                self._validate_score(question, answer.score)
+                filtered.append((answer.question_id, answer.score, answer.comment))
         await self._repo.upsert_answers(sheet.id, filtered)
 
         answers = await self._repo.get_answers(sheet.id)
@@ -211,6 +226,8 @@ class ExamAssessmentService:
         missing = [qid for qid in question_ids if drafts.get(qid) is None or drafts[qid].score is None]
         if missing:
             self._incomplete(missing)
+        for question in questions:
+            self._validate_score(question, drafts[question.id].score)
         snapshot = {qid: (int(drafts[qid].score), drafts[qid].comment) for qid in question_ids}
 
         latest = await self._repo.latest_submission(sheet.id)

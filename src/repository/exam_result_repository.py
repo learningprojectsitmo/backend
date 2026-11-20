@@ -12,7 +12,7 @@ from src.core.uow import IUnitOfWork
 from src.model.exam import Exam, ExamSettingsRevision
 from src.model.exam_attempt import AssessmentWindow, ExamAttempt
 from src.model.exam_result import ExamResultEdition
-from src.model.project import Project
+from src.model.project import Project, ProjectType
 from src.model.project_type_question import ProjectTypeQuestion
 from src.model.user import User
 
@@ -92,12 +92,14 @@ class ExamResultRepository:
         await self.uow.session.flush()
         return edition
 
-    async def question_count(self, project_type_id: int) -> int:
+    async def sheet_max(self, project_type_id: int) -> int:
         return int(
             await self.uow.session.scalar(
-                select(func.count())
-                .select_from(ProjectTypeQuestion)
-                .where(ProjectTypeQuestion.project_type_id == project_type_id)
+                select(func.count(ProjectTypeQuestion.id) * ProjectType.question_max_score)
+                .select_from(ProjectType)
+                .join(ProjectTypeQuestion, ProjectTypeQuestion.project_type_id == ProjectType.id)
+                .where(ProjectType.id == project_type_id)
+                .group_by(ProjectType.question_max_score)
             )
             or 0
         )
