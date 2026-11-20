@@ -436,7 +436,7 @@ async def test_get_keeps_one_snapshot_during_concurrent_replace(seeded, change):
     changed = []
 
     def replace_after_question_select(conn, cursor, statement, parameters, context, executemany):
-        if changed or not re.search(r"\bFROM project_type_question\b", statement):
+        if changed or not re.search(r"\b(?:FROM|JOIN) project_type_question\b", statement):
             return
         changed.append(True)
         with writer.begin() as transaction:
@@ -444,6 +444,9 @@ async def test_get_keeps_one_snapshot_during_concurrent_replace(seeded, change):
             if change == "clear":
                 transaction.execute(
                     text("DELETE FROM project_type_question WHERE project_type_id=:tid"), {"tid": types[0]}
+                )
+                transaction.execute(
+                    text("UPDATE project_type SET question_max_score=3 WHERE id=:tid"), {"tid": types[0]}
                 )
             else:
                 qid = initial.questions[0].id
@@ -470,7 +473,7 @@ async def test_get_keeps_one_snapshot_during_concurrent_replace(seeded, change):
         async with make_uow() as u:
             fresh = await service(u).get_questions(spaces[0], types[0], users["teacher"])
         if change == "clear":
-            assert fresh.questions == []
+            assert fresh.questions == [] and fresh.max_score == 3
         else:
             assert fresh.questions[0].text == "concurrent edit"
             assert fresh.questions[0].levels[0].description == "concurrent explanation"
