@@ -63,7 +63,7 @@ def service(*, exam_status: str = "published", seq_values: list[int] | None = No
     exam_service = SimpleNamespace(
         read_access=AsyncMock(
             return_value=(
-                SimpleNamespace(id=12, workspace_id=7, status=exam_status),
+                SimpleNamespace(id=12, workspace_id=7, status=exam_status, completed_at=None, archived_at=None),
                 exam_status == "published",
             )
         )

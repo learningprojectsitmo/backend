@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 from src.core.exceptions import BusinessLogicError, NotFoundError, PermissionError
+from src.model.exam import Exam
 from src.model.user import User
 from src.repository.exam_repository import ExamRepository
 from src.repository.project_type_question_repository import ProjectTypeQuestionRepository
@@ -10,6 +11,7 @@ from src.schema.exam import (
     AssessmentWindowSettings,
     ExamCreate,
     ExamListRead,
+    ExamListStatus,
     ExamPublish,
     ExamRead,
     ExamSettingsHistoryRead,
@@ -27,7 +29,7 @@ class ExamService:
     def _conflict(code: str):
         raise BusinessLogicError({"code": code, "message": code.replace("_", " ")})
 
-    async def _scope(self, workspace_id: int, user: User) -> bool:
+    async def _scope(self, workspace_id: int, user: User, *, admin_only: bool = False) -> bool:
         workspace = await self._questions.get_workspace(workspace_id)
         if workspace is None:
             raise NotFoundError("Workspace not found")
@@ -37,7 +39,7 @@ class ExamService:
         member, local = await self._questions.get_membership_role(workspace_id, user.id)
         if not member and workspace.author_id != user.id:
             raise NotFoundError("Workspace not found")
-        return role == "teacher" or local in {"teacher", "admin"}
+        return local == "admin" or (not admin_only and (role == "teacher" or local == "teacher"))
 
     async def read_access(self, workspace_id, exam_id, user, *, lock=False):
         writer = await self._scope(workspace_id, user)
@@ -51,6 +53,15 @@ class ExamService:
         if write and (not writer):
             raise PermissionError("Only workspace teacher/admin can manage exams")
         return exam
+
+    def require_not_archived(self, exam: Exam) -> None:
+        if exam.archived_at is not None:
+            self._conflict("exam_archived")
+
+    def require_queue_open(self, exam: Exam) -> None:
+        self.require_not_archived(exam)
+        if exam.completed_at is not None:
+            self._conflict("exam_completed")
 
     async def _types(self, workspace_id, ids, *, ready=False):
         if ready and (not ids):
@@ -79,6 +90,8 @@ class ExamService:
             created_at=exam.created_at,
             published_by=exam.published_by,
             published_at=exam.published_at,
+            completed_at=exam.completed_at,
+            archived_at=exam.archived_at,
         )
 
     async def _revision_read(self, revision) -> ExamSettingsRevisionRead:
@@ -103,7 +116,9 @@ class ExamService:
     async def get(self, workspace_id: int, exam_id: int, user: User) -> ExamRead:
         return await self._read(await self._exam(workspace_id, exam_id, user))
 
-    async def list(self, workspace_id: int, user: User, *, status: str | None, limit: int, offset: int) -> ExamListRead:
+    async def list(
+        self, workspace_id: int, user: User, *, status: ExamListStatus | None, limit: int, offset: int
+    ) -> ExamListRead:
         writer = await self._scope(workspace_id, user)
         rows = await self._repository.list_scoped(
             workspace_id, include_drafts=writer, status=status, limit=limit, offset=offset
@@ -112,10 +127,45 @@ class ExamService:
             items=[await self._read(e) for e in rows[:limit]], limit=limit, offset=offset, has_more=len(rows) > limit
         )
 
+    async def remove(self, workspace_id: int, exam_id: int, user: User) -> None:
+        await self.read_access(workspace_id, exam_id, user)
+        if not await self._scope(workspace_id, user, admin_only=True):
+            raise PermissionError("Only an administrator can remove exams")
+        exam = await self._repository.get_scoped(workspace_id, exam_id, lock=True)
+        if exam is None:
+            raise NotFoundError("Exam not found")
+        if not await self._scope(workspace_id, user, admin_only=True):
+            raise PermissionError("Only an administrator can remove exams")
+        if exam.archived_at is not None:
+            return
+        if (
+            exam.status == "draft"
+            and await self._repository.earliest_slot_start(exam.id) is None
+            and not await self._repository.has_registrations(exam.id)
+        ):
+            await self._repository.delete_empty_draft(exam)
+            return
+        exam.archived_at = datetime.now(UTC)
+        self._repository.uow.mark_exam_changed(exam.id, "exam")
+
+    async def complete(self, workspace_id: int, exam_id: int, user: User) -> ExamRead:
+        exam = await self._exam(workspace_id, exam_id, user, write=True, lock=True)
+        await self.require_organizer(workspace_id, exam_id, user)
+        self.require_not_archived(exam)
+        if exam.status != "published":
+            self._conflict("exam_not_published")
+        if exam.completed_at is None:
+            if await self._repository.has_unresolved_registrations(exam.id):
+                self._conflict("exam_queue_unresolved")
+            exam.completed_at = datetime.now(UTC)
+            self._repository.uow.mark_exam_changed(exam.id, "exam")
+        return await self._read(exam)
+
     async def replace_settings(
         self, workspace_id: int, exam_id: int, data: ExamSettingsReplace, user: User
     ) -> ExamRead:
         exam = await self._exam(workspace_id, exam_id, user, write=True, lock=True)
+        self.require_not_archived(exam)
         if exam.current_settings_version != data.expected_version:
             self._conflict("settings_version_conflict")
         old = (await self._read(exam)).configuration
@@ -128,7 +178,8 @@ class ExamService:
             ):
                 self._conflict("published_schedule_locked")
             if old.starts_at != config.starts_at and (
-                datetime.now(UTC) >= min(old.starts_at, config.starts_at)
+                exam.completed_at is not None
+                or datetime.now(UTC) >= min(old.starts_at, config.starts_at)
                 or await self._repository.has_attempts(exam_id)
             ):
                 self._conflict("published_schedule_locked")
@@ -143,6 +194,7 @@ class ExamService:
 
     async def publish(self, workspace_id: int, exam_id: int, data: ExamPublish, user: User) -> ExamRead:
         exam = await self._exam(workspace_id, exam_id, user, write=True, lock=True)
+        self.require_not_archived(exam)
         if exam.current_settings_version != data.expected_version:
             self._conflict("settings_version_conflict")
         if exam.status == "draft":
@@ -187,6 +239,7 @@ class ExamService:
         exam = await self._repository.get_scoped(workspace_id, exam_id, lock=True)
         if exam is None:
             raise NotFoundError("Exam not found")
+        self.require_queue_open(exam)
         if exam.status != "published":
             self._conflict("exam_not_published")
         revision = await self._repository.get_revision(exam_id, exam.current_settings_version)

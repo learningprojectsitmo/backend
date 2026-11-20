@@ -65,6 +65,7 @@ class ExamRegistrationService:
         if exam is None:
             raise NotFoundError("Exam not found")
         await self._exam_service.require_organizer(workspace_id, exam_id, user)
+        self._exam_service.require_queue_open(exam)
         configuration = (await self._exam_service.get(workspace_id, exam_id, user)).configuration
         now = self._clock()
         if now >= configuration.starts_at:
@@ -133,6 +134,7 @@ class ExamRegistrationService:
                 await self._exam_service.require_self_registration_open(workspace_id, exam_id, user, now=now)
             ).configuration
         exam = await self._exam_service.get(workspace_id, exam_id, user)
+        self._exam_service.require_queue_open(exam)
         if exam.status != "published":
             self._conflict("exam_not_published")
         return exam.configuration

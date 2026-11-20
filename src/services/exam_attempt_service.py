@@ -105,6 +105,7 @@ class ExamAttemptService:
             if existing.status == "postponed":
                 self._conflict("attempt_postponed")
             return await self._read(existing), False
+        self._exam_service.require_queue_open(exam)
         registration = await self._registrations_repository.registration(workspace_id, exam_id, data.registration_id)
         if registration is None:
             raise NotFoundError("Registration not found")

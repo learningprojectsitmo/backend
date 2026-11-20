@@ -47,6 +47,8 @@ def client():
         ("GET", ""),
         ("POST", ""),
         ("GET", "/1"),
+        ("DELETE", "/1"),
+        ("POST", "/1/complete"),
         ("PUT", "/1/settings"),
         ("POST", "/1/publish"),
         ("GET", "/1/settings"),

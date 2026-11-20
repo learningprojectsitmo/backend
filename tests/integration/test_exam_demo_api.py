@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta
 
 import httpx
@@ -210,3 +211,86 @@ async def test_http_slot_gap_and_eta_are_independent_and_times_have_offsets(api,
     forecast = queue["eta"]["items"][0]
     assert forecast["registration_id"] == second["id"]
     assert forecast["eta_seconds"] == (7 + 7 + transition) * 60
+
+
+@pytest.mark.parametrize("admin", ["admin", "local_admin"])
+async def test_admin_deletes_only_scoped_empty_draft(api, seeded, admin):
+    client, base, _now = api
+    path = f"{base}/{seeded['draft']}"
+    assert (await client.delete(path, params={"x_test_actor": "member"})).status_code == 404
+    assert (await client.delete(path, params={"x_test_actor": "teacher"})).status_code == 403
+    foreign = f"/v1/workspaces/{seeded['foreign_workspace']}/exams/{seeded['draft']}"
+    assert (await client.delete(foreign, params={"x_test_actor": "admin"})).status_code == 404
+    deleted = await client.delete(path, params={"x_test_actor": admin})
+    assert deleted.status_code == 204 and deleted.content == b""
+    assert (await client.delete(path, params={"x_test_actor": admin})).status_code == 404
+    assert (await client.get(path)).status_code == 404
+    async with seeded["engine"].connect() as db:
+        for table in ("exam_settings_project_type", "exam_settings_revision"):
+            assert (
+                await db.scalar(text(f"SELECT count(*) FROM {table} WHERE exam_id=:id"), {"id": seeded["draft"]}) == 0
+            )
+
+
+async def test_admin_archives_published_exam_with_registrations(api, seeded):
+    client, base, _now = api
+    path = f"{base}/{seeded['exams'][0]}"
+    reg = await register(client, path, seeded)
+    assert (await client.delete(path, params={"x_test_actor": "member"})).status_code == 403
+    for _ in range(2):
+        assert (await client.delete(path, params={"x_test_actor": "admin"})).status_code == 204
+    assert body(await client.get(path))["archived_at"] is not None
+    assert body(await client.get(path + "/registrations"))["items"] == [reg]
+    assert seeded["exams"][0] not in [e["id"] for e in body(await client.get(base))["items"]]
+    assert [e["id"] for e in body(await client.get(base, params={"status": "archived"}))["items"]] == [
+        seeded["exams"][0]
+    ]
+    assert body(await client.get(base, params={"status": "archived", "x_test_actor": "member"}))["items"] == []
+    new_reg = await client.post(path + "/registrations", json={"project_id": seeded["projects"]["manager2"]})
+    assert body(new_reg, 409)["detail"]["code"] == "exam_archived"
+
+
+async def test_complete_explicitly_after_resolving_queue(api, seeded):
+    client, base, _now = api
+    path = f"{base}/{seeded['exams'][0]}"
+    regs = [await register(client, path, seeded, name) for name in ("manager", "manager2")]
+    first_attempt = await finish(client, path, await begin(client, path, regs[0]))
+    assert body(await client.get(path))["completed_at"] is None
+    assert body(await client.post(path + "/complete"), 409)["detail"]["code"] == "exam_queue_unresolved"
+    await finish(client, path, await begin(client, path, regs[1]))
+    assert body(await client.get(path))["completed_at"] is None
+    assert (await client.post(path + "/complete", params={"x_test_actor": "member"})).status_code == 403
+    completed = body(await client.post(path + "/complete"))
+    assert completed["completed_at"] is not None
+    assert body(await client.post(path + "/complete")) == completed
+    assert body(await client.get(base, params={"status": "completed"}))["items"] == [completed]
+    assert completed in body(await client.get(base, params={"status": "published", "x_test_actor": "member"}))["items"]
+    new_reg = await client.post(path + "/registrations", json={"project_id": seeded["projects"]["member"]})
+    assert body(new_reg, 409)["detail"]["code"] == "exam_completed"
+    assert body(await client.get(path + f"/attempts/{first_attempt['id']}"))["status"] == "finished"
+
+
+@pytest.mark.parametrize("command", ["register", "start"])
+async def test_archive_serializes_with_registration_and_first_attempt(api, seeded, command):
+    client, base, _now = api
+    path = f"{base}/{seeded['exams'][0]}"
+    if command == "register":
+        mutation = client.post(path + "/registrations", json={"project_id": seeded["projects"]["manager"]})
+    else:
+        reg = await register(client, path, seeded)
+        mutation = client.post(
+            path + "/attempts", json={"registration_id": reg["id"], "expected_version": reg["version"]}
+        )
+    archived, outcome = await asyncio.gather(client.delete(path, params={"x_test_actor": "admin"}), mutation)
+    assert archived.status_code == 204
+    assert body(await client.get(path))["archived_at"] is not None
+    if outcome.status_code == 409:
+        assert body(outcome, 409)["detail"]["code"] == "exam_archived"
+    else:
+        created = body(outcome, 201)
+        if command == "register":
+            assert body(await client.get(path + "/registrations"))["items"] == [created]
+        else:
+            assert (await finish(client, path, created))["status"] == "finished"
+    second = await client.post(path + "/registrations", json={"project_id": seeded["projects"]["manager2"]})
+    assert body(second, 409)["detail"]["code"] == "exam_archived"
