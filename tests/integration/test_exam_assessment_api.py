@@ -3,10 +3,11 @@ from __future__ import annotations
 import httpx
 import pytest
 import test_exam_assessment_db as assessment_db_cases
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
+from test_exam_assessment_submit_db import assessment_service
 
 from src.api.v1.routes import routers
-from src.core.container import get_uow
+from src.core.container import get_exam_assessment_service, get_uow
 from src.core.dependencies import get_current_user
 
 pytestmark = pytest.mark.integration
@@ -24,7 +25,11 @@ async def _client(s, actor_name):
         async with s["uow"]() as u:
             yield u
 
+    async def frozen_assessment(uow=Depends(test_uow)):
+        return assessment_service(uow, assessment_db_cases.NOW)
+
     app.dependency_overrides[get_uow] = test_uow
+    app.dependency_overrides[get_exam_assessment_service] = frozen_assessment
     actor = {"user": s["users"][actor_name]}
     app.dependency_overrides[get_current_user] = lambda: actor["user"]
     transport = httpx.ASGITransport(app=app)

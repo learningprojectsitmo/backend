@@ -16,7 +16,7 @@ seeded = assessment_db_cases.seeded
 _finished_attempt = assessment_db_cases._finished_attempt
 
 
-async def _client(s, actor_name, *, now=None):
+async def _client(s, actor_name, *, now=assessment_db_cases.NOW):
     app = FastAPI()
     app.include_router(routers)
 
@@ -26,12 +26,11 @@ async def _client(s, actor_name, *, now=None):
 
     app.dependency_overrides[get_uow] = test_uow
     app.dependency_overrides[get_current_user] = lambda: s["users"][actor_name]
-    if now is not None:
 
-        async def frozen_service(uow=Depends(test_uow)):
-            yield assessment_service(uow, now)
+    async def frozen_service(uow=Depends(test_uow)):
+        return assessment_service(uow, now)
 
-        app.dependency_overrides[get_exam_assessment_service] = frozen_service
+    app.dependency_overrides[get_exam_assessment_service] = frozen_service
     return httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test")
 
 
