@@ -15,7 +15,7 @@ Content-Type: application/json
 
 Ответ201: `id`, `workspace_id`, `status:"draft"`, `current_settings_version:1`, `configuration`, `created_by/created_at`, nullable `published_by/published_at`.
 
-Defaults: teacher/manager/member60/30/10, max_score `"25.00"`, выступление7 / вопросы7 / переход1 / оценивание3 минуты. Дата требует timezone; ответ UTC. В draft можно готовить пустой список типов. Для публикации каждому выбранному типу нужен непустой список вопросов с полной шкалой1–5; N не ограничено пятью.
+Defaults: teacher/manager/member60/30/10, max_score `"25.00"`, выступление7 / вопросы7 / переход1 / оценивание3 минуты. Дата требует timezone; ответ UTC. В draft можно готовить пустой список типов. Для публикации каждому выбранному типу нужен непустой список вопросов с полной шкалой типа (1–3 или 1–5). Число вопросов произвольное.
 
 ```http
 POST /v1/workspaces/7/exams/12/publish

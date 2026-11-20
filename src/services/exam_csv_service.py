@@ -113,6 +113,7 @@ class ExamCsvService:
         calculated = None
         calculation = None
         source = edition or settings
+        sheet_max = len(questions) * questions[0]["question_max_score"] if questions else 0
         if edition:
             state = "published" if edition["published_at"] else "accepted"
             calculated = edition["calculated_score"]
@@ -123,7 +124,7 @@ class ExamCsvService:
                 calculation = calculate_exam_score(
                     sheets=[SheetScore(a["role"], a["total"]) for a in submitted],
                     weights=ScoreWeights(settings.teacher_weight, settings.manager_weight, settings.member_weight),
-                    sheet_max=5 * len(questions),
+                    sheet_max=sheet_max,
                     max_score=settings.max_score,
                 )
             except ExamScoreError as error:
@@ -167,7 +168,7 @@ class ExamCsvService:
             "max_score": value("max_score"),
             "settings_version": edition["settings_version"] if edition else settings.version,
             **{key: value(key) for key in ("teacher_weight", "manager_weight", "member_weight")},
-            "sheet_max": edition["sheet_max"] if edition else 5 * len(questions),
+            "sheet_max": edition["sheet_max"] if edition else sheet_max,
             "result_id": edition["id"] if edition else None,
             "result_version": edition["version"] if edition else None,
             "used_weight": edition["used_weight"] if edition else (calculation.used_weight if calculation else None),

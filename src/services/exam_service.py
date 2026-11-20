@@ -67,12 +67,14 @@ class ExamService:
         if ready and (not ids):
             self._conflict("questions_not_ready")
         for tid in sorted(ids):
-            if await self._questions.get_type(workspace_id, tid, lock=True) is None:
+            project_type = await self._questions.get_type(workspace_id, tid, lock=True)
+            if project_type is None:
                 raise NotFoundError("Project type not found in this workspace")
             if ready:
                 questions = await self._questions.list_questions(tid)
+                expected_scores = set(range(1, project_type.question_max_score + 1))
                 if not questions or any(
-                    {level.score for level in q.levels} != {1, 2, 3, 4, 5}
+                    {level.score for level in q.levels} != expected_scores
                     or any(not level.description.strip() for level in q.levels)
                     for q in questions
                 ):

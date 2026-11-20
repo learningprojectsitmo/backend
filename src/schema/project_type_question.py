@@ -4,6 +4,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
+QuestionScale = Literal[3, 5]
 TemplateCode = Literal["product", "technical_integration", "research"]
 QuestionText = Annotated[str, StringConstraints(strict=True, strip_whitespace=True, min_length=1, max_length=1000)]
 QuestionDescription = Annotated[
@@ -25,13 +26,13 @@ class _QuestionContent(BaseModel):
 
     text: QuestionText
     description: QuestionDescription | None = None
-    levels: Annotated[tuple[QuestionLevel, ...], Field(min_length=5, max_length=5)]
+    levels: Annotated[tuple[QuestionLevel, ...], Field(min_length=3, max_length=5)]
 
     @field_validator("levels")
     @classmethod
     def complete_scale(cls, levels: tuple[QuestionLevel, ...]) -> tuple[QuestionLevel, ...]:
-        if {level.score for level in levels} != {1, 2, 3, 4, 5}:
-            raise ValueError("Each question must have distinct levels 1 through 5")
+        if len(levels) not in (3, 5) or {level.score for level in levels} != set(range(1, len(levels) + 1)):
+            raise ValueError("Each question needs exactly levels 1–3 or exactly levels 1–5")
         return tuple(sorted(levels, key=lambda level: level.score))
 
 
@@ -43,6 +44,7 @@ class QuestionListReplace(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     questions: list[QuestionWrite]
+    max_score: QuestionScale | None = None
 
     @field_validator("questions")
     @classmethod
@@ -62,7 +64,7 @@ class ProjectTypeQuestionsRead(BaseModel):
     project_type_id: int
     questions: list[QuestionRead]
     min_score: Literal[1] = 1
-    max_score: Literal[5] = 5
+    max_score: QuestionScale = 5
 
 
 class TemplateQuestionRead(_QuestionContent):

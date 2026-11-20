@@ -82,8 +82,8 @@ class Fakes:
         self.editions.append(edition)
         return edition
 
-    async def question_count(self, project_type_id):
-        return self.questions
+    async def sheet_max(self, project_type_id):
+        return 5 * self.questions
 
     # sheet source
     async def load_submitted_sheets(self, *, attempt_id):
@@ -96,7 +96,7 @@ class Results:
         self.latest = fakes.latest
         self.editions = fakes.list_editions
         self.add = fakes.add
-        self.question_count = fakes.question_count
+        self.sheet_max = fakes.sheet_max
 
 
 class Attempts:
