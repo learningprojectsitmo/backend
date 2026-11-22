@@ -49,7 +49,7 @@ async def apply_template(s, code="product"):
         read = await ProjectTypeQuestionService(
             ProjectTypeQuestionRepository(u), QuestionTemplateService()
         ).apply_template(s["workspace"], s["types"][0], code, s["users"]["teacher"])
-    assert len(read.questions) == 5 and all(len(q.levels) == 5 for q in read.questions)
+    assert len(read.questions) == 5 and all(len(q.levels) == TEMPLATES[code] for q in read.questions)
 
 
 @pytest_asyncio.fixture(loop_scope="function")
