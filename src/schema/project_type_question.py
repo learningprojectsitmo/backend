@@ -5,7 +5,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
 QuestionScale = Literal[3, 5]
-TemplateCode = Literal["product", "technical_integration", "research"]
+TemplateCode = Literal["product", "technical_integration", "research", "project_defense"]
 QuestionText = Annotated[str, StringConstraints(strict=True, strip_whitespace=True, min_length=1, max_length=1000)]
 QuestionDescription = Annotated[
     str, StringConstraints(strict=True, strip_whitespace=True, min_length=1, max_length=2000)
@@ -78,6 +78,7 @@ class QuestionTemplateRead(BaseModel):
 
     code: TemplateCode
     name: str
+    max_score: QuestionScale = 5
     questions: tuple[TemplateQuestionRead, ...]
 
 

@@ -69,7 +69,7 @@ class ProjectTypeQuestionService:
     ) -> ProjectTypeQuestionsRead:
         template = self._templates.get_template(template_code)
         data = QuestionListReplace(
-            max_score=5,
+            max_score=template.max_score,
             questions=[
                 QuestionWrite(text=q.text, description=q.description, levels=q.levels) for q in template.questions
             ],

@@ -4,10 +4,16 @@ from functools import lru_cache
 from importlib.resources import files
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, TypeAdapter, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, TypeAdapter
 
 from src.core.exceptions import NotFoundError
-from src.schema.project_type_question import QuestionLevel, QuestionTemplateRead, TemplateCode, TemplateQuestionRead
+from src.schema.project_type_question import (
+    QuestionLevel,
+    QuestionScale,
+    QuestionTemplateRead,
+    TemplateCode,
+    TemplateQuestionRead,
+)
 
 NonBlank = Annotated[str, StringConstraints(strict=True, min_length=1, pattern=r"\S")]
 
@@ -22,13 +28,6 @@ class _SourceCriterion(BaseModel):
     weight: None
     target_scope: Literal["team"]
 
-    @field_validator("levels")
-    @classmethod
-    def complete_scale(cls, levels: dict[str, str]) -> dict[str, str]:
-        if set(levels) != {"1", "2", "3", "4", "5"}:
-            raise ValueError("Template scale must contain exactly levels 1 through 5")
-        return levels
-
 
 class _SourceTemplate(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -36,6 +35,7 @@ class _SourceTemplate(BaseModel):
     source_type: NonBlank
     key: TemplateCode
     name: NonBlank
+    max_score: QuestionScale = 5
     criteria: Annotated[list[_SourceCriterion], Field(min_length=5, max_length=5)]
 
 
@@ -43,25 +43,34 @@ class _SourceTemplate(BaseModel):
 def load_question_templates() -> tuple[QuestionTemplateRead, ...]:
     raw = files("src.data.assessment").joinpath("question_templates.json").read_text(encoding="utf-8")
     source = TypeAdapter(list[_SourceTemplate]).validate_json(raw)
-    kinds: dict[TemplateCode, str] = {"product": "P", "technical_integration": "T", "research": "R"}
+    kinds: dict[TemplateCode, str] = {
+        "product": "P",
+        "technical_integration": "T",
+        "research": "R",
+        "project_defense": "D",
+    }
     if len(source) != len(kinds) or {t.key for t in source} != set(kinds):
-        raise ValueError("Each of the three templates must appear exactly once")
+        raise ValueError("Each of the templates must appear exactly once")
     by_code = {t.key: t for t in source}
     result = []
     for code, prefix in kinds.items():
         template = by_code[code]
         if [c.id for c in template.criteria] != [f"{prefix}{n}" for n in range(1, 6)]:
             raise ValueError("Template criterion codes must match their set and order")
+        scores = range(1, template.max_score + 1)
+        if any(set(c.levels) != {str(n) for n in scores} for c in template.criteria):
+            raise ValueError("Each criterion must define all levels of its template scale")
         result.append(
             QuestionTemplateRead(
                 code=code,
                 name=template.name,
+                max_score=template.max_score,
                 questions=tuple(
                     TemplateQuestionRead(
                         code=c.id,
                         text=c.name,
                         description=c.description,
-                        levels=tuple(QuestionLevel(score=n, description=c.levels[str(n)]) for n in range(1, 6)),
+                        levels=tuple(QuestionLevel(score=n, description=c.levels[str(n)]) for n in scores),
                     )
                     for c in template.criteria
                 ),

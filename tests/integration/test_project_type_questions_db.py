@@ -96,20 +96,23 @@ async def seeded(question_db):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("code", ["product", "technical_integration", "research"])
+@pytest.mark.parametrize("code", ["product", "technical_integration", "research", "project_defense"])
 async def test_copy_edit_append_reorder_and_independence(seeded, code):
     _, make_uow, users, spaces, types = seeded
     async with make_uow() as u:
         original = await service(u).apply_template(spaces[0], types[0], code, users["teacher"])
         other = await service(u).apply_template(spaces[1], types[1], code, users["admin"])
     assert len(original.questions) == 5
-    assert sum(max(level.score for level in q.levels) for q in original.questions) == 25
+    assert original.max_score == (3 if code == "project_defense" else 5)
+    assert sum(max(level.score for level in q.levels) for q in original.questions) == 5 * original.max_score
     assert len({q.id for q in original.questions + other.questions}) == 10
     data = [q.model_dump(exclude={"position"}) for q in original.questions]
     data[0]["text"] = "Изменённый вопрос"
     data[0]["levels"][0]["description"] = "Новое объяснение"
     data.reverse()
-    data.append(custom())
+    extra = custom()
+    extra["levels"] = extra["levels"][: original.max_score]
+    data.append(extra)
     async with make_uow() as u:
         saved = await service(u).replace_questions(
             spaces[0], types[0], QuestionListReplace.model_validate({"questions": data}), users["local_teacher"]
