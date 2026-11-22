@@ -48,14 +48,16 @@ async def test_templates_http_exposes_all_original_explanations(client):
         response = await client.get("/v1/assessment/question-templates")
     assert response.status_code == 200
     templates = response.json()
-    assert [t["code"] for t in templates] == ["product", "technical_integration", "research"]
+    assert [t["code"] for t in templates] == ["product", "technical_integration", "research", "project_defense"]
     source = json.loads(files("src.data.assessment").joinpath("question_templates.json").read_text(encoding="utf-8"))
     for actual, original in zip(templates, source, strict=True):
         assert "version" not in actual
         assert len(actual["questions"]) == 5
         for q, c in zip(actual["questions"], original["criteria"], strict=True):
             assert (q["code"], q["text"], q["description"]) == (c["id"], c["name"], c["description"])
-            assert q["levels"] == [{"score": n, "description": c["levels"][str(n)]} for n in range(1, 6)]
+            assert q["levels"] == [
+                {"score": n, "description": c["levels"][str(n)]} for n in range(1, actual["max_score"] + 1)
+            ]
 
 
 @pytest.mark.asyncio

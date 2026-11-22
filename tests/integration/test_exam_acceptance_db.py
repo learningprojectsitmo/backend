@@ -41,7 +41,7 @@ seeded_base = results_cases.seeded_base
 seeded = results_cases.seeded
 OPEN = submit_cases.OPEN
 LAST_SECOND = AFTER_WINDOW - timedelta(seconds=1)
-TEMPLATES = ["product", "technical_integration", "research"]
+TEMPLATES = {"product": 5, "technical_integration": 5, "research": 5, "project_defense": 3}
 
 
 async def apply_template(s, code="product"):
@@ -49,7 +49,7 @@ async def apply_template(s, code="product"):
         read = await ProjectTypeQuestionService(
             ProjectTypeQuestionRepository(u), QuestionTemplateService()
         ).apply_template(s["workspace"], s["types"][0], code, s["users"]["teacher"])
-    assert len(read.questions) == 5 and all(len(q.levels) == 5 for q in read.questions)
+    assert len(read.questions) == 5 and all(len(q.levels) == TEMPLATES[code] for q in read.questions)
 
 
 @pytest_asyncio.fixture(loop_scope="function")
@@ -112,26 +112,27 @@ SHEETS_SQL = (
 )
 
 
-# ── AC-01: three catalog sets ────────────────────────────────────────────────
+# ── AC-01: catalog sets ────────────────────────────────────────────────
 
 
-def test_ac01_catalog_has_three_sets_of_fifteen_criteria_and_seventy_five_levels():
+def test_ac01_catalog_defines_all_criteria_and_levels():
     templates = QuestionTemplateService().list_templates()
-    assert [t.code for t in templates] == TEMPLATES
-    assert sum(len(t.questions) for t in templates) == 15
-    assert sum(len(q.levels) for t in templates for q in t.questions) == 75
+    assert {t.code: t.max_score for t in templates} == TEMPLATES
+    assert sum(len(t.questions) for t in templates) == 20
+    assert sum(len(q.levels) for t in templates for q in t.questions) == 90
 
 
 @pytest.mark.parametrize("code", TEMPLATES)
-async def test_ac01_five_fives_on_each_catalog_set_give_sheet_25_and_result_25_of_25(seeded, code):
+async def test_ac01_full_marks_on_each_catalog_set_give_result_25_of_25(seeded, code):
     s = seeded
     await apply_template(s, code)
     attempt = await finished(s)
-    submission = await fill(s, attempt, "local_teacher", 5)
-    assert submission.total == 25 and len(submission.answers) == 5
+    scale = TEMPLATES[code]
+    submission = await fill(s, attempt, "local_teacher", scale)
+    assert submission.total == 5 * scale and len(submission.answers) == 5
     result = await accept_real(s, attempt)
     assert (result.edition.calculated_score, result.edition.final_score) == (Decimal("25.00"), Decimal("25.00"))
-    assert (result.edition.snapshot.sheet_max, result.edition.snapshot.max_score) == (25, Decimal("25.00"))
+    assert (result.edition.snapshot.sheet_max, result.edition.snapshot.max_score) == (5 * scale, Decimal("25.00"))
 
 
 # ── AC-02: own team excluded, others admitted, one person is one vote ───────

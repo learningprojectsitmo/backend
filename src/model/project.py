@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import (
     JSON,
     Boolean,
+    CheckConstraint,
     DateTime,
     ForeignKey,
     Index,
@@ -254,6 +255,7 @@ class ProjectType(Base):
     __table_args__ = (
         UniqueConstraint("workspace_id", "name", name="uq_project_type_workspace_name"),
         UniqueConstraint("id", "workspace_id", name="uq_project_type_scope"),
+        CheckConstraint("question_max_score IN (3, 5)", name="ck_project_type_question_scale"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -264,6 +266,8 @@ class ProjectType(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
+
+    question_max_score: Mapped[int] = mapped_column(Integer, server_default=text("5"))
 
     workspace: Mapped[WorkSpace | None] = relationship(back_populates="project_types")
     stages: Mapped[list[ProjectStage]] = relationship(

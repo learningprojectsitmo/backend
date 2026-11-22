@@ -31,7 +31,7 @@ async def test_write_scope_and_role_matrix(global_role, membership, local_role, 
     repo = SimpleNamespace(
         get_question_lock=AsyncMock(return_value=None),
         get_workspace=AsyncMock(return_value=SimpleNamespace(author_id=7 if author else 8)),
-        get_type=AsyncMock(return_value=SimpleNamespace(id=42, workspace_id=3)),
+        get_type=AsyncMock(return_value=SimpleNamespace(id=42, workspace_id=3, question_max_score=5, questions=[])),
         get_membership_role=AsyncMock(return_value=(membership, local_role)),
         replace_questions=AsyncMock(return_value=[]),
         list_questions=AsyncMock(return_value=[]),
@@ -55,7 +55,7 @@ async def test_null_role_member_can_read_but_foreign_type_is_not_found():
     repo = SimpleNamespace(
         get_question_lock=AsyncMock(return_value=None),
         get_workspace=AsyncMock(return_value=SimpleNamespace(author_id=8)),
-        get_type=AsyncMock(return_value=SimpleNamespace(id=42, workspace_id=3)),
+        get_type=AsyncMock(return_value=SimpleNamespace(id=42, workspace_id=3, question_max_score=5, questions=[])),
         get_membership_role=AsyncMock(return_value=(True, None)),
         list_questions=AsyncMock(return_value=[]),
     )

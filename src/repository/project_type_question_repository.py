@@ -21,11 +21,19 @@ class ProjectTypeQuestionRepository:
     async def get_workspace(self, workspace_id: int) -> WorkSpace | None:
         return await self.uow.session.get(WorkSpace, workspace_id)
 
-    async def get_type(self, workspace_id: int, type_id: int, *, lock: bool = False) -> ProjectType | None:
-        query = select(ProjectType).where(ProjectType.id == type_id, ProjectType.workspace_id == workspace_id)
+    async def get_type(
+        self, workspace_id: int, type_id: int, *, lock: bool = False, include_questions: bool = False
+    ) -> ProjectType | None:
+        query = (
+            select(ProjectType)
+            .where(ProjectType.id == type_id, ProjectType.workspace_id == workspace_id)
+            .execution_options(populate_existing=True)
+        )
         if lock:
             query = query.with_for_update()
-        return (await self.uow.session.execute(query)).scalar_one_or_none()
+        if include_questions:
+            query = query.options(joinedload(ProjectType.questions).joinedload(ProjectTypeQuestion.levels))
+        return (await self.uow.session.execute(query)).unique().scalar_one_or_none()
 
     async def get_global_role(self, user_id: int) -> str | None:
         # Scalar SQL deliberately bypasses a cached authentication User/Role.
@@ -71,6 +79,8 @@ class ProjectTypeQuestionRepository:
             question.text = item.text
             question.description = item.description
             question.position = position
+            requested_scores = {level.score for level in item.levels}
+            question.levels[:] = [level for level in question.levels if level.score in requested_scores]
             levels = {level.score: level for level in question.levels}
             for item_level in item.levels:
                 if item_level.score in levels:

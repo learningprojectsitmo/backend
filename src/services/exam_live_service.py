@@ -59,14 +59,8 @@ class ExamLiveService:
         changed: tuple[str, ...] | list[str] = (),
         check_access: bool = True,
     ) -> ExamLiveSnapshotRead:
-        if check_access:
-            if user is None:
-                raise NotFoundError("Exam not found")
-            exam, _writer = await self._exam_service.read_access(workspace_id, exam_id, user)
-        else:
-            exam = await self._exams.get_scoped(workspace_id, exam_id)
-            if exam is None:
-                raise NotFoundError("Exam not found")
+        if check_access and user is None:
+            raise NotFoundError("Exam not found")
         stale = False
         queue = None
         stream_seq = None
@@ -74,6 +68,12 @@ class ExamLiveService:
             stream_seq_before = await self._exams.event_seq(workspace_id, exam_id)
             if stream_seq_before is None:
                 raise NotFoundError("Exam not found")
+            if check_access:
+                exam, _writer = await self._exam_service.read_access(workspace_id, exam_id, user)
+            else:
+                exam = await self._exams.get_scoped(workspace_id, exam_id)
+                if exam is None:
+                    raise NotFoundError("Exam not found")
             queue = await self._queue.read(workspace_id, exam_id, user)
             stream_seq_after = await self._exams.event_seq(workspace_id, exam_id)
             if stream_seq_after is None:
@@ -116,6 +116,8 @@ class ExamLiveService:
                 id=exam.id,
                 workspace_id=exam.workspace_id,
                 status=exam.status,
+                completed_at=exam.completed_at,
+                archived_at=exam.archived_at,
                 settings_version=queue.settings_version,
             ),
             queue=queue,
