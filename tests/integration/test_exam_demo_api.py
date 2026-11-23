@@ -13,6 +13,7 @@ from sqlalchemy import text
 from src.api.v1.routes import routers
 from src.core.container import get_uow
 from src.core.dependencies import get_current_user
+from src.repository.exam_repository import ExamRepository
 
 pytestmark = pytest.mark.integration
 seeded = registration_cases.seeded
@@ -230,6 +231,52 @@ async def test_admin_deletes_only_scoped_empty_draft(api, seeded, admin):
             assert (
                 await db.scalar(text(f"SELECT count(*) FROM {table} WHERE exam_id=:id"), {"id": seeded["draft"]}) == 0
             )
+
+
+@pytest.mark.parametrize("list_exams", [False, True])
+async def test_read_handles_draft_deleted_after_root_query(api, seeded, monkeypatch, list_exams):
+    client, base, _now = api
+    draft = seeded["draft"]
+    path = f"{base}/{draft}"
+    selected = asyncio.Event()
+    deleted = asyncio.Event()
+    original = ExamRepository.revision_configuration
+
+    async def read_configuration(repo, exam_id, version):
+        if exam_id == draft:
+            selected.set()
+            await asyncio.wait_for(deleted.wait(), timeout=5)
+        return await original(repo, exam_id, version)
+
+    monkeypatch.setattr(ExamRepository, "revision_configuration", read_configuration)
+    read = asyncio.create_task(client.get(base, params={"status": "draft"}) if list_exams else client.get(path))
+    try:
+        await asyncio.wait_for(selected.wait(), timeout=5)
+        assert (await client.delete(path, params={"x_test_actor": "admin"})).status_code == 204
+    finally:
+        deleted.set()
+        response = await read
+    if list_exams:
+        assert draft not in {item["id"] for item in body(response)["items"]}
+    else:
+        assert response.status_code == 404
+
+
+@pytest.mark.parametrize("action", ["archive", "complete"])
+async def test_lifecycle_downgrade_preserves_recorded_state(api, seeded, run_migrations, action):
+    client, base, _now = api
+    path = f"{base}/{seeded['exams'][0]}"
+    if action == "archive":
+        assert (await client.delete(path, params={"x_test_actor": "admin"})).status_code == 204
+    else:
+        body(await client.post(path + "/complete"))
+    before = body(await client.get(path))
+
+    with pytest.raises(AssertionError, match="Cannot downgrade while completed or archived exams exist"):
+        run_migrations(seeded["url"], "downgrade", "d116a10b20c9")
+
+    assert body(await client.get(path)) == before
+    run_migrations(seeded["url"], "check")
 
 
 async def test_admin_archives_published_exam_with_registrations(api, seeded):

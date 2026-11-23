@@ -106,6 +106,27 @@ class ExamRepository:
             .scalars()
             .all()
         )
+        return self._configuration(revision, tuple(ids))
+
+    async def revision_configuration(self, exam_id: int, version: int) -> ExamConfiguration | None:
+        rows = (
+            await self.uow.session.execute(
+                select(ExamSettingsRevision, ExamSettingsProjectType.project_type_id)
+                .outerjoin(
+                    ExamSettingsProjectType,
+                    (ExamSettingsProjectType.exam_id == ExamSettingsRevision.exam_id)
+                    & (ExamSettingsProjectType.settings_version == ExamSettingsRevision.version),
+                )
+                .where(ExamSettingsRevision.exam_id == exam_id, ExamSettingsRevision.version == version)
+                .order_by(ExamSettingsProjectType.project_type_id)
+            )
+        ).all()
+        if not rows:
+            return None
+        return self._configuration(rows[0][0], tuple(type_id for _, type_id in rows if type_id is not None))
+
+    @staticmethod
+    def _configuration(revision: ExamSettingsRevision, ids: tuple[int, ...]) -> ExamConfiguration:
         values = {
             key: getattr(revision, key)
             for key in ExamConfiguration.model_fields
@@ -113,7 +134,7 @@ class ExamRepository:
         }
         return ExamConfiguration(
             **values,
-            project_type_ids=tuple(ids),
+            project_type_ids=ids,
             weights=ExamWeights(
                 teacher=revision.teacher_weight, manager=revision.manager_weight, member=revision.member_weight
             ),
