@@ -283,6 +283,19 @@ async def test_global_admin_outside_workspace_and_participants_are_forbidden(see
     assert await count(s, "exam_result_edition") == 0
 
 
+async def test_published_result_is_still_private_to_teachers_and_admins(seeded):
+    s = seeded
+    attempt = await finished_attempt(s)
+    await accept(s, attempt)
+    published = await publish(s, attempt)
+    assert published.edition.published_at is not None
+
+    for actor in ("manager", "member"):
+        outcomes = await all_calls(s, attempt, actor)
+        assert outcomes["get"] is PermissionError
+        assert outcomes["editions"] is PermissionError
+
+
 @pytest.mark.parametrize("local", ["teacher", "admin", None])
 async def test_effective_teacher_or_admin_of_the_workspace_may_decide_and_publish(seeded, local):
     # `outsider` is a global teacher: local teacher/admin and NULL (-> global teacher) all qualify.

@@ -81,13 +81,15 @@ class ExamService:
                     self._conflict("questions_not_ready")
 
     async def _read(self, exam) -> ExamRead:
-        revision = await self._repository.get_revision(exam.id, exam.current_settings_version)
+        configuration = await self._repository.revision_configuration(exam.id, exam.current_settings_version)
+        if configuration is None:
+            raise NotFoundError("Exam not found")
         return ExamRead(
             id=exam.id,
             workspace_id=exam.workspace_id,
             status=exam.status,
             current_settings_version=exam.current_settings_version,
-            configuration=await self._repository.configuration(revision),
+            configuration=configuration,
             created_by=exam.created_by,
             created_at=exam.created_at,
             published_by=exam.published_by,
@@ -97,10 +99,13 @@ class ExamService:
         )
 
     async def _revision_read(self, revision) -> ExamSettingsRevisionRead:
+        configuration = await self._repository.revision_configuration(revision.exam_id, revision.version)
+        if configuration is None:
+            raise NotFoundError("Settings revision not found")
         return ExamSettingsRevisionRead(
             exam_id=revision.exam_id,
             version=revision.version,
-            configuration=await self._repository.configuration(revision),
+            configuration=configuration,
             changed_by=revision.changed_by,
             changed_at=revision.changed_at,
             reason=revision.reason,
@@ -125,9 +130,14 @@ class ExamService:
         rows = await self._repository.list_scoped(
             workspace_id, include_drafts=writer, status=status, limit=limit, offset=offset
         )
-        return ExamListRead(
-            items=[await self._read(e) for e in rows[:limit]], limit=limit, offset=offset, has_more=len(rows) > limit
-        )
+        items = []
+        for row in rows[:limit]:
+            try:
+                items.append(await self._read(row))
+            except NotFoundError:
+                # An empty draft may be deleted between reading the page and its configuration.
+                continue
+        return ExamListRead(items=items, limit=limit, offset=offset, has_more=len(rows) > limit)
 
     async def remove(self, workspace_id: int, exam_id: int, user: User) -> None:
         await self.read_access(workspace_id, exam_id, user)
@@ -212,7 +222,7 @@ class ExamService:
     async def list_settings(
         self, workspace_id: int, exam_id: int, user: User, *, limit: int, offset: int
     ) -> ExamSettingsHistoryRead:
-        await self._exam(workspace_id, exam_id, user, write=True)
+        await self._exam(workspace_id, exam_id, user, write=True, lock=True)
         rows = await self._repository.list_revisions(exam_id, limit=limit, offset=offset)
         return ExamSettingsHistoryRead(
             items=[await self._revision_read(r) for r in rows[:limit]],
