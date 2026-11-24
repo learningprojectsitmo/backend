@@ -23,7 +23,7 @@ from src.schema.exam_queue import (
     QueueReason,
 )
 from src.services.exam_attempt_mapping import attempt_read
-from src.services.exam_eta import EtaCurrentState, EtaTiming, EtaWaitingState, build_queue_eta
+from src.services.exam_eta import EtaBreak, EtaCurrentState, EtaTiming, EtaWaitingState, build_queue_eta
 from src.services.exam_service import ExamService
 
 SNAPSHOT_RETRIES = 3
@@ -238,6 +238,7 @@ class ExamQueueService:
                 current=current_state,
                 waiting=waiting_states,
                 exam_started=exam_started,
+                breaks=[EtaBreak(slot.starts_at, slot.ends_at) for slot in slots.values() if slot.kind == "break"],
             )
 
             latest_state = await self._exams.revision_state(workspace_id, exam_id)
@@ -293,7 +294,7 @@ class ExamQueueService:
             )
 
         waiting_states: list[EtaWaitingState] = []
-        for registration, _item, _marker in queued:
+        for registration, item, _marker in queued:
             attempt = attempts.get(registration.id)
             if attempt is not None and attempt.status == "postponed":
                 state = "postponed"
@@ -315,6 +316,7 @@ class ExamQueueService:
                     state=state,  # type: ignore[arg-type]
                     timing=timing,
                     postponed_phase=postponed_phase,
+                    planned_start_at=item.planned_start_at,
                 )
             )
         return current_state, waiting_states

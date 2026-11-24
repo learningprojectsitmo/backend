@@ -18,6 +18,7 @@ from src.schema.exam_registration import (
     SlotBatchCreate,
     SlotListRead,
     SlotRead,
+    SlotScheduleReplace,
 )
 from src.services.exam_registration_service import ExamRegistrationService
 
@@ -47,6 +48,17 @@ async def add_slots(
     service: ExamRegistrationService = Depends(get_exam_registration_service),
 ):
     return await service.add_slots(workspace_id, exam_id, data, user)
+
+
+@exam_registration_router.put("/slots", response_model=list[SlotRead])
+async def replace_slots(
+    data: SlotScheduleReplace,
+    workspace_id: int = Path(ge=1, le=PG_INTEGER_MAX),
+    exam_id: int = Path(ge=1, le=PG_INTEGER_MAX),
+    user: User = Depends(get_current_user),
+    service: ExamRegistrationService = Depends(get_exam_registration_service),
+):
+    return await service.replace_slots(workspace_id, exam_id, data, user)
 
 
 @exam_registration_router.post("/registrations/self", response_model=RegistrationRead, status_code=201)

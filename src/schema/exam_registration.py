@@ -24,6 +24,7 @@ EventAction = Literal[
     "queue_changed",
 ]
 QueueHold = Literal["postponed", "no_show"]
+SlotKind = Literal["defense", "break"]
 
 
 class RegistrationDTO(BaseModel):
@@ -63,9 +64,32 @@ class SlotBatchCreate(RegistrationDTO):
         return slots
 
 
+class ScheduleSlot(SlotCreate):
+    id: PositiveId | None = None
+    kind: SlotKind
+
+
+class ScheduleSlotSnapshot(ScheduleSlot):
+    id: PositiveId
+
+
+class SlotScheduleReplace(RegistrationDTO):
+    expected_slots: Annotated[tuple[ScheduleSlotSnapshot, ...], Field(max_length=10_000)]
+    slots: Annotated[tuple[ScheduleSlot, ...], Field(max_length=10_000)]
+
+    @field_validator("expected_slots", "slots")
+    @classmethod
+    def unique_ids(cls, slots):
+        ids = [slot.id for slot in slots if slot.id is not None]
+        if len(ids) != len(set(ids)):
+            raise ValueError("Duplicate schedule slot ID")
+        return slots
+
+
 class RegistrationCreate(RegistrationDTO):
     project_id: PositiveId
     slot_id: PositiveId | None = None
+    expected_slot: SlotCreate | None = None
 
 
 class RegistrationVersion(RegistrationDTO):
@@ -88,6 +112,7 @@ class RegistrationCancel(RegistrationVersion):
 class RegistrationMove(RegistrationCancel):
     target_exam_id: PositiveId
     target_slot_id: PositiveId | None = None
+    expected_slot: SlotCreate | None = None
 
 
 class SlotRead(RegistrationDTO):
@@ -97,6 +122,9 @@ class SlotRead(RegistrationDTO):
     starts_at: datetime
     ends_at: datetime
     is_available: bool
+    kind: SlotKind = "defense"
+    can_edit: bool = False
+    can_delete: bool = False
 
 
 class RegistrationRead(RegistrationDTO):

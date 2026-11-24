@@ -24,7 +24,7 @@ class ExamSlot(Base):
     __tablename__ = "exam_slot"
     __table_args__ = (
         UniqueConstraint("id", "exam_id", "workspace_id", name="uq_exam_slot_scope"),
-        UniqueConstraint("exam_id", "starts_at", "ends_at", name="uq_exam_slot_interval"),
+        UniqueConstraint("exam_id", "starts_at", "ends_at", name="uq_exam_slot_interval", deferrable=True),
         ForeignKeyConstraint(
             ["exam_id", "workspace_id"],
             ["exam.id", "exam.workspace_id"],
@@ -32,12 +32,14 @@ class ExamSlot(Base):
             ondelete="RESTRICT",
         ),
         CheckConstraint("ends_at>starts_at", name="ck_slot_interval"),
+        CheckConstraint("kind IN ('defense', 'break')", name="ck_slot_kind"),
     )
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     workspace_id: Mapped[int] = mapped_column(Integer)
     exam_id: Mapped[int] = mapped_column(Integer)
     starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    kind: Mapped[str] = mapped_column(String(10), server_default="defense")
     created_by: Mapped[int] = mapped_column(ForeignKey("user.id", ondelete="RESTRICT"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 

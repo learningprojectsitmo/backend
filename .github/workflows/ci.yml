@@ -115,7 +115,7 @@ jobs:
       - name: Verify registrations and attempts on disposable PostgreSQL
         run: |
           test -n "$REGISTRATION_TEST_DATABASE_URL"
-          pytest tests/integration/test_exam_registrations_db.py tests/integration/test_exam_organizer_db.py tests/integration/test_exam_attempts_db.py tests/integration/test_exam_queue_db.py tests/integration/test_exam_eta_db.py tests/integration/test_exam_live_db.py tests/integration/test_exam_live_ws.py tests/integration/test_exam_assessment_db.py tests/integration/test_exam_assessment_api.py tests/integration/test_exam_assessment_submit_db.py tests/integration/test_exam_assessment_submit_api.py --no-cov
+          pytest tests/integration/test_exam_registrations_db.py tests/integration/test_exam_schedule_db.py tests/integration/test_exam_organizer_db.py tests/integration/test_exam_attempts_db.py tests/integration/test_exam_queue_db.py tests/integration/test_exam_eta_db.py tests/integration/test_exam_live_db.py tests/integration/test_exam_live_ws.py tests/integration/test_exam_assessment_db.py tests/integration/test_exam_assessment_api.py tests/integration/test_exam_assessment_submit_db.py tests/integration/test_exam_assessment_submit_api.py --no-cov
 
       - name: Verify audience snapshots on disposable PostgreSQL
         run: pytest tests/integration/test_audience_db.py tests/integration/test_assessment_snapshot_db.py tests/integration/test_project_relations_db.py --no-cov

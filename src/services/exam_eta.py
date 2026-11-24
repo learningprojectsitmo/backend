@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from collections import deque
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -35,12 +36,19 @@ class EtaCurrentState:
 
 
 @dataclass(frozen=True)
+class EtaBreak:
+    starts_at: datetime
+    ends_at: datetime
+
+
+@dataclass(frozen=True)
 class EtaWaitingState:
     registration_id: int
     position: int
     state: Literal["waiting", "postponed"]
     timing: EtaTiming
     postponed_phase: Literal["speaking", "questions"] | None = None
+    planned_start_at: datetime | None = None
 
 
 def full_slot_seconds(timing: EtaTiming) -> int:
@@ -92,6 +100,7 @@ def build_queue_eta(
     current: EtaCurrentState | None,
     waiting: Sequence[EtaWaitingState],
     exam_started: bool = False,
+    breaks: Sequence[EtaBreak] = (),
 ) -> QueueEtaRead:
     certainty, reason = _certainty_and_reason(current, now, exam_starts_at, exam_started)
 
@@ -112,8 +121,25 @@ def build_queue_eta(
             settings_version=current.settings_version,
         )
 
+    upcoming_breaks: deque[EtaBreak] = deque()
+    for pause in sorted(breaks, key=lambda item: item.starts_at):
+        if pause.starts_at > now:
+            upcoming_breaks.append(pause)
+        elif now < pause.ends_at:
+            cursor = max(cursor, pause.ends_at)
+
     items: list[EtaItemRead] = []
     for team in sorted(waiting, key=lambda item: (item.position, item.registration_id)):
+        duration = timedelta(seconds=waiting_slot_seconds(team))
+        while upcoming_breaks:
+            pause = upcoming_breaks[0]
+            scheduled_after_break = team.planned_start_at is not None and team.planned_start_at >= pause.ends_at
+            if not scheduled_after_break and cursor + duration <= pause.starts_at:
+                break
+            # The live queue can compress empty slots. Add the break's duration
+            # without treating other gaps in the timetable as waiting time.
+            cursor += pause.ends_at - pause.starts_at
+            upcoming_breaks.popleft()
         eta_at = cursor
         items.append(
             EtaItemRead(
@@ -126,6 +152,6 @@ def build_queue_eta(
                 reason=reason,
             )
         )
-        cursor = cursor + timedelta(seconds=waiting_slot_seconds(team))
+        cursor += duration
 
     return QueueEtaRead(current=current_read, items=items)
