@@ -1,19 +1,49 @@
 from __future__ import annotations
 
-from sqlalchemy import exists, select
+from dataclasses import dataclass
+from datetime import datetime
+
+from sqlalchemy import exists, or_, select
 
 from src.core.uow import IUnitOfWork
 from src.model.exam_registration import ExamRegistration, ExamSlot, RegistrationEvent
 from src.model.project import Project
-from src.schema.exam_registration import SlotRead
+from src.schema.exam_registration import SlotKind, SlotRead
+
+
+@dataclass(frozen=True, slots=True)
+class ScheduleRow:
+    slot: ExamSlot
+    occupied: bool
+    has_history: bool
+    started: bool
+
+    def is_editable(self, now: datetime) -> bool:
+        return not self.started and self.slot.starts_at > now
+
+    def read(self, now: datetime, *, editable: bool) -> SlotRead:
+        slot = self.slot
+        can_edit = editable and self.is_editable(now)
+        return SlotRead(
+            id=slot.id,
+            workspace_id=slot.workspace_id,
+            exam_id=slot.exam_id,
+            starts_at=slot.starts_at,
+            ends_at=slot.ends_at,
+            kind=slot.kind,
+            is_available=slot.kind == "defense" and not self.occupied,
+            can_edit=can_edit,
+            can_delete=can_edit and not self.has_history,
+        )
 
 
 class ExamRegistrationRepository:
     def __init__(self, uow: IUnitOfWork):
         self.uow = uow
 
-    async def has_slots(self, exam_id: int) -> bool:
-        return bool(await self.uow.session.scalar(select(exists().where(ExamSlot.exam_id == exam_id))))
+    async def has_slots(self, exam_id: int, *, kind: SlotKind) -> bool:
+        query = select(exists().where(ExamSlot.exam_id == exam_id, ExamSlot.kind == kind))
+        return bool(await self.uow.session.scalar(query))
 
     async def has_registrations(self, exam_id: int) -> bool:
         return bool(await self.uow.session.scalar(select(exists().where(ExamRegistration.exam_id == exam_id))))
@@ -27,26 +57,28 @@ class ExamRegistrationRepository:
             ).all()
         )
 
-    async def list_slots(self, workspace_id: int, exam_id: int, *, limit: int, offset: int) -> list[SlotRead]:
-        occupied = exists().where(ExamRegistration.slot_id == ExamSlot.id, ExamRegistration.status == "active")
+    async def schedule(
+        self, workspace_id: int, exam_id: int, *, limit: int | None = None, offset: int = 0
+    ) -> list[ScheduleRow]:
+        registration = exists().where(ExamRegistration.slot_id == ExamSlot.id)
+        history = exists().where(
+            RegistrationEvent.exam_id == ExamSlot.exam_id,
+            or_(RegistrationEvent.from_slot_id == ExamSlot.id, RegistrationEvent.to_slot_id == ExamSlot.id),
+        )
         query = (
-            select(ExamSlot, (~occupied).label("available"))
+            select(
+                ExamSlot,
+                registration.where(ExamRegistration.status == "active").label("occupied"),
+                or_(registration, history).label("has_history"),
+                registration.where(ExamRegistration.started_at.is_not(None)).label("started"),
+            )
             .where(ExamSlot.exam_id == exam_id, ExamSlot.workspace_id == workspace_id)
             .order_by(ExamSlot.starts_at, ExamSlot.id)
-            .limit(limit + 1)
-            .offset(offset)
+            .execution_options(populate_existing=True)
         )
-        return [
-            SlotRead(
-                id=slot.id,
-                workspace_id=slot.workspace_id,
-                exam_id=slot.exam_id,
-                starts_at=slot.starts_at,
-                ends_at=slot.ends_at,
-                is_available=available,
-            )
-            for slot, available in await self.uow.session.execute(query)
-        ]
+        if limit is not None:
+            query = query.limit(limit).offset(offset)
+        return [ScheduleRow(*row) for row in await self.uow.session.execute(query)]
 
     async def project(self, workspace_id: int, project_id: int, *, lock: bool = False) -> Project | None:
         query = (

@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from itertools import pairwise
 from uuid import uuid4
 
+from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
 from src.core.exceptions import BusinessLogicError, NotFoundError, PermissionError
@@ -25,8 +26,11 @@ from src.schema.exam_registration import (
     RegistrationRead,
     RegistrationVersion,
     SlotBatchCreate,
+    SlotCreate,
+    SlotKind,
     SlotListRead,
     SlotRead,
+    SlotScheduleReplace,
 )
 from src.services.exam_queue_service import ExamQueueService
 from src.services.exam_service import ExamService
@@ -53,55 +57,124 @@ class ExamRegistrationService:
         raise BusinessLogicError({"code": code, "message": code.replace("_", " ")})
 
     async def list_slots(self, workspace_id: int, exam_id: int, user: User, *, limit: int, offset: int) -> SlotListRead:
-        await self._exam_service.require_read_access(workspace_id, exam_id, user)
-        rows = await self._repository.list_slots(workspace_id, exam_id, limit=limit, offset=offset)
-        return SlotListRead(items=rows[:limit], limit=limit, offset=offset, has_more=len(rows) > limit)
+        exam, writer = await self._exam_service.read_access(workspace_id, exam_id, user)
+        editable = writer and exam.archived_at is None and exam.completed_at is None
+        rows = await self._repository.schedule(workspace_id, exam_id, limit=limit + 1, offset=offset)
+        now = self._clock()
+        return SlotListRead(
+            items=[row.read(now, editable=editable) for row in rows[:limit]],
+            limit=limit,
+            offset=offset,
+            has_more=len(rows) > limit,
+        )
 
-    async def add_slots(self, workspace_id: int, exam_id: int, data: SlotBatchCreate, user: User) -> list[SlotRead]:
+    async def _lock_schedule(self, workspace_id: int, exam_id: int, user: User) -> datetime:
         await self._exam_service.require_organizer(workspace_id, exam_id, user)
-        # The same parent lock serializes publication, slot mode and registrations.
-
+        # Publication, registration, defense start, and timetable edits share this lock.
         exam = await ExamRepository(self._repository.uow).get_scoped(workspace_id, exam_id, lock=True)
         if exam is None:
             raise NotFoundError("Exam not found")
         await self._exam_service.require_organizer(workspace_id, exam_id, user)
         self._exam_service.require_queue_open(exam)
-        configuration = (await self._exam_service.get(workspace_id, exam_id, user)).configuration
+        return (await self._exam_service.get(workspace_id, exam_id, user)).configuration.starts_at
+
+    def _new_slot(
+        self, workspace_id: int, exam_id: int, slot: SlotCreate, kind: SlotKind, user: User, now: datetime
+    ) -> ExamSlot:
+        return ExamSlot(
+            workspace_id=workspace_id,
+            exam_id=exam_id,
+            starts_at=slot.starts_at,
+            ends_at=slot.ends_at,
+            kind=kind,
+            created_by=user.id,
+            created_at=now,
+        )
+
+    def _validate_intervals(self, exam_start: datetime, intervals: list[tuple[datetime, datetime]]) -> None:
+        if any(start < exam_start for start, _ in intervals):
+            self._conflict("slot_before_exam")
+        if any(right[0] < left[1] for left, right in pairwise(sorted(intervals))):
+            self._conflict("slot_overlap")
+
+    async def add_slots(self, workspace_id: int, exam_id: int, data: SlotBatchCreate, user: User) -> list[SlotRead]:
+        exam_start = await self._lock_schedule(workspace_id, exam_id, user)
         now = self._clock()
-        if now >= configuration.starts_at:
+        if now >= exam_start:
             self._conflict("slot_schedule_closed")
         old = await self._repository.all_slots(exam_id)
-        if not old and await self._repository.has_registrations(exam_id):
+        if not any(slot.kind == "defense" for slot in old) and await self._repository.has_registrations(exam_id):
             self._conflict("slot_schedule_locked")
-        if any(slot.starts_at < configuration.starts_at for slot in data.slots):
-            self._conflict("slot_before_exam")
-        intervals = sorted([(s.starts_at, s.ends_at) for s in old] + [(s.starts_at, s.ends_at) for s in data.slots])
-        if any(right[0] < left[1] for left, right in pairwise(intervals)):
-            self._conflict("slot_overlap")
-        rows = [
-            ExamSlot(
-                workspace_id=workspace_id,
-                exam_id=exam_id,
-                starts_at=slot.starts_at,
-                ends_at=slot.ends_at,
-                created_by=user.id,
-                created_at=now,
-            )
-            for slot in data.slots
-        ]
+        self._validate_intervals(exam_start, [(slot.starts_at, slot.ends_at) for slot in [*old, *data.slots]])
+        rows = [self._new_slot(workspace_id, exam_id, slot, "defense", user, now) for slot in data.slots]
         self._repository.uow.session.add_all(rows)
         await self._repository.uow.session.flush()
         return [
             SlotRead(
-                id=s.id,
+                id=slot.id,
                 workspace_id=workspace_id,
                 exam_id=exam_id,
-                starts_at=s.starts_at,
-                ends_at=s.ends_at,
+                starts_at=slot.starts_at,
+                ends_at=slot.ends_at,
                 is_available=True,
+                can_edit=True,
+                can_delete=True,
             )
-            for s in rows
+            for slot in rows
         ]
+
+    async def replace_slots(
+        self, workspace_id: int, exam_id: int, data: SlotScheduleReplace, user: User
+    ) -> list[SlotRead]:
+        exam_start = await self._lock_schedule(workspace_id, exam_id, user)
+        now = self._clock()
+        current = await self._repository.schedule(workspace_id, exam_id)
+        existing = {row.slot.id: row for row in current}
+        actual = {slot_id: (row.slot.starts_at, row.slot.ends_at, row.slot.kind) for slot_id, row in existing.items()}
+        expected = {slot.id: (slot.starts_at, slot.ends_at, slot.kind) for slot in data.expected_slots}
+        retained = {slot.id: slot for slot in data.slots if slot.id is not None}
+        if actual != expected or retained.keys() - existing.keys():
+            self._conflict("slot_schedule_stale")
+        if (
+            not any(row.slot.kind == "defense" for row in current)
+            and any(slot.kind == "defense" for slot in data.slots)
+            and await self._repository.has_registrations(exam_id)
+        ):
+            self._conflict("slot_schedule_locked")
+        self._validate_intervals(exam_start, [(slot.starts_at, slot.ends_at) for slot in data.slots])
+
+        removed = existing.keys() - retained.keys()
+        updates = {
+            slot_id: slot
+            for slot_id, slot in retained.items()
+            if (slot.starts_at, slot.ends_at, slot.kind) != actual[slot_id]
+        }
+        if any(not existing[slot_id].is_editable(now) for slot_id in removed | updates.keys()):
+            self._conflict("slot_schedule_locked")
+        if any(existing[slot_id].has_history for slot_id in removed):
+            self._conflict("slot_has_registrations")
+        if any(slot.kind != existing[slot_id].slot.kind for slot_id, slot in updates.items()):
+            self._conflict("slot_kind_locked")
+        added = [slot for slot in data.slots if slot.id is None]
+        if any(slot.starts_at <= now for slot in [*updates.values(), *added]):
+            self._conflict("slot_schedule_closed")
+        if not (removed or updates or added):
+            return [row.read(now, editable=True) for row in current]
+
+        session = self._repository.uow.session
+        # A slot may move into another row's old interval during reflow or a swap.
+        await session.execute(text("SET CONSTRAINTS uq_exam_slot_interval DEFERRED"))
+        for slot_id in removed:
+            await session.delete(existing[slot_id].slot)
+        for slot_id, slot in updates.items():
+            row = existing[slot_id].slot
+            row.starts_at, row.ends_at = slot.starts_at, slot.ends_at
+        session.add_all([self._new_slot(workspace_id, exam_id, slot, slot.kind, user, now) for slot in added])
+        await session.flush()
+        await session.execute(text("SET CONSTRAINTS uq_exam_slot_interval IMMEDIATE"))
+        await ExamRepository(self._repository.uow).bump_queue_revision(exam_id)
+        saved = await self._repository.schedule(workspace_id, exam_id)
+        return [row.read(now, editable=True) for row in saved]
 
     async def _access(self, workspace_id, exam_id, user, *, organized):
         if organized:
@@ -144,13 +217,32 @@ class ExamRegistrationService:
         if project.project_type_id is None or project.project_type_id not in configuration.project_type_ids:
             self._conflict("project_type_not_allowed")
 
-    async def _slot(self, exam_id, slot_id, *, locked, current=None):
-        if slot_id is not None and (slot_id not in locked or locked[slot_id].exam_id != exam_id):
-            raise NotFoundError("Slot not found in this exam")
+    async def _slot(
+        self,
+        exam_id: int,
+        slot_id: int | None,
+        *,
+        locked: dict[int, ExamSlot],
+        expected_slot: SlotCreate | None,
+        current: ExamRegistration | None = None,
+    ) -> None:
         if slot_id is None:
-            if await self._repository.has_slots(exam_id):
+            if expected_slot is not None:
+                self._conflict("slot_time_changed")
+            if await self._repository.has_slots(exam_id, kind="defense"):
                 self._conflict("slot_required")
-        elif await self._repository.slot_occupied(slot_id, except_registration=current.id if current else None):
+            return
+        slot = locked.get(slot_id)
+        if slot is None or slot.exam_id != exam_id:
+            raise NotFoundError("Slot not found in this exam")
+        if slot.kind == "break":
+            self._conflict("slot_is_break")
+        if expected_slot is not None and (slot.starts_at, slot.ends_at) != (
+            expected_slot.starts_at,
+            expected_slot.ends_at,
+        ):
+            self._conflict("slot_time_changed")
+        if await self._repository.slot_occupied(slot_id, except_registration=current.id if current else None):
             self._conflict("slot_unavailable")
 
     async def _flush(self):
@@ -232,7 +324,7 @@ class ExamRegistrationService:
         self._project_type(project, configuration)
         if await self._repository.active_for_project(project.id) is not None:
             self._conflict("project_already_registered")
-        await self._slot(exam_id, data.slot_id, locked=slots)
+        await self._slot(exam_id, data.slot_id, locked=slots, expected_slot=data.expected_slot)
         source = "organizer" if organized else "manager"
         row = self._new(workspace_id, exam_id, project, data.slot_id, user, now, source)
         await self._flush()
@@ -341,7 +433,13 @@ class ExamRegistrationService:
             target_slot_id=data.target_slot_id,
             release_source=not same_exam,
         )
-        await self._slot(data.target_exam_id, data.target_slot_id, locked=slots, current=row if same_exam else None)
+        await self._slot(
+            data.target_exam_id,
+            data.target_slot_id,
+            locked=slots,
+            current=row if same_exam else None,
+            expected_slot=data.expected_slot,
+        )
         if same_exam and row.slot_id == data.target_slot_id:
             saved = RegistrationRead.model_validate(row)
             return RegistrationMoveRead(source=saved, target=saved)
@@ -361,6 +459,8 @@ class ExamRegistrationService:
                 to_slot_id=row.slot_id,
             )
             await self._flush()
+            if row.queue_position is not None and await self._repository.has_slots(exam_id, kind="break"):
+                await ExamRepository(self._repository.uow).bump_queue_revision(exam_id)
             saved = RegistrationRead.model_validate(row)
             return RegistrationMoveRead(source=saved, target=saved)
         row.status = "moved"
