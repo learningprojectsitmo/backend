@@ -14,6 +14,7 @@ from src.schema.exam_registration import (
     RegistrationMove,
     RegistrationMoveRead,
     RegistrationRead,
+    RegistrationReplace,
     RegistrationStatus,
     SlotBatchCreate,
     SlotListRead,
@@ -174,3 +175,17 @@ async def move_organized_registration(
     service: ExamRegistrationService = Depends(get_exam_registration_service),
 ):
     return await service.move_organized(workspace_id, exam_id, registration_id, data, user)
+
+
+@exam_registration_router.post(
+    "/registrations/{registration_id}/replace", response_model=RegistrationRead, status_code=201
+)
+async def replace_organized_registration(
+    data: RegistrationReplace,
+    workspace_id: int = Path(ge=1, le=PG_INTEGER_MAX),
+    exam_id: int = Path(ge=1, le=PG_INTEGER_MAX),
+    registration_id: int = Path(ge=1, le=PG_INTEGER_MAX),
+    user: User = Depends(get_current_user),
+    service: ExamRegistrationService = Depends(get_exam_registration_service),
+):
+    return await service.replace_organized(workspace_id, exam_id, registration_id, data, user)

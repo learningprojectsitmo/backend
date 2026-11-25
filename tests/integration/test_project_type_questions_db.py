@@ -15,7 +15,7 @@ from sqlalchemy.exc import DBAPIError, IntegrityError
 from src.api.v1.routes import routers
 from src.core.container import get_uow
 from src.core.dependencies import get_current_user
-from src.core.exceptions import NotFoundError, PermissionError
+from src.core.exceptions import BusinessLogicError, NotFoundError, PermissionError
 from src.model.project import Project, ProjectStage, ProjectType
 from src.model.project_type_question import ProjectTypeQuestion, ProjectTypeQuestionLevel
 from src.model.user import Role, User
@@ -233,19 +233,23 @@ async def test_constraints_and_parent_cascade(seeded):
 
 
 @pytest.mark.asyncio
-async def test_concurrent_writes_wait_for_parent_lock_and_keep_whole_list(seeded):
+@pytest.mark.parametrize("compare_snapshot", [False, True])
+async def test_concurrent_writes_wait_for_parent_lock_and_keep_whole_list(seeded, compare_snapshot):
     engine, make_uow, users, spaces, types = seeded
     first_saved = asyncio.Event()
     release_first = asyncio.Event()
     second_started = asyncio.Event()
     pid_holder = []
+    async with make_uow() as u:
+        initial = await service(u).get_questions(spaces[0], types[0], users["teacher"])
+    expected = {"expected_etag": initial.etag} if compare_snapshot else {}
 
     async def first():
         async with make_uow() as u:
             await service(u).replace_questions(
                 spaces[0],
                 types[0],
-                QuestionListReplace.model_validate({"questions": [custom("A1"), custom("A2")]}),
+                QuestionListReplace.model_validate({"questions": [custom("A1"), custom("A2")], **expected}),
                 users["teacher"],
             )
             first_saved.set()
@@ -259,7 +263,9 @@ async def test_concurrent_writes_wait_for_parent_lock_and_keep_whole_list(seeded
             await service(u).replace_questions(
                 spaces[0],
                 types[0],
-                QuestionListReplace.model_validate({"questions": [custom("B1"), custom("B2"), custom("B3")]}),
+                QuestionListReplace.model_validate(
+                    {"questions": [custom("B1"), custom("B2"), custom("B3")], **expected}
+                ),
                 users["teacher"],
             )
 
@@ -280,11 +286,18 @@ async def test_concurrent_writes_wait_for_parent_lock_and_keep_whole_list(seeded
         assert not task2.done()
     finally:
         release_first.set()
-        await asyncio.wait_for(asyncio.gather(task1, task2), 10)
+        first_result, second_result = await asyncio.wait_for(asyncio.gather(task1, task2, return_exceptions=True), 10)
+    assert first_result is None
+    if compare_snapshot:
+        assert isinstance(second_result, BusinessLogicError)
+        assert second_result.detail["code"] == "questions_conflict"
+    else:
+        assert second_result is None
     async with make_uow() as u:
         result = await service(u).get_questions(spaces[0], types[0], users["teacher"])
-    assert [q.text for q in result.questions] == ["B1", "B2", "B3"]
-    assert [q.position for q in result.questions] == [0, 1, 2]
+    expected_texts = ["A1", "A2"] if compare_snapshot else ["B1", "B2", "B3"]
+    assert [q.text for q in result.questions] == expected_texts
+    assert [q.position for q in result.questions] == list(range(len(expected_texts)))
 
 
 def test_migration_preserves_existing_types_and_stages(question_database_url, run_migrations):
@@ -482,3 +495,43 @@ async def test_get_keeps_one_snapshot_during_concurrent_replace(seeded, change):
             assert fresh.questions[0].levels[0].description == "concurrent explanation"
     finally:
         writer.dispose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("retry_with_template", [False, True])
+async def test_http_rejects_stale_editor_snapshot_under_write_lock(seeded, retry_with_template):
+    _, make_uow, users, spaces, types = seeded
+    app = http_app(make_uow, users["teacher"])
+    path = f"/v1/workspaces/{spaces[0]}/project-types/{types[0]}/questions"
+
+    def items(result):
+        return [{key: value for key, value in q.items() if key != "position"} for q in result["questions"]]
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        initial = (await client.post(path + "/apply-template", json={"template_code": "product"})).json()
+        first_editor = items(initial)
+        first_editor[0]["text"] = "Первое окно изменило первый критерий"
+        first = await client.put(path, json={"questions": first_editor, "expected_etag": initial["etag"]})
+        assert first.status_code == 200
+        current = first.json()
+        assert current["etag"] != initial["etag"]
+        assert (await client.get(path)).json() == current
+
+        if retry_with_template:
+            second = await client.post(
+                path + "/apply-template",
+                json={"template_code": "research", "expected_etag": initial["etag"]},
+            )
+        else:
+            second_editor = items(initial)
+            second_editor[1]["text"] = "Второе окно изменило второй критерий"
+            second = await client.put(path, json={"questions": second_editor, "expected_etag": initial["etag"]})
+        assert second.status_code == 409
+        assert second.json()["detail"]["code"] == "questions_conflict"
+        assert (await client.get(path)).json() == current
+
+        fresh_editor = items(current)
+        fresh_editor[1]["text"] = "Второе окно повторило правку после загрузки"
+        clean = await client.put(path, json={"questions": fresh_editor, "expected_etag": current["etag"]})
+        assert clean.status_code == 200
+        assert clean.json()["questions"][0]["text"] == first_editor[0]["text"]

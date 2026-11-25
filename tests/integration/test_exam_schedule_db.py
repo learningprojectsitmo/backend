@@ -9,13 +9,14 @@ import test_exam_registrations_db as registration_cases
 from fastapi import FastAPI
 from sqlalchemy import text
 from test_exam_eta_db import read_eta, start
-from test_exam_queue_db import register
+from test_exam_queue_db import queue_service, register
 
 from src.api.v1.routes import routers
 from src.core.container import get_uow
 from src.core.dependencies import get_current_user
 from src.core.exceptions import BusinessLogicError, NotFoundError
 from src.schema.exam_registration import RegistrationCreate, SlotBatchCreate, SlotScheduleReplace
+from src.services.exam_registration_service import ExamRegistrationService
 
 pytestmark = pytest.mark.integration
 seeded = registration_cases.seeded
@@ -386,3 +387,154 @@ async def test_stale_slot_time_cannot_book_retained_slot_id(seeded, move):
         assert result.status_code == (200 if move else 201)
         data = result.json()["target"] if move else result.json()
         assert data["slot_id"] == target["id"]
+
+
+async def test_queue_retry_refreshes_slot_and_break_intervals(seeded, monkeypatch):
+    s = seeded
+    async with client_for(s) as organizer:
+        response = await save_schedule(
+            organizer,
+            [],
+            [interval(START + timedelta(minutes=15), 10, kind="break"), interval(START + timedelta(minutes=45))],
+        )
+        assert response.status_code == 200
+        pause, defense = snapshot(response.json())
+        await register(s, "manager", slot_id=defense["id"])
+        initial = await read_eta(s)
+        assert initial.eta.items[0].eta_seconds == 600
+
+        async with s["uow"]() as uow:
+            reader = queue_service(uow, START)
+            revision_state = reader._exams.revision_state
+            calls = 0
+
+            async def save_before_first_revision_check(workspace_id, exam_id):
+                nonlocal calls
+                calls += 1
+                if calls == 1:
+                    changed = await save_schedule(
+                        organizer,
+                        [pause, defense],
+                        [
+                            interval(START + timedelta(minutes=15), 20, kind="break", id=pause["id"]),
+                            interval(START + timedelta(minutes=50), id=defense["id"]),
+                        ],
+                    )
+                    assert changed.status_code == 200
+                return await revision_state(workspace_id, exam_id)
+
+            monkeypatch.setattr(reader._exams, "revision_state", save_before_first_revision_check)
+            updated = await reader.read(s["workspace"], s["exams"][0])
+
+    assert calls == 2
+    assert updated.queue_revision == initial.queue_revision + 1
+    assert not updated.eta_stale
+    assert updated.items[0].planned_start_at == START + timedelta(minutes=50)
+    assert updated.eta.items[0].eta_seconds == 1200
+
+
+async def replacement_fixture(s, organizer):
+    response = await save_schedule(organizer, [], [interval(START), interval(START + timedelta(minutes=15))])
+    assert response.status_code == 200
+    current, other = snapshot(response.json())
+    original = await register(s, "manager", slot_id=current["id"])
+    url = f"registrations/{original.id}/replace"
+    body = {
+        "project_id": s["projects"]["manager2"],
+        "expected_version": original.version,
+        "expected_slot": {key: current[key] for key in ("starts_at", "ends_at")},
+    }
+    return original, current, other, url, body
+
+
+async def test_atomic_replacement_keeps_slot_queue_position_and_history(seeded):
+    async with client_for(seeded) as organizer:
+        original, current, other, url, body = await replacement_fixture(seeded, organizer)
+        following = await register(seeded, "member", slot_id=other["id"])
+        response = await organizer.post(url, json=body)
+        assert response.status_code == 201
+        new = response.json()
+        assert new["project_id"] == body["project_id"]
+        assert new["id"] != original.id
+        assert new["slot_id"] == current["id"]
+        assert new["queue_position"] == original.queue_position
+
+        registrations = (await organizer.get("registrations")).json()["items"]
+        by_id = {row["id"]: row for row in registrations}
+        assert by_id[original.id]["status"] == "cancelled"
+        assert by_id[original.id]["queue_position"] is None
+        assert by_id[following.id]["queue_position"] == following.queue_position
+        old_history = (await organizer.get(f"registrations/{original.id}/history")).json()["items"]
+        new_history = (await organizer.get(f"registrations/{new['id']}/history")).json()["items"]
+        assert {event["action"] for event in old_history} == {"created", "cancelled"}
+        assert [(event["action"], event["to_slot_id"]) for event in new_history] == [("created", current["id"])]
+
+
+@pytest.mark.parametrize(
+    ("failure", "status", "code"),
+    [
+        ("already_registered", 409, "project_already_registered"),
+        ("moved_slot", 409, "slot_time_changed"),
+        ("stale_version", 409, "registration_version_conflict"),
+        ("started", 409, "defense_already_started"),
+        ("manager", 403, None),
+    ],
+)
+async def test_replacement_conflict_keeps_original_registration(seeded, failure, status, code):
+    async with client_for(seeded) as organizer:
+        original, current, other, url, body = await replacement_fixture(seeded, organizer)
+        if failure == "already_registered":
+            await register(seeded, "manager2", slot_id=other["id"])
+        elif failure == "moved_slot":
+            moved = await save_schedule(
+                organizer,
+                [current, other],
+                [interval(START + timedelta(minutes=30), id=current["id"]), other],
+            )
+            assert moved.status_code == 200
+        elif failure == "stale_version":
+            body["expected_version"] += 1
+        elif failure == "started":
+            await start(seeded, original)
+
+        async with client_for(seeded, actor="manager" if failure == "manager" else "teacher") as requester:
+            rejected = await requester.post(url, json=body)
+        assert rejected.status_code == status
+        if code is not None:
+            assert rejected.json()["detail"]["code"] == code
+        active = (await organizer.get("registrations", params={"status": "active"})).json()["items"]
+        assert next(row for row in active if row["slot_id"] == current["id"])["id"] == original.id
+
+
+async def test_concurrent_replacements_produce_one_active_registration(seeded):
+    async with client_for(seeded) as organizer, client_for(seeded) as concurrent:
+        original, current, _, url, body = await replacement_fixture(seeded, organizer)
+        results = await asyncio.gather(
+            organizer.post(url, json=body),
+            concurrent.post(url, json={**body, "project_id": seeded["projects"]["member"]}),
+        )
+        assert sorted(response.status_code for response in results) == [201, 409]
+        accepted = next(response.json() for response in results if response.status_code == 201)
+        registrations = (await organizer.get("registrations")).json()["items"]
+        assert {(row["id"], row["status"], row["slot_id"]) for row in registrations} == {
+            (original.id, "cancelled", current["id"]),
+            (accepted["id"], "active", current["id"]),
+        }
+
+
+async def test_replacement_rolls_back_after_cancellation_if_successor_fails(seeded, monkeypatch):
+    async with client_for(seeded) as organizer:
+        original, current, _, url, body = await replacement_fixture(seeded, organizer)
+
+        def fail_to_create_successor(self, *args):
+            self._conflict("project_already_registered")
+
+        monkeypatch.setattr(ExamRegistrationService, "_new", fail_to_create_successor)
+        response = await organizer.post(url, json=body)
+        assert response.status_code == 409
+        registrations = (await organizer.get("registrations")).json()["items"]
+        assert [(row["id"], row["status"], row["slot_id"]) for row in registrations] == [
+            (original.id, "active", current["id"])
+        ]
+        history = (await organizer.get(f"registrations/{original.id}/history")).json()["items"]
+        assert [event["action"] for event in history] == ["created"]

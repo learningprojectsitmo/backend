@@ -63,7 +63,9 @@ class QuestionWithLevelsRead(AssessmentDTO):
 
 
 class AssessmentSubmitWrite(AssessmentDTO):
-    """Submit takes no data: the server snapshots the saved draft. Role, weight and scores are never accepted."""
+    """Use selected answers if supplied, or submit the saved draft for legacy clients."""
+
+    answers: list[AnswerDraftWrite] | None = None
 
 
 class SubmissionAnswerRead(AssessmentDTO):

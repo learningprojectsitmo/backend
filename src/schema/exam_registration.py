@@ -109,6 +109,11 @@ class RegistrationCancel(RegistrationVersion):
         return value
 
 
+class RegistrationReplace(RegistrationVersion):
+    project_id: PositiveId
+    expected_slot: SlotCreate
+
+
 class RegistrationMove(RegistrationCancel):
     target_exam_id: PositiveId
     target_slot_id: PositiveId | None = None

@@ -1016,7 +1016,9 @@ class TestProjectService:
         current_stage_id = 11
         current_stage_name = "Утверждение темы"
         stage = ProjectStage(id=current_stage_id, name=current_stage_name, order=0, project_type_id=1)
-        project = Project(id=1, name="P", author_id=5, current_stage_id=current_stage_id, progress=40)
+        project = Project(
+            id=1, name="P", author_id=5, project_type_id=3, current_stage_id=current_stage_id, progress=40
+        )
         project.current_stage = stage
 
         # when
@@ -1025,6 +1027,7 @@ class TestProjectService:
         # then
         assert item.current_stage_id == current_stage_id
         assert item.current_stage_name == current_stage_name
+        assert item.project_type_id == 3
 
     @pytest.mark.asyncio
     async def test_to_project_list_item_should_allow_missing_current_stage(self):
@@ -1038,6 +1041,7 @@ class TestProjectService:
         # then
         assert item.current_stage_id is None
         assert item.current_stage_name is None
+        assert item.project_type_id is None
 
     @pytest.mark.asyncio
     async def test_should_treat_stage_zero_and_missing_type_consistently(self):
