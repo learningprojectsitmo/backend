@@ -11,7 +11,11 @@ from sqlalchemy.exc import IntegrityError
 from test_exam_results_db import AFTER_WINDOW, NOW, finished_attempt, set_participation
 
 from src.core.exceptions import BusinessLogicError, NotFoundError, PermissionError, ValidationError
-from src.model.exam_assessment import ExamAssessmentSubmission, ExamAssessmentSubmissionAnswer
+from src.model.exam_assessment import (
+    ExamAssessmentAnswer,
+    ExamAssessmentSubmission,
+    ExamAssessmentSubmissionAnswer,
+)
 from src.model.project_type_question import ProjectTypeQuestion, ProjectTypeQuestionLevel
 from src.repository.exam_assessment_repository import ExamAssessmentRepository
 from src.repository.exam_attempt_repository import ExamAttemptRepository
@@ -20,7 +24,7 @@ from src.repository.exam_result_repository import ExamResultRepository
 from src.repository.project_repository import ProjectRepository
 from src.repository.project_type_question_repository import ProjectTypeQuestionRepository
 from src.repository.workspace_repository import WorkSpaceRepository
-from src.schema.exam_assessment import AnswerDraftWrite, AssessmentDraftWrite
+from src.schema.exam_assessment import AnswerDraftWrite, AssessmentDraftWrite, AssessmentSubmitWrite
 from src.schema.exam_result import ResultAccept
 from src.services.exam_assessment_service import ExamAssessmentService
 from src.services.exam_result_service import ExamResultService
@@ -38,13 +42,13 @@ OPEN = NOW + timedelta(minutes=11)  # window is open from NOW+10m to NOW+13m
 LAST_SECOND = AFTER_WINDOW - timedelta(seconds=1)
 
 
-def assessment_service(uow, now=OPEN):
+def assessment_service(uow, now=OPEN, *, clock=None):
     return ExamAssessmentService(
         ExamAssessmentRepository(uow),
         ExamAttemptRepository(uow),
         ProjectTypeQuestionRepository(uow),
         ExamRepository(uow),
-        clock=lambda: now,
+        clock=clock or (lambda: now),
     )
 
 
@@ -171,6 +175,71 @@ async def test_deadline_uses_server_clock_for_submit_and_draft(seeded):
     # The last valid edition still counts; the late attempts left nothing behind.
     assert await edition_count(s) == 1
     assert [(x.role, x.total) for x in await sources(s, attempt)] == [("teacher", 4)]
+
+
+@pytest.mark.parametrize("explicit_answers", [False, True])
+async def test_submit_that_reaches_cutoff_before_writing_does_not_report_success(seeded, explicit_answers):
+    s = seeded
+    attempt = await finished_attempt(s)
+    actor = s["users"]["local_teacher"]
+    await draft(s, attempt, "local_teacher", 4)
+    qid = (await question_ids(s, attempt))[0]
+    data = AssessmentSubmitWrite(answers=[AnswerDraftWrite(question_id=qid, score=5)]) if explicit_answers else None
+    before_close = AFTER_WINDOW - timedelta(microseconds=200)
+    clock = iter((before_close, before_close, AFTER_WINDOW))
+
+    with pytest.raises(BusinessLogicError) as error:
+        async with s["uow"]() as u:
+            await assessment_service(u, clock=lambda: next(clock)).submit(
+                s["workspace"], s["exams"][0], attempt.id, actor, data
+            )
+
+    assert error.value.detail["code"] == "assessment_window_closed"
+    assert await edition_count(s) == 0
+    reopened = await form(s, attempt, "local_teacher", now=AFTER_WINDOW)
+    assert reopened.submission is None
+    assert reopened.draft.answers[0].score == 4
+
+
+async def test_draft_waiting_for_another_save_rechecks_the_deadline(seeded):
+    s = seeded
+    attempt = await finished_attempt(s)
+    actor = s["users"]["local_teacher"]
+    await draft(s, attempt, "local_teacher", 4)
+    qid = (await question_ids(s, attempt))[0]
+    now = LAST_SECOND
+    entered = asyncio.Event()
+
+    def clock():
+        entered.set()
+        return now
+
+    async def save():
+        async with s["uow"]() as uow:
+            return await assessment_service(uow, clock=clock).save_draft(
+                s["workspace"],
+                s["exams"][0],
+                attempt.id,
+                actor,
+                AssessmentDraftWrite(answers=[AnswerDraftWrite(question_id=qid, score=5)]),
+            )
+
+    async with s["uow"]() as locking:
+        repository = ExamAssessmentRepository(locking)
+        sheet = await repository.get_sheet(s["workspace"], s["exams"][0], attempt.id, actor.id)
+        assert sheet is not None
+        await repository.lock_sheet(sheet.id)
+        await locking.session.execute(
+            select(ExamAssessmentAnswer).where(ExamAssessmentAnswer.question_id == qid).with_for_update()
+        )
+        request = asyncio.create_task(save())
+        await asyncio.wait_for(entered.wait(), timeout=3)
+        now = AFTER_WINDOW
+
+    with pytest.raises(BusinessLogicError) as error:
+        await asyncio.wait_for(request, timeout=3)
+    assert error.value.detail["code"] == "assessment_window_closed"
+    assert (await form(s, attempt, "local_teacher", now=AFTER_WINDOW)).draft.answers[0].score == 4
 
 
 async def test_incomplete_sheet_is_rejected_with_missing_questions(seeded):

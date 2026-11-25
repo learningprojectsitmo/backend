@@ -4,6 +4,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 
 from src.core.exceptions import BusinessLogicError, NotFoundError, PermissionError, ValidationError
+from src.model.exam_attempt import AssessmentWindow
 from src.model.user import User
 from src.repository.exam_assessment_repository import ExamAssessmentRepository
 from src.repository.exam_attempt_repository import ExamAttemptRepository
@@ -15,6 +16,7 @@ from src.schema.exam_assessment import (
     AssessmentDraftWrite,
     AssessmentFormRead,
     AssessmentSubmissionRead,
+    AssessmentSubmitWrite,
     AssessmentWindowRead,
     AssessorRead,
     QuestionLevelRead,
@@ -66,10 +68,11 @@ class ExamAssessmentService:
     def _conflict(code: str):
         raise BusinessLogicError({"code": code, "message": code.replace("_", " ")})
 
-    def _require_open(self, window) -> None:
-        # Server clock is the only authority: the window closes exactly at closes_at.
-        if self._clock() >= window.closes_at:
+    def _require_open(self, window: AssessmentWindow) -> datetime:
+        now = self._clock()
+        if now >= window.closes_at:
             self._conflict("assessment_window_closed")
+        return now
 
     @staticmethod
     def _normalized(rows: dict[int, tuple[int | None, str | None]], valid_ids: set[int]):
@@ -194,19 +197,27 @@ class ExamAssessmentService:
             if question := by_id.get(answer.question_id):
                 self._validate_score(question, answer.score)
                 filtered.append((answer.question_id, answer.score, answer.comment))
-        await self._repo.upsert_answers(sheet.id, filtered)
-
-        answers = await self._repo.get_answers(sheet.id)
+        await self._repo.lock_sheet(sheet.id)
+        self._require_open(window)
+        answers = await self._repo.upsert_answers(sheet.id, filtered)
         # Reload the sheet for fresh updated_at.
         sheet = await self._repo.get_sheet(workspace_id, exam_id, attempt_id, user.id)
         answer_reads = [
             AnswerDraftRead(question_id=qid, score=answer.score, comment=answer.comment)
             for qid, answer in answers.items()
         ]
-        return AssessmentDraftRead(answers=answer_reads, updated_at=sheet.updated_at if sheet else self._clock())
+        now = self._require_open(window)
+        return AssessmentDraftRead(answers=answer_reads, updated_at=sheet.updated_at if sheet else now)
 
-    async def submit(self, workspace_id: int, exam_id: int, attempt_id: int, user: User) -> AssessmentSubmissionRead:
-        """Snapshot the saved draft as a new immutable edition (idempotent for an unchanged draft)."""
+    async def submit(
+        self,
+        workspace_id: int,
+        exam_id: int,
+        attempt_id: int,
+        user: User,
+        data: AssessmentSubmitWrite | None = None,
+    ) -> AssessmentSubmissionRead:
+        """Store the selected answers as an immutable edition, reusing an identical latest edition."""
         attempt, window, _project = await self._load(workspace_id, exam_id, attempt_id)
         access = await self._determine_access(window.id, user.id, workspace_id)
         if access.excluded:
@@ -215,32 +226,53 @@ class ExamAssessmentService:
 
         questions = await self._questions.list_questions(attempt.project_type_id)
         question_ids = [q.id for q in questions]
-        sheet = await self._repo.get_sheet(workspace_id, exam_id, attempt_id, user.id)
-        if sheet is None:
-            self._incomplete(question_ids)
-        # Serialize concurrent submits of this sheet, then re-check the deadline after the wait.
+        selected = data.answers if data is not None else None
+        if selected is None:
+            sheet = await self._repo.get_sheet(workspace_id, exam_id, attempt_id, user.id)
+            if sheet is None:
+                self._incomplete(question_ids)
+        else:
+            sheet = await self._repo.get_or_create_sheet(workspace_id, exam_id, attempt_id, user.id)
+        # Autosaves and submits acquire the same lock before reading or updating answers.
         await self._repo.lock_sheet(sheet.id)
         self._require_open(window)
 
-        drafts = await self._repo.get_answers(sheet.id)
-        missing = [qid for qid in question_ids if drafts.get(qid) is None or drafts[qid].score is None]
+        if selected is None:
+            answers = await self._repo.get_answers(sheet.id)
+        else:
+            answers = {answer.question_id: answer for answer in selected}
+            if len(answers) != len(selected) or answers.keys() - set(question_ids):
+                raise ValidationError(
+                    {
+                        "code": "invalid_submission_questions",
+                        "message": "Submitted criteria must belong to this sheet without duplicates",
+                    }
+                )
+        missing = [qid for qid in question_ids if qid not in answers or answers[qid].score is None]
         if missing:
             self._incomplete(missing)
         for question in questions:
-            self._validate_score(question, drafts[question.id].score)
-        snapshot = {qid: (int(drafts[qid].score), drafts[qid].comment) for qid in question_ids}
+            self._validate_score(question, answers[question.id].score)
+        snapshot = {qid: (int(answers[qid].score), answers[qid].comment) for qid in question_ids}
 
         latest = await self._repo.latest_submission(sheet.id)
-        unchanged = False
-        if latest is not None and await self._repo.submission_answers(latest.id) == snapshot:
-            submission, unchanged = latest, True
-        else:
-            submission = await self._repo.add_submission(
+        unchanged = latest is not None and await self._repo.submission_answers(latest.id) == snapshot
+        if selected is not None:
+            await self._repo.upsert_answers(
+                sheet.id, [(qid, score, comment) for qid, (score, comment) in snapshot.items()]
+            )
+        # Check after the reads and any draft synchronization. Counted votes use this exact timestamp.
+        submitted_at = self._require_open(window)
+        submission = (
+            latest
+            if unchanged
+            else await self._repo.add_submission(
                 sheet,
                 version=1 if latest is None else latest.version + 1,
-                submitted_at=self._clock(),
+                submitted_at=submitted_at,
                 answers=snapshot,
             )
+        )
         return AssessmentSubmissionRead(
             version=submission.version,
             submitted_at=submission.submitted_at,

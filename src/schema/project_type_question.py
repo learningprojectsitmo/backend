@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from hashlib import sha256
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, computed_field, field_validator
 
 QuestionScale = Literal[3, 5]
 TemplateCode = Literal["product", "technical_integration", "research", "project_defense"]
@@ -12,6 +13,7 @@ QuestionDescription = Annotated[
 ]
 LevelDescription = Annotated[str, StringConstraints(strict=True, strip_whitespace=True, min_length=1, max_length=4000)]
 QuestionId = Annotated[int, Field(strict=True, ge=1)]
+QuestionsEtag = Annotated[str, StringConstraints(strict=True, pattern=r"^[0-9a-f]{64}$")]
 
 
 class QuestionLevel(BaseModel):
@@ -45,6 +47,7 @@ class QuestionListReplace(BaseModel):
 
     questions: list[QuestionWrite]
     max_score: QuestionScale | None = None
+    expected_etag: QuestionsEtag | None = None
 
     @field_validator("questions")
     @classmethod
@@ -66,6 +69,11 @@ class ProjectTypeQuestionsRead(BaseModel):
     min_score: Literal[1] = 1
     max_score: QuestionScale = 5
 
+    @computed_field
+    @property
+    def etag(self) -> QuestionsEtag:
+        return sha256(self.model_dump_json(exclude={"etag"}).encode("utf-8")).hexdigest()
+
 
 class TemplateQuestionRead(_QuestionContent):
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -86,3 +94,4 @@ class TemplateApply(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     template_code: TemplateCode
+    expected_etag: QuestionsEtag | None = None

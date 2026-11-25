@@ -92,6 +92,7 @@ Content-Type: application/json
 Teacher/admin с правами Exam управляет любой командой его workspace. Права совпадают с Exam: globaladmin — все workspace; globalteacher — автор/участник пространства; localteacher/admin — своё пространство. Авторство workspace без teacher/admin и globalteacher без доступа запись не дают. Manager/member не получают организационные операции.
 
 - POST `.../exams/{exam_id}/registrations` — `{project_id,slot_id:null}`, ответ201 RegistrationRead.
+- POST `.../registrations/{registration_id}/replace` — `{project_id, expected_version, expected_slot: {starts_at, ends_at}}`, ответ 201 с новой активной записью. Доступно организатору для незапущенной команды в занятом слоте открытого опубликованного экзамена. Сервер проверяет новый проект и ожидаемый интервал, отменяет прежнюю запись и создаёт новую одной транзакцией. Слот, позиция и события истории сохраняются. При конфликте или ошибке прежняя запись остаётся активной.
 - GET той же базы — все регистрации Exam, optional project_id/status и обычная пагинация.
 - POST `.../registrations/{id}/cancel` — `{expected_version,reason}`, ответ200 RegistrationRead.
 - POST `.../registrations/{id}/move` — `{expected_version,target_exam_id,target_slot_id:null,reason}`, ответ200 `{source,target}`.

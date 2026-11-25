@@ -62,4 +62,6 @@ async def apply_template(
     current_user: User = Depends(get_current_user),
     service: ProjectTypeQuestionService = Depends(get_project_type_question_service),
 ) -> ProjectTypeQuestionsRead:
-    return await service.apply_template(workspace_id, type_id, data.template_code, current_user)
+    return await service.apply_template(
+        workspace_id, type_id, data.template_code, current_user, expected_etag=data.expected_etag
+    )

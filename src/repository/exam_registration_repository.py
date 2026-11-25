@@ -52,7 +52,10 @@ class ExamRegistrationRepository:
         return list(
             (
                 await self.uow.session.scalars(
-                    select(ExamSlot).where(ExamSlot.exam_id == exam_id).order_by(ExamSlot.starts_at, ExamSlot.id)
+                    select(ExamSlot)
+                    .where(ExamSlot.exam_id == exam_id)
+                    .order_by(ExamSlot.starts_at, ExamSlot.id)
+                    .execution_options(populate_existing=True)
                 )
             ).all()
         )

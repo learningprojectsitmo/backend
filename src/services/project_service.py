@@ -840,6 +840,7 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
             tags=tags,
             participants_preview=preview,
             author_id=project.author_id,
+            project_type_id=project.project_type_id,
             current_stage_id=project.current_stage_id,
             current_stage_name=current_stage.name if current_stage else None,
         )

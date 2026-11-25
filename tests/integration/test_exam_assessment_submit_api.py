@@ -62,12 +62,55 @@ async def test_submit_flow_over_http(seeded):
         assert (await client.post(f"{base}/submit")).json()["version"] == 2
 
 
-@pytest.mark.parametrize("extra", [{"role": "teacher"}, {"weight": 100}, {"answers": []}, {"total": 25}])
-async def test_submit_body_does_not_accept_role_weight_or_scores(seeded, extra):
+@pytest.mark.parametrize("extra", [{"role": "teacher"}, {"weight": 100}, {"total": 25}])
+async def test_submit_body_does_not_accept_role_weight_or_totals(seeded, extra):
     s = seeded
     attempt = await _finished_attempt(s)
     async with await _client(s, "member") as client:
         assert (await client.post(f"{_base(s, attempt)}/submit", json=extra)).status_code == 422
+
+
+async def test_submit_records_its_own_snapshot_even_when_another_tab_saved_a_different_draft(seeded):
+    s = seeded
+    attempt = await _finished_attempt(s)
+    base = _base(s, attempt)
+    async with (
+        await _client(s, "local_teacher") as submitter,
+        await _client(s, "local_teacher") as other_tab,
+    ):
+        qid = (await submitter.get(base)).json()["questions"][0]["id"]
+        chosen = {"answers": [{"question_id": qid, "score": 5, "comment": "Chosen at submit"}]}
+        other = {"answers": [{"question_id": qid, "score": 2, "comment": "Other tab"}]}
+        assert (await other_tab.put(f"{base}/draft", json=other)).status_code == 200
+
+        result = await submitter.post(f"{base}/submit", json=chosen)
+        assert result.status_code == 200, result.text
+        assert result.json()["answers"] == chosen["answers"]
+        assert result.json()["total"] == 5
+
+        reopened = (await submitter.get(base)).json()
+        assert reopened["draft"]["answers"] == chosen["answers"]
+        assert reopened["submission"]["has_unsubmitted_changes"] is False
+        assert (await submitter.post(f"{base}/submit", json=chosen)).json()["unchanged"] is True
+        assert (await submitter.post(f"{base}/submit", json={})).json()["version"] == 1
+
+
+async def test_incomplete_snapshot_does_not_fill_missing_scores_from_draft(seeded):
+    s = seeded
+    attempt = await _finished_attempt(s)
+    base = _base(s, attempt)
+    async with await _client(s, "local_teacher") as client:
+        qid = (await client.get(base)).json()["questions"][0]["id"]
+        original = [{"question_id": qid, "score": 4, "comment": "Existing draft"}]
+        assert (await client.put(f"{base}/draft", json={"answers": original})).status_code == 200
+
+        result = await client.post(f"{base}/submit", json={"answers": []})
+        assert result.status_code == 422
+        assert result.json()["detail"]["code"] == "incomplete_sheet"
+        assert result.json()["detail"]["missing_question_ids"] == [qid]
+        reopened = (await client.get(base)).json()
+        assert reopened["draft"]["answers"] == original
+        assert reopened["submission"] is None
 
 
 async def test_submit_error_codes(seeded):

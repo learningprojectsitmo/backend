@@ -259,7 +259,7 @@ async def test_form_submission_state():
 
 def test_submit_body_rejects_role_weight_and_scores():
     assert AssessmentSubmitWrite() is not None
-    for extra in ({"role": "teacher"}, {"weight": 100}, {"answers": []}, {"total": 25}):
+    for extra in ({"role": "teacher"}, {"weight": 100}, {"total": 25}):
         with pytest.raises(PydanticValidationError):
             AssessmentSubmitWrite(**extra)
 

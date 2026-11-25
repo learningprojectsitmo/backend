@@ -24,6 +24,7 @@ from src.schema.exam_registration import (
     RegistrationMove,
     RegistrationMoveRead,
     RegistrationRead,
+    RegistrationReplace,
     RegistrationVersion,
     SlotBatchCreate,
     SlotCreate,
@@ -387,6 +388,21 @@ class ExamRegistrationService:
         row.updated_by = user.id
         row.updated_at = now
 
+    async def _cancel_row(self, row, user, now, *, source, reason):
+        row.status = "cancelled"
+        row.queue_hold = None
+        self._touch(row, user, now)
+        self._event(
+            row,
+            action="cancelled",
+            source=source,
+            user=user,
+            now=now,
+            reason=reason,
+            from_slot_id=row.slot_id,
+        )
+        await self._flush()
+
     async def _cancel(self, workspace_id, exam_id, registration_id, data, user, *, organized):
         row, _, now, _ = await self._change(
             workspace_id,
@@ -398,19 +414,7 @@ class ExamRegistrationService:
             target_exam_id=exam_id,
             release_source=True,
         )
-        row.status = "cancelled"
-        row.queue_hold = None
-        self._touch(row, user, now)
-        self._event(
-            row,
-            action="cancelled",
-            source="organizer" if organized else "manager",
-            user=user,
-            now=now,
-            reason=data.reason,
-            from_slot_id=row.slot_id,
-        )
-        await self._flush()
+        await self._cancel_row(row, user, now, source="organizer" if organized else "manager", reason=data.reason)
         if await self._queue.release(workspace_id, exam_id, row) is None:
             await ExamRepository(self._repository.uow).bump_queue_revision(exam_id)
         return RegistrationRead.model_validate(row)
@@ -561,6 +565,46 @@ class ExamRegistrationService:
         self, workspace_id: int, exam_id: int, registration_id: int, data: RegistrationMove, user: User
     ) -> RegistrationMoveRead:
         return await self._move(workspace_id, exam_id, registration_id, data, user, organized=True)
+
+    async def replace_organized(
+        self, workspace_id: int, exam_id: int, registration_id: int, data: RegistrationReplace, user: User
+    ) -> RegistrationRead:
+        await self._exam_service.require_organizer(workspace_id, exam_id, user)
+        await self._lock_exams(workspace_id, [exam_id])
+        project = await self._project(workspace_id, data.project_id, user, organized=True)
+        row = await self._repository.registration(workspace_id, exam_id, registration_id, lock=True)
+        if row is None:
+            raise NotFoundError("Registration not found")
+        self._state(row, data.expected_version)
+
+        slot_id = row.slot_id
+        if slot_id is None:
+            self._conflict("slot_time_changed")
+        slots = await self._repository.slots_for_update(workspace_id, {exam_id}, {slot_id})
+        await self._exam_service.require_organizer(workspace_id, exam_id, user)
+        now = self._clock()
+        configuration = await self._configuration(workspace_id, exam_id, user, now, organized=True)
+        self._project_type(project, configuration)
+        if await self._repository.active_for_project(project.id) is not None:
+            self._conflict("project_already_registered")
+        await self._slot(exam_id, slot_id, locked=slots, expected_slot=data.expected_slot, current=row)
+
+        # Free both unique indexes inside the same transaction. Preserve the live queue
+        # position when occupied, including manual changes to the order.
+        position = row.queue_position
+        row.queue_position = None
+        await self._cancel_row(row, user, now, source="organizer", reason="Команда заменена в слоте")
+
+        replacement = self._new(workspace_id, exam_id, project, slot_id, user, now, "organizer")
+        replacement.queue_position = position
+        await self._flush()
+        self._event(replacement, action="created", source="organizer", user=user, now=now, to_slot_id=slot_id)
+        await self._flush()
+        if position is None:
+            await self._queue.assign_on_create(workspace_id, exam_id, replacement)
+        else:
+            await ExamRepository(self._repository.uow).bump_queue_revision(exam_id)
+        return RegistrationRead.model_validate(replacement)
 
     async def list_organized(
         self,

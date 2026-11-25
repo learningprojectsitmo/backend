@@ -54,4 +54,4 @@ async def submit_assessment(
     user: User = Depends(get_current_user),
     service: ExamAssessmentService = Depends(get_exam_assessment_service),
 ):
-    return await service.submit(workspace_id, exam_id, attempt_id, user)
+    return await service.submit(workspace_id, exam_id, attempt_id, user, data)

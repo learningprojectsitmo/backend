@@ -9,6 +9,7 @@ from src.schema.project_type_question import (
     QuestionListReplace,
     QuestionRead,
     QuestionScale,
+    QuestionsEtag,
     QuestionWrite,
     TemplateCode,
 )
@@ -56,6 +57,12 @@ class ProjectTypeQuestionService:
             raise BusinessLogicError(
                 {"code": "questions_locked", "message": "Questions are locked after assessment first opens"}
             )
+        if data.expected_etag is not None:
+            current = self._response(type_id, await self._repository.list_questions(type_id), ptype.question_max_score)
+            if current.etag != data.expected_etag:
+                raise BusinessLogicError(
+                    {"code": "questions_conflict", "message": "Questions changed after the editor loaded them"}
+                )
         max_score = ptype.question_max_score if data.max_score is None else data.max_score
         if any(len(question.levels) != max_score for question in data.questions):
             raise ValidationError(
@@ -65,11 +72,18 @@ class ProjectTypeQuestionService:
         return self._response(type_id, await self._repository.replace_questions(type_id, data), max_score)
 
     async def apply_template(
-        self, workspace_id: int, type_id: int, template_code: TemplateCode, user: User
+        self,
+        workspace_id: int,
+        type_id: int,
+        template_code: TemplateCode,
+        user: User,
+        *,
+        expected_etag: QuestionsEtag | None = None,
     ) -> ProjectTypeQuestionsRead:
         template = self._templates.get_template(template_code)
         data = QuestionListReplace(
             max_score=template.max_score,
+            expected_etag=expected_etag,
             questions=[
                 QuestionWrite(text=q.text, description=q.description, levels=q.levels) for q in template.questions
             ],
