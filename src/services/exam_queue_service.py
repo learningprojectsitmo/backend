@@ -230,14 +230,18 @@ class ExamQueueService:
             current_state, waiting_states = await self._eta_states(
                 exam, queued, attempts, settings_revision, now, timing_cache
             )
-            exam_started = bool(attempts) or any(row.started_at is not None for row in rows)
+            started_at = (
+                exam.started_at
+                or min((attempt.started_at for attempt in attempts.values()), default=None)
+                or min((row.started_at for row in rows if row.started_at is not None), default=exam.completed_at)
+            )
 
             eta = build_queue_eta(
                 now=now,
                 exam_starts_at=settings_revision.starts_at,
                 current=current_state,
                 waiting=waiting_states,
-                exam_started=exam_started,
+                exam_started=started_at is not None,
                 breaks=[EtaBreak(slot.starts_at, slot.ends_at) for slot in slots.values() if slot.kind == "break"],
             )
 
@@ -256,6 +260,7 @@ class ExamQueueService:
 
         return QueueRead(
             queue_revision=exam.queue_revision,
+            started_at=started_at,
             server_now=now,
             settings_version=exam.current_settings_version,
             eta_stale=eta_stale,

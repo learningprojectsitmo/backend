@@ -446,17 +446,33 @@ async def test_heartbeat_and_client_resync(seeded):
         assert resynced["exam"]["id"] == s["exams"][0]
 
 
-async def test_viewer_receives_queue_without_manage_flag(seeded):
+async def test_viewer_receives_queue_and_explicit_start_without_manage_flag(seeded):
     s = seeded
+    teacher = token_for(s["users"]["teacher"])
+    viewer = token_for(s["users"]["manager"])
+    exam_id = s["exams"][0]
     async with (
         run_server(s["url"]) as base,
-        live_socket(base, s["workspace"], s["exams"][0], token_for(s["users"]["manager"])) as websocket,
+        live_socket(base, s["workspace"], exam_id, viewer) as websocket,
+        httpx.AsyncClient(base_url=base) as client,
     ):
         hello = await receive(websocket, "hello")
-        snapshot = await receive(websocket)
+        before = await receive(websocket)
         assert hello["access"] == {"role": "viewer", "can_manage": False}
-        assert snapshot["exam"]["id"] == s["exams"][0]
-        assert "queue" in snapshot
+        assert before["exam"]["id"] == exam_id
+        assert before["exam"]["started_at"] is None
+        assert before["queue"]["started_at"] is None
+        started = await http_json(
+            client,
+            "POST",
+            f"/v1/workspaces/{s['workspace']}/exams/{exam_id}/start",
+            teacher,
+        )
+        changed = await receive(websocket)
+        assert changed["exam"]["started_at"] == started["started_at"]
+        assert changed["queue"]["started_at"] == started["started_at"]
+        assert changed["queue"]["eta"]["current"] is None
+        assert changed["queue"]["queue_revision"] == before["queue"]["queue_revision"] + 1
 
 
 async def test_draft_organizer_receives_publish_change(seeded):

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from sqlalchemy import delete, exists, func, select, update
 
 from src.core.uow import IUnitOfWork
@@ -201,8 +203,10 @@ class ExamRepository:
     async def has_registrations(self, exam_id: int) -> bool:
         return bool(await self.uow.session.scalar(select(exists().where(ExamRegistration.exam_id == exam_id))))
 
-    async def has_attempts(self, exam_id: int) -> bool:
-        return bool(await self.uow.session.scalar(select(exists().where(ExamAttempt.exam_id == exam_id))))
+    async def first_attempt_started_at(self, exam_id: int) -> datetime | None:
+        return await self.uow.session.scalar(
+            select(func.min(ExamAttempt.started_at)).where(ExamAttempt.exam_id == exam_id)
+        )
 
     async def earliest_slot_start(self, exam_id: int):
         return await self.uow.session.scalar(select(func.min(ExamSlot.starts_at)).where(ExamSlot.exam_id == exam_id))

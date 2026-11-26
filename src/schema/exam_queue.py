@@ -81,6 +81,7 @@ class QueueEtaRead(QueueDTO):
 
 class QueueRead(QueueDTO):
     queue_revision: int
+    started_at: datetime | None = None
     server_now: datetime
     settings_version: int
     eta_stale: bool

@@ -116,6 +116,7 @@ class ExamLiveService:
                 id=exam.id,
                 workspace_id=exam.workspace_id,
                 status=exam.status,
+                started_at=queue.started_at,
                 completed_at=exam.completed_at,
                 archived_at=exam.archived_at,
                 settings_version=queue.settings_version,

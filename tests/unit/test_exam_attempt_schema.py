@@ -9,6 +9,7 @@ from src.schema.exam_attempt import (
     AttemptCommand,
     AttemptPause,
     AttemptRead,
+    AttemptRestart,
     AttemptStart,
     AttemptWindowRead,
     CurrentAttemptRead,
@@ -42,6 +43,19 @@ def test_start_forbids_missing_expected_version_and_extra_client_fields():
     ]:
         with pytest.raises(ValidationError):
             AttemptStart.model_validate({"registration_id": 3, "expected_version": 1, field: value})
+
+
+@pytest.mark.parametrize("value", [True, -1, "1", 1.5, 2**31])
+def test_conditional_start_and_restart_require_valid_queue_revision(value):
+    with pytest.raises(ValidationError):
+        AttemptStart(registration_id=3, expected_version=1, expected_queue_revision=value)
+    with pytest.raises(ValidationError):
+        AttemptRestart(expected_version=1, expected_queue_revision=value)
+
+
+def test_conditional_start_and_restart_accept_zero_queue_revision():
+    assert AttemptStart(registration_id=3, expected_version=1, expected_queue_revision=0).expected_queue_revision == 0
+    assert AttemptRestart(expected_version=1, expected_queue_revision=0).expected_queue_revision == 0
 
 
 def test_command_requires_positive_expected_version():

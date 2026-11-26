@@ -36,6 +36,7 @@ class Exam(Base):
         CheckConstraint("status IN ('draft','published')", name="ck_exam_status"),
         CheckConstraint("queue_revision>=0", name="ck_exam_queue_revision"),
         CheckConstraint("stream_seq>=0", name="ck_exam_stream_seq"),
+        CheckConstraint("started_at IS NULL OR status = 'published'", name="ck_exam_started"),
         CheckConstraint(
             "(status='draft' AND published_at IS NULL AND published_by IS NULL) OR (status='published' AND published_at IS NOT NULL AND published_by IS NOT NULL)",
             name="ck_exam_publication",
@@ -51,6 +52,7 @@ class Exam(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     published_by: Mapped[int | None] = mapped_column(ForeignKey("user.id", ondelete="RESTRICT"))
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 

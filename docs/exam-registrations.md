@@ -48,7 +48,7 @@ Content-Type: application/json
 {"id":91,"workspace_id":7,"exam_id":12,"project_id":42,"project_type_id_at_registration":8,"slot_id":5,"queue_position":1,"queue_hold":null,"status":"active","version":1,"created_source":"manager","created_by":17,"created_at":"2026-11-20T10:00:00Z","updated_by":17,"updated_at":"2026-11-20T10:00:00Z","started_at":null}
 ```
 
-Проверяются свой проект/роль, общий workspace, выбранный в Exam тип проекта, published, открытый период и слот. Самостоятельные create/cancel/move разрешены от `max(published_at,registration_opens_at)` включительно до `min(starts_at,registration_closes_at)` исключительно; при null используются published_at/starts_at. Проверка периода и запись выполняются в одной транзакции существующим `ExamService.require_self_registration_open`.
+Проверяются свой проект/роль, общий workspace, выбранный в Exam тип проекта, published, открытый период и слот. До фактического запуска экзамена самостоятельные create/cancel/move разрешены от `max(published_at,registration_opens_at)` включительно до `min(starts_at,registration_closes_at)` исключительно; при null используются published_at/starts_at. Проверка периода и запись выполняются в одной транзакции существующим `ExamService.require_self_registration_open`.
 
 У проекта **одна active запись вообще**, включая другие экзамены и даты. Повторный POST не создаёт дубль и возвращает409 `project_already_registered`. Для другого Exam нужна отмена или перенос. Совпадающие конкурентные запросы имеют одного победителя; слот/проект защищены также partial unique индексами БД.
 

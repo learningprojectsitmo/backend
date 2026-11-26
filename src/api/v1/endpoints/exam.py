@@ -63,6 +63,16 @@ async def remove_exam(
     return Response(status_code=204)
 
 
+@exam_router.post("/{exam_id}/start", response_model=ExamRead)
+async def start_exam(
+    workspace_id: int = Path(ge=1),
+    exam_id: int = Path(ge=1),
+    user: User = Depends(get_current_user),
+    service: ExamService = Depends(get_exam_service),
+):
+    return await service.start(workspace_id, exam_id, user)
+
+
 @exam_router.post("/{exam_id}/complete", response_model=ExamRead)
 async def complete_exam(
     workspace_id: int = Path(ge=1),
