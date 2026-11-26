@@ -27,6 +27,7 @@ class ExamLiveExamRead(ExamLiveDTO):
     workspace_id: int
     status: Literal["draft", "published"]
     settings_version: int
+    started_at: datetime | None = None
     completed_at: datetime | None = None
     archived_at: datetime | None = None
 

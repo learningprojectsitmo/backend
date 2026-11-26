@@ -7,6 +7,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
 from src.core.exceptions import BusinessLogicError, NotFoundError
+from src.model.exam import Exam
 from src.model.exam_attempt import AssessmentWindow, AssessmentWindowAudience, AttemptEvent, ExamAttempt
 from src.model.user import User
 from src.repository.exam_attempt_repository import ExamAttemptRepository
@@ -98,8 +99,16 @@ class ExamAttemptService:
             )
         )
 
+    def _require_expected_queue(self, exam: Exam, expected_revision: int | None) -> None:
+        if expected_revision is None:
+            return
+        self._exam_service.require_queue_open(exam)
+        if exam.queue_revision != expected_revision:
+            self._conflict("queue_revision_conflict")
+
     async def start(self, workspace_id: int, exam_id: int, data: AttemptStart, user: User) -> tuple[AttemptRead, bool]:
         exam = await self._lock_exam(workspace_id, exam_id, user)
+        self._require_expected_queue(exam, data.expected_queue_revision)
         existing = await self._repository.by_registration(workspace_id, exam_id, data.registration_id)
         if existing is not None:
             if existing.status == "postponed":
@@ -147,6 +156,7 @@ class ExamAttemptService:
             created_at=now,
             updated_at=now,
         )
+        await self._exam_service.record_start(exam, now)
         self._repository.uow.session.add(attempt)
         try:
             await self._repository.uow.session.flush()
@@ -340,7 +350,8 @@ class ExamAttemptService:
         data: AttemptRestart,
         user: User,
     ) -> AttemptRead:
-        _, attempt = await self._lock_attempt(workspace_id, exam_id, attempt_id, user)
+        exam, attempt = await self._lock_attempt(workspace_id, exam_id, attempt_id, user)
+        self._require_expected_queue(exam, data.expected_queue_revision)
         if attempt.status == "finished":
             self._conflict("attempt_finished")
         if attempt.status != "postponed":

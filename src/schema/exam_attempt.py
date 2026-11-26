@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator
 
 PG_INTEGER_MAX = 2**31 - 1
 PositiveId = Annotated[StrictInt, Field(ge=1, le=PG_INTEGER_MAX)]
+QueueRevision = Annotated[StrictInt, Field(ge=0, le=PG_INTEGER_MAX)]
 
 AttemptStatus = Literal["speaking", "questions", "postponed", "finished"]
 AttemptAction = Literal["started", "questions", "paused", "resumed", "finished", "postponed", "restarted"]
@@ -20,6 +21,7 @@ class AttemptDTO(BaseModel):
 class AttemptStart(AttemptDTO):
     registration_id: PositiveId
     expected_version: PositiveId
+    expected_queue_revision: QueueRevision | None = None
 
 
 class AttemptCommand(AttemptDTO):
@@ -53,6 +55,7 @@ class AttemptPostpone(AttemptCommand):
 
 
 class AttemptRestart(AttemptCommand):
+    expected_queue_revision: QueueRevision | None = None
     reason: Annotated[str, Field(min_length=1, max_length=1000)] | None = None
 
     @field_validator("reason", mode="before")

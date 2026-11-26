@@ -131,6 +131,7 @@ class ExamRead(ExamDTO):
     created_at: datetime
     published_by: int | None
     published_at: datetime | None
+    started_at: datetime | None = None
     completed_at: datetime | None = None
     archived_at: datetime | None = None
 

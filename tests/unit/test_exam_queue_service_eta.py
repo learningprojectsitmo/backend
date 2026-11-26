@@ -62,6 +62,7 @@ def attempt(
         paused_at=paused_at,
         postponed_at=postponed_at,
         postponed_phase=postponed_phase,
+        started_at=NOW,
         phase_deadline=deadline or NOW + timedelta(seconds=60),
         finished_at=None,
     )
@@ -126,6 +127,8 @@ def make_service(*, rows, attempts, revisions, current_version=1, revision_state
         workspace_id=7,
         status="published",
         queue_revision=17,
+        started_at=None,
+        completed_at=None,
         current_settings_version=current_version,
     )
     exams = FakeExamRepository(exam, revisions)

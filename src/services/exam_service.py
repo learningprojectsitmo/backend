@@ -80,6 +80,19 @@ class ExamService:
                 ):
                     self._conflict("questions_not_ready")
 
+    async def _actual_start(self, exam: Exam) -> datetime | None:
+        if exam.started_at is not None or exam.status != "published":
+            return exam.started_at
+        # A first defense created by a previous server version during a rolling
+        # deployment still starts the exam, even before it writes a marker.
+        return await self._repository.first_attempt_started_at(exam.id) or exam.completed_at
+
+    async def record_start(self, exam: Exam, now: datetime) -> None:
+        """Called while holding the exam lock, including when a legacy client starts a defense."""
+        if exam.started_at is None:
+            exam.started_at = await self._actual_start(exam) or now
+            self._repository.uow.mark_exam_changed(exam.id, "exam")
+
     async def _read(self, exam) -> ExamRead:
         configuration = await self._repository.revision_configuration(exam.id, exam.current_settings_version)
         if configuration is None:
@@ -94,6 +107,7 @@ class ExamService:
             created_at=exam.created_at,
             published_by=exam.published_by,
             published_at=exam.published_at,
+            started_at=await self._actual_start(exam),
             completed_at=exam.completed_at,
             archived_at=exam.archived_at,
         )
@@ -160,6 +174,17 @@ class ExamService:
         exam.archived_at = datetime.now(UTC)
         self._repository.uow.mark_exam_changed(exam.id, "exam")
 
+    async def start(self, workspace_id: int, exam_id: int, user: User) -> ExamRead:
+        exam = await self._exam(workspace_id, exam_id, user, write=True, lock=True)
+        await self.require_organizer(workspace_id, exam_id, user)
+        self.require_queue_open(exam)
+        if exam.status != "published":
+            self._conflict("exam_not_published")
+        if exam.started_at is None:
+            await self.record_start(exam, datetime.now(UTC))
+            await self._repository.bump_queue_revision(exam.id)
+        return await self._read(exam)
+
     async def complete(self, workspace_id: int, exam_id: int, user: User) -> ExamRead:
         exam = await self._exam(workspace_id, exam_id, user, write=True, lock=True)
         await self.require_organizer(workspace_id, exam_id, user)
@@ -167,8 +192,12 @@ class ExamService:
         if exam.status != "published":
             self._conflict("exam_not_published")
         if exam.completed_at is None:
+            started_at = await self._actual_start(exam)
+            if started_at is None:
+                self._conflict("exam_not_started")
             if await self._repository.has_unresolved_registrations(exam.id):
                 self._conflict("exam_queue_unresolved")
+            exam.started_at = started_at
             exam.completed_at = datetime.now(UTC)
             self._repository.uow.mark_exam_changed(exam.id, "exam")
         return await self._read(exam)
@@ -180,21 +209,22 @@ class ExamService:
         self.require_not_archived(exam)
         if exam.current_settings_version != data.expected_version:
             self._conflict("settings_version_conflict")
-        old = (await self._read(exam)).configuration
+        current = await self._read(exam)
+        old = current.configuration
         config = data.configuration
         if exam.status == "published":
-            if (
-                old.project_type_ids != config.project_type_ids
+            if old.project_type_ids != config.project_type_ids:
+                self._conflict("published_schedule_locked")
+            start_changed = old.starts_at != config.starts_at
+            dates_changed = (
+                start_changed
                 or old.registration_opens_at != config.registration_opens_at
                 or old.registration_closes_at != config.registration_closes_at
-            ):
+            )
+            if dates_changed and (current.started_at is not None or exam.completed_at is not None):
                 self._conflict("published_schedule_locked")
-            if old.starts_at != config.starts_at and (
-                exam.completed_at is not None
-                or datetime.now(UTC) >= min(old.starts_at, config.starts_at)
-                or await self._repository.has_attempts(exam_id)
-            ):
-                self._conflict("published_schedule_locked")
+            if start_changed and config.starts_at <= datetime.now(UTC):
+                self._conflict("exam_start_must_be_future")
         if old != config:
             earliest = await self._repository.earliest_slot_start(exam_id)
             if earliest is not None and earliest < config.starts_at:
@@ -254,6 +284,8 @@ class ExamService:
         self.require_queue_open(exam)
         if exam.status != "published":
             self._conflict("exam_not_published")
+        if await self._actual_start(exam) is not None:
+            self._conflict("registration_closed")
         revision = await self._repository.get_revision(exam_id, exam.current_settings_version)
         opens = max(exam.published_at, revision.registration_opens_at or exam.published_at)
         closes = min(revision.starts_at, revision.registration_closes_at or revision.starts_at)
