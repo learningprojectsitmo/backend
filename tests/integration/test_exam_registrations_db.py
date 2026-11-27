@@ -1281,8 +1281,7 @@ async def test_blocked_projects_http_respects_exam_scope_and_project_ownership(s
         assert response.status_code == 404
 
 
-@pytest.mark.parametrize("move", [False, True])
-async def test_completed_exam_no_show_remains_in_history(seeded, move):
+async def test_repeat_registration_preserves_no_show_in_completed_exam(seeded):
     s = seeded
     previous, next_exam = s["exams"]
     teacher = s["users"]["teacher"]
@@ -1299,28 +1298,8 @@ async def test_completed_exam_no_show_remains_in_history(seeded, move):
             s["workspace"], previous, teacher
         )
 
-    with pytest.raises(BusinessLogicError) as conflict:
-        async with s["uow"]() as u:
-            service = reg_service(u)
-            if move:
-                await service.move_organized(
-                    s["workspace"],
-                    previous,
-                    old.id,
-                    RegistrationMove(target_exam_id=next_exam, expected_version=old.version, reason="Новый экзамен"),
-                    teacher,
-                )
-            else:
-                await service.cancel_organized(
-                    s["workspace"],
-                    previous,
-                    old.id,
-                    RegistrationCancel(expected_version=old.version, reason="Новый экзамен"),
-                    teacher,
-                )
-    assert conflict.value.detail["code"] == "exam_completed"
-
     async with s["uow"]() as u:
-        await reg_service(u).create_organized(s["workspace"], next_exam, data, teacher)
+        new = await reg_service(u).create_organized(s["workspace"], next_exam, data, teacher)
+        assert new.id != old.id
         row = await ExamRegistrationRepository(u).registration(s["workspace"], previous, old.id)
-        assert row.status == "active" and row.queue_hold == "no_show"
+        assert row.status == "active" and row.queue_hold == "no_show" and row.version == old.version

@@ -219,8 +219,6 @@ class ExamRegistrationService:
         exam = await self._exam_service.get(workspace_id, exam_id, user)
         if not allow_closed:
             self._exam_service.require_queue_open(exam)
-        elif exam.completed_at is not None:
-            self._conflict("exam_completed")
         if exam.status != "published":
             self._conflict("exam_not_published")
         return exam.configuration
