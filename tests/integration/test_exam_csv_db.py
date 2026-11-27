@@ -1,24 +1,34 @@
 from __future__ import annotations
 
+import asyncio
+from csv import DictReader
+from datetime import timedelta
 from decimal import Decimal
+from io import BytesIO, StringIO
+from zipfile import ZipFile
 
 import pytest
 import test_exam_results_db as results_cases
 from fastapi import HTTPException
 from sqlalchemy import text
 from test_exam_assessment_submit_db import AFTER_WINDOW, assessment_service, draft, question_ids, result_service, submit
-from test_exam_attempts_db import NOW, attempt_service, organized, set_settings, start
+from test_exam_attempts_db import NOW, attempt_service, finish, organized, set_settings, start
+from test_exam_queue_db import queue_service
+from test_exam_registrations_db import intervals, reg_service
 from test_exam_results_db import accept, finished_attempt, insert_row, set_participation
 
 import src.services.exam_csv_participation as participation
 from src.core.exceptions import BusinessLogicError, NotFoundError, PermissionError
+from src.repository.exam_registration_repository import ExamRegistrationRepository
 from src.repository.exam_repository import ExamRepository
 from src.repository.project_type_question_repository import ProjectTypeQuestionRepository
 from src.schema.exam import ExamPublish, ExamSettingsReplace
 from src.schema.exam_assessment import AssessmentDraftWrite
 from src.schema.exam_attempt import AttemptPostpone
+from src.schema.exam_registration import RegistrationCreate
 from src.schema.exam_result import ResultAccept
 from src.schema.project_type_question import QuestionListReplace
+from src.services.exam_csv_profiles import render_archive
 from src.services.exam_csv_service import ExamCsvService
 from src.services.exam_service import ExamService
 from src.services.project_type_question_service import ProjectTypeQuestionService
@@ -317,3 +327,88 @@ async def test_output_cell_limit_rejects_large_preview_before_building_rows(seed
     with pytest.raises(HTTPException) as error:
         await snapshot(seeded)
     assert error.value.status_code == 413
+
+
+@pytest.mark.parametrize("legacy_schema", [True, False])
+async def test_repeat_registration_preserves_completed_exam_history_and_csv(seeded, run_migrations, legacy_schema):
+    s = seeded
+    workspace = s["workspace"]
+    previous, next_exam = s["exams"]
+    teacher = s["users"]["teacher"]
+    data = RegistrationCreate(project_id=s["projects"]["manager"])
+    async with s["uow"]() as u:
+        slots = await reg_service(u).add_slots(workspace, previous, intervals(), teacher)
+        old = await reg_service(u).create_organized(
+            workspace, previous, RegistrationCreate(project_id=data.project_id, slot_id=slots[0].id), teacher
+        )
+    attempt, _ = await start(s, old)
+    await finish(s, attempt, now=NOW + timedelta(minutes=10))
+    await draft(s, attempt, "teacher", 4)
+    await submit(s, attempt, "teacher")
+    async with s["uow"]() as u:
+        await result_service(u).accept(workspace, previous, attempt.id, ResultAccept(expected_version=0), teacher)
+    before = await snapshot(s)
+    assert before.register[0]["attempt_id"] == attempt.id
+    assert before.register[0]["final_score"] == Decimal("20.00")
+    assert any(row["criterion_1_score"] == 4 for row in before.participation)
+
+    async with s["uow"]() as u:
+        history_before = await reg_service(u).history(workspace, previous, old.id, teacher, limit=50, offset=0)
+    if legacy_schema:
+        await s["engine"].dispose()
+        run_migrations(s["url"], "downgrade", "d117a11b20a4")
+    async with s["uow"]() as u:
+        service = ExamService(ExamRepository(u), ProjectTypeQuestionRepository(u))
+        completed = await service.complete(workspace, previous, teacher)
+    async with s["uow"]() as u:
+        await ExamService(ExamRepository(u), ProjectTypeQuestionRepository(u)).remove(
+            workspace, previous, s["users"]["admin"]
+        )
+    if legacy_schema:
+        await s["engine"].dispose()
+        async with s["engine"].begin() as conn:
+            await conn.execute(text("LOCK TABLE exam_registration IN ACCESS SHARE MODE"))
+            with pytest.raises(AssertionError, match="could not obtain lock on relation"):
+                await asyncio.wait_for(asyncio.to_thread(run_migrations, s["url"], "upgrade", "head"), timeout=10)
+            assert await conn.scalar(text("SELECT version_num FROM alembic_version")) == "d117a11b20a4"
+        run_migrations(s["url"], "upgrade", "head")
+        run_migrations(s["url"], "check")
+
+    async with s["uow"]() as u:
+        new = await reg_service(u).create_self(workspace, next_exam, data, s["users"]["manager"])
+        assert new.id != old.id
+
+    async with s["uow"]() as u:
+        registration = await ExamRegistrationRepository(u).registration(workspace, previous, old.id)
+        assert (registration.status, registration.slot_id, registration.exam_completed_at) == (
+            "active",
+            slots[0].id,
+            completed.completed_at,
+        )
+        queue = await queue_service(u).read(workspace, previous, teacher)
+        assert [(item.registration_id, item.attempt.id, item.state) for item in queue.items] == [
+            (old.id, attempt.id, "finished")
+        ]
+        history_after = await reg_service(u).history(workspace, previous, old.id, teacher, limit=50, offset=0)
+        assert history_after == history_before
+
+    def read_csv_rows(body):
+        with ZipFile(BytesIO(body)) as archive:
+            return {
+                name: [
+                    {key: value for key, value in row.items() if key not in ("export_id", "snapshot_at")}
+                    for row in DictReader(StringIO(archive.read(name).decode("utf-8-sig")), delimiter=";")
+                ]
+                for name in archive.namelist()
+            }
+
+    # Each export has fresh snapshot metadata, while the exported domain rows are identical.
+    after = await ExamCsvService(s["uow"]).download(workspace, previous, teacher)
+    assert read_csv_rows(after) == read_csv_rows(render_archive(before))
+
+    await s["engine"].dispose()
+    with pytest.raises(AssertionError, match=f"project {data.project_id} has multiple active registrations"):
+        run_migrations(s["url"], "downgrade", "d117a11b20a4")
+    async with s["engine"].connect() as conn:
+        assert await conn.scalar(text("SELECT version_num FROM alembic_version")) == "d117a11b20a5"
+        assert await conn.scalar(text("SELECT count(*) FROM exam_registration WHERE status = 'active'")) == 2

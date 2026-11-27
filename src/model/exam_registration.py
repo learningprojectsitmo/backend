@@ -79,7 +79,12 @@ class ExamRegistration(Base):
             "queue_hold IS NULL OR (queue_position IS NULL AND started_at IS NULL)",
             name="ck_registration_hold_off_queue",
         ),
-        Index("uq_registration_active_project", "project_id", unique=True, postgresql_where=text("status='active'")),
+        Index(
+            "uq_registration_active_project",
+            "project_id",
+            unique=True,
+            postgresql_where=text("status='active' AND exam_completed_at IS NULL"),
+        ),
         Index(
             "uq_registration_active_slot",
             "slot_id",
@@ -110,6 +115,7 @@ class ExamRegistration(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_by: Mapped[int] = mapped_column(ForeignKey("user.id", ondelete="RESTRICT"))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    exam_completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 

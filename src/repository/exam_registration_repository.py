@@ -109,14 +109,26 @@ class ExamRegistrationRepository:
             query = query.with_for_update()
         return (await self.uow.session.scalars(query)).one_or_none()
 
-    async def active_for_project(self, project_id: int) -> ExamRegistration | None:
+    @staticmethod
+    def _blocking_registration(project_id):
         return (
-            await self.uow.session.scalars(
-                select(ExamRegistration).where(
-                    ExamRegistration.project_id == project_id, ExamRegistration.status == "active"
-                )
-            )
-        ).one_or_none()
+            ExamRegistration.project_id == project_id,
+            ExamRegistration.status == "active",
+            ExamRegistration.exam_completed_at.is_(None),
+        )
+
+    async def has_blocking_registration(self, project_id: int) -> bool:
+        return bool(await self.uow.session.scalar(select(exists().where(*self._blocking_registration(project_id)))))
+
+    async def blocked_project_ids(self, workspace_id: int, *, author_id: int | None) -> list[int]:
+        query = (
+            select(Project.id)
+            .where(Project.workspace_id == workspace_id, exists().where(*self._blocking_registration(Project.id)))
+            .order_by(Project.id)
+        )
+        if author_id is not None:
+            query = query.where(Project.author_id == author_id)
+        return list((await self.uow.session.scalars(query)).all())
 
     async def slots_for_update(self, workspace_id: int, exam_ids: set[int], ids: set[int]) -> dict[int, ExamSlot]:
         query = (

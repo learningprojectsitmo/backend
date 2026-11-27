@@ -62,6 +62,17 @@ async def replace_slots(
     return await service.replace_slots(workspace_id, exam_id, data, user)
 
 
+@exam_registration_router.get("/registrations/blocked-projects", response_model=list[int])
+async def list_blocked_registration_projects(
+    workspace_id: int = Path(ge=1, le=PG_INTEGER_MAX),
+    exam_id: int = Path(ge=1, le=PG_INTEGER_MAX),
+    self_only: bool = False,
+    user: User = Depends(get_current_user),
+    service: ExamRegistrationService = Depends(get_exam_registration_service),
+):
+    return await service.blocked_project_ids(workspace_id, exam_id, user, organized=not self_only)
+
+
 @exam_registration_router.post("/registrations/self", response_model=RegistrationRead, status_code=201)
 async def create_self_registration(
     data: RegistrationCreate,
