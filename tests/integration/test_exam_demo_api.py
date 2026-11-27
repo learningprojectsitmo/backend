@@ -741,3 +741,66 @@ async def test_published_registration_dates_lock_after_lifecycle_change(api, see
     conflict = await settings(client, path, before, registration_closes_at=(now[0] + timedelta(hours=1)).isoformat())
     assert body(conflict, 409)["detail"]["code"] == error
     assert body(await client.get(path)) == before
+
+
+@pytest.mark.parametrize("restart", [False, True])
+async def test_conditional_defense_checks_break_even_when_the_queue_revision_has_not_changed(api, seeded, restart):
+    client, base, now = api
+    path = f"{base}/{seeded['exams'][0]}"
+    start = registration_cases.START
+    break_start = start + timedelta(minutes=75)
+    break_end = break_start + timedelta(minutes=20)
+    saved = body(
+        await client.put(
+            path + "/slots",
+            json={
+                "expected_slots": [],
+                "slots": [
+                    {
+                        "starts_at": start.isoformat(),
+                        "ends_at": (start + timedelta(minutes=15)).isoformat(),
+                        "kind": "defense",
+                    },
+                    {"starts_at": break_start.isoformat(), "ends_at": break_end.isoformat(), "kind": "break"},
+                ],
+            },
+        )
+    )
+    team = await register(client, path, seeded, slot_id=saved[0]["id"])
+    body(await client.post(path + "/start"))
+    if restart:
+        attempt = await begin(client, path, team)
+        attempt_path = f"{path}/attempts/{attempt['id']}"
+        postponed = body(
+            await client.post(
+                f"{attempt_path}/postpone", json={"expected_version": attempt["version"], "reason": "Pause"}
+            )
+        )
+        queue = body(await client.get(path + "/queue"))
+        body(
+            await client.post(
+                f"{path}/queue/{team['id']}/place",
+                json={"expected_version": queue["items"][0]["registration_version"], "position": 1},
+            )
+        )
+        request_path = attempt_path + "/restart"
+        fields = {"expected_version": postponed["version"]}
+    else:
+        request_path = path + "/attempts"
+        fields = {"registration_id": team["id"], "expected_version": team["version"]}
+
+    now[0] = break_start - timedelta(minutes=15)
+    queue = body(await client.get(path + "/queue"))
+    assert datetime.fromisoformat(queue["eta"]["items"][0]["eta_at"]) == now[0]
+    payload = {**fields, "expected_queue_revision": queue["queue_revision"]}
+
+    now[0] += timedelta(milliseconds=1)
+    response = await client.post(request_path, json=payload)
+    assert body(response, 409)["detail"]["code"] == "defense_waiting_for_schedule"
+    after = body(await client.get(path + "/queue"))
+    assert after["queue_revision"] == queue["queue_revision"] and after["eta"]["current"] is None
+    assert datetime.fromisoformat(after["eta"]["items"][0]["eta_at"]) == break_end
+
+    now[0] = break_end
+    actual = body(await client.post(request_path, json=payload), 200 if restart else 201)
+    assert datetime.fromisoformat(actual["phase_started_at"]) == break_end

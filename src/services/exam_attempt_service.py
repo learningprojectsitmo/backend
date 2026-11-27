@@ -106,6 +106,19 @@ class ExamAttemptService:
         if exam.queue_revision != expected_revision:
             self._conflict("queue_revision_conflict")
 
+    async def _defense_start_time(self, exam: Exam, registration_id: int, expected_revision: int | None) -> datetime:
+        if expected_revision is None or not await self._registrations_repository.has_slots(exam.id, kind="break"):
+            return self._clock()
+
+        # The exam is locked, but time can have advanced since the client fetched its forecast.
+        queue = await self._queue.read(exam.workspace_id, exam.id)
+        if queue.eta_stale:
+            self._conflict("queue_revision_conflict")
+        next_team = next(iter(queue.eta.items), None)
+        if next_team and next_team.registration_id == registration_id and next_team.eta_at > queue.server_now:
+            self._conflict("defense_waiting_for_schedule")
+        return queue.server_now
+
     async def start(self, workspace_id: int, exam_id: int, data: AttemptStart, user: User) -> tuple[AttemptRead, bool]:
         exam = await self._lock_exam(workspace_id, exam_id, user)
         self._require_expected_queue(exam, data.expected_queue_revision)
@@ -126,7 +139,7 @@ class ExamAttemptService:
             self._conflict("registration_not_queued")
         if await self._repository.running(exam_id) is not None:
             self._conflict("another_defense_active")
-        now = self._clock()
+        now = await self._defense_start_time(exam, registration.id, data.expected_queue_revision)
         binding = await self._registrations.claim_for_attempt(
             workspace_id,
             exam_id,
@@ -360,7 +373,7 @@ class ExamAttemptService:
             self._conflict("another_defense_active")
         if attempt.version != data.expected_version:
             self._conflict("attempt_version_conflict")
-        now = self._clock()
+        now = await self._defense_start_time(exam, attempt.registration_id, data.expected_queue_revision)
         phase = attempt.postponed_phase
         timing = await self._timing(exam_id, attempt.settings_version)
         minutes = timing.presentation_minutes if phase == "speaking" else timing.questions_minutes

@@ -196,11 +196,20 @@ class ExamRegistrationService:
         if not organized:
             if project.author_id != user.id:
                 raise NotFoundError("Own project not found")
-            member, local = await self._questions.get_membership_role(workspace_id, user.id)
-            effective = local if local is not None else await self._questions.get_global_role(user.id)
-            if not member or effective != "manager":
-                raise PermissionError("Only the team's manager can change its registration")
+            await self._require_manager(workspace_id, user)
         return project
+
+    async def _require_manager(self, workspace_id: int, user: User) -> None:
+        member, local = await self._questions.get_membership_role(workspace_id, user.id)
+        effective = local if local is not None else await self._questions.get_global_role(user.id)
+        if not member or effective != "manager":
+            raise PermissionError("Only the team's manager can change its registration")
+
+    async def blocked_project_ids(self, workspace_id: int, exam_id: int, user: User, *, organized: bool) -> list[int]:
+        await self._access(workspace_id, exam_id, user, organized=organized)
+        if not organized:
+            await self._require_manager(workspace_id, user)
+        return await self._repository.blocked_project_ids(workspace_id, author_id=None if organized else user.id)
 
     async def _configuration(self, workspace_id, exam_id, user, now, *, organized, allow_closed=False):
         if not organized:
@@ -323,7 +332,7 @@ class ExamRegistrationService:
         now = self._clock()
         configuration = await self._configuration(workspace_id, exam_id, user, now, organized=organized)
         self._project_type(project, configuration)
-        if await self._repository.active_for_project(project.id) is not None:
+        if await self._repository.has_blocking_registration(project.id):
             self._conflict("project_already_registered")
         await self._slot(exam_id, data.slot_id, locked=slots, expected_slot=data.expected_slot)
         source = "organizer" if organized else "manager"
@@ -585,7 +594,7 @@ class ExamRegistrationService:
         now = self._clock()
         configuration = await self._configuration(workspace_id, exam_id, user, now, organized=True)
         self._project_type(project, configuration)
-        if await self._repository.active_for_project(project.id) is not None:
+        if await self._repository.has_blocking_registration(project.id):
             self._conflict("project_already_registered")
         await self._slot(exam_id, slot_id, locked=slots, expected_slot=data.expected_slot, current=row)
 

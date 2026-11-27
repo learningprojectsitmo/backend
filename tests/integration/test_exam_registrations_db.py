@@ -1184,3 +1184,122 @@ async def test_profile_admin_revoked_while_waiting_cannot_restore_role(seeded):
     response = await asyncio.wait_for(task, 10)
     assert response.status_code == 403
     assert await saved_role(s, "admin") == s["users"]["member"].role_id
+
+
+@pytest.mark.parametrize("actor,organized", [("teacher", True), ("manager", False)])
+async def test_completed_archived_exam_allows_registration_in_next_exam(seeded, actor, organized):
+    s = seeded
+    previous, next_exam = s["exams"]
+    project_id = s["projects"]["manager"]
+    data = RegistrationCreate(project_id=project_id)
+    async with s["uow"]() as u:
+        old = await reg_service(u).create_organized(s["workspace"], previous, data, s["users"]["teacher"])
+        await u.session.execute(
+            text("UPDATE exam_registration SET started_at = :now WHERE id = :registration"),
+            {"now": START, "registration": old.id},
+        )
+        await u.session.execute(
+            text("UPDATE exam SET started_at = :now, completed_at = :now, archived_at = :now WHERE id = :exam"),
+            {"now": START, "exam": previous},
+        )
+
+    async with s["uow"]() as u:
+        service = reg_service(u)
+        create = service.create_organized if organized else service.create_self
+        new = await create(s["workspace"], next_exam, data, s["users"][actor])
+        assert new.id != old.id
+        assert new.status == "active"
+        historical = await ExamRegistrationRepository(u).registration(s["workspace"], previous, old.id)
+        assert historical.status == "active"
+        assert historical.started_at == START
+
+
+async def test_archive_without_completion_keeps_project_blocked(seeded):
+    s = seeded
+    previous, next_exam = s["exams"]
+    data = RegistrationCreate(project_id=s["projects"]["manager"])
+    async with s["uow"]() as u:
+        await reg_service(u).create_organized(s["workspace"], previous, data, s["users"]["teacher"])
+        await ExamService(ExamRepository(u), ProjectTypeQuestionRepository(u)).remove(
+            s["workspace"], previous, s["users"]["admin"]
+        )
+
+    async with s["uow"]() as u:
+        assert await reg_service(u).blocked_project_ids(
+            s["workspace"], next_exam, s["users"]["teacher"], organized=True
+        ) == [data.project_id]
+    with pytest.raises(BusinessLogicError) as conflict:
+        async with s["uow"]() as u:
+            await reg_service(u).create_self(s["workspace"], next_exam, data, s["users"]["manager"])
+    assert conflict.value.detail["code"] == "project_already_registered"
+
+
+async def test_blocked_projects_http_respects_exam_scope_and_project_ownership(seeded):
+    s = seeded
+    previous, target = s["exams"]
+    async with s["uow"]() as u:
+        for name in ("manager", "manager2"):
+            await reg_service(u).create_organized(
+                s["workspace"],
+                previous,
+                RegistrationCreate(project_id=s["projects"][name]),
+                s["users"]["teacher"],
+            )
+
+    app = FastAPI()
+    app.include_router(routers)
+
+    async def test_uow():
+        async with s["uow"]() as u:
+            yield u
+
+    app.dependency_overrides[get_uow] = test_uow
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        for actor, self_only, code, expected in [
+            ("teacher", False, 200, sorted([s["projects"]["manager"], s["projects"]["manager2"]])),
+            ("manager", True, 200, [s["projects"]["manager"]]),
+            ("manager2", True, 200, [s["projects"]["manager2"]]),
+            ("local_manager", True, 200, []),
+            ("manager", False, 403, None),
+            ("demoted", True, 403, None),
+            ("member", True, 403, None),
+            ("outsider", False, 404, None),
+        ]:
+            app.dependency_overrides[get_current_user] = lambda: s["users"][actor]  # noqa: B023
+            response = await client.get(
+                f"/v1/workspaces/{s['workspace']}/exams/{target}/registrations/blocked-projects",
+                params={"self_only": self_only},
+            )
+            assert response.status_code == code
+            if expected is not None:
+                assert response.json() == expected
+
+        app.dependency_overrides[get_current_user] = lambda: s["users"]["admin"]
+        response = await client.get(
+            f"/v1/workspaces/{s['foreign_workspace']}/exams/{target}/registrations/blocked-projects"
+        )
+        assert response.status_code == 404
+
+
+async def test_repeat_registration_preserves_no_show_in_completed_exam(seeded):
+    s = seeded
+    previous, next_exam = s["exams"]
+    teacher = s["users"]["teacher"]
+    data = RegistrationCreate(project_id=s["projects"]["manager"])
+    async with s["uow"]() as u:
+        old = await reg_service(u).create_organized(s["workspace"], previous, data, teacher)
+        await u.session.execute(
+            text("UPDATE exam_registration SET queue_hold = 'no_show', queue_position = NULL WHERE id = :id"),
+            {"id": old.id},
+        )
+        await ExamService(ExamRepository(u), ProjectTypeQuestionRepository(u)).start(s["workspace"], previous, teacher)
+    async with s["uow"]() as u:
+        await ExamService(ExamRepository(u), ProjectTypeQuestionRepository(u)).complete(
+            s["workspace"], previous, teacher
+        )
+
+    async with s["uow"]() as u:
+        new = await reg_service(u).create_organized(s["workspace"], next_exam, data, teacher)
+        assert new.id != old.id
+        row = await ExamRegistrationRepository(u).registration(s["workspace"], previous, old.id)
+        assert row.status == "active" and row.queue_hold == "no_show" and row.version == old.version
