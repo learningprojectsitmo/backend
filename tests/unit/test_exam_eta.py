@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 from src.schema.exam_queue import EtaCurrentRead, EtaItemRead, QueueEtaRead, QueueRead
 from src.services.exam_eta import (
+    EtaBreak,
     EtaCurrentState,
     EtaTiming,
     EtaWaitingState,
@@ -47,6 +48,7 @@ def waiting(
     *,
     state: str = "waiting",
     postponed_phase: str | None = None,
+    planned_start_at: datetime | None = None,
     t: EtaTiming | None = None,
 ) -> EtaWaitingState:
     return EtaWaitingState(
@@ -55,6 +57,7 @@ def waiting(
         state=state,  # type: ignore[arg-type]
         timing=t or timing(),
         postponed_phase=postponed_phase,  # type: ignore[arg-type]
+        planned_start_at=planned_start_at,
     )
 
 
@@ -234,3 +237,32 @@ def test_contract_dto_fields():
     assert "eta" in QueueRead.model_fields
     assert EtaCurrentRead.model_fields["slot_remaining_seconds"]
     assert EtaItemRead.model_fields["eta_at"]
+
+
+def test_waiting_teams_compact_inside_their_original_blocks():
+    first_break = EtaBreak(NOW + timedelta(minutes=75), NOW + timedelta(minutes=95))
+    second_break = EtaBreak(NOW + timedelta(minutes=140), NOW + timedelta(minutes=150))
+    fifteen = timing(420, 420, 60)
+    teams = [
+        waiting(1, 1, planned_start_at=NOW, t=fifteen),
+        waiting(2, 2, planned_start_at=NOW + timedelta(minutes=15), t=fifteen),
+        waiting(3, 3, planned_start_at=NOW + timedelta(minutes=110), t=fifteen),
+        waiting(4, 4, planned_start_at=NOW + timedelta(minutes=125), t=fifteen),
+        waiting(5, 5, planned_start_at=NOW + timedelta(minutes=165), t=fifteen),
+    ]
+    eta = build_queue_eta(now=NOW, exam_starts_at=NOW, current=None, waiting=teams, breaks=[second_break, first_break])
+    assert [item.eta_seconds for item in eta.items] == [0, 900, 5700, 6600, 9000]
+
+
+def test_next_team_waits_until_break_ends_if_it_no_longer_fits_before_it():
+    pause = EtaBreak(NOW + timedelta(minutes=5), NOW + timedelta(minutes=25))
+    eta = build_queue_eta(now=NOW, exam_starts_at=NOW, current=None, waiting=[waiting(1, 1)], breaks=[pause])
+    assert eta.items[0].eta_at == pause.ends_at
+
+
+def test_break_does_not_add_time_after_running_defense_has_overrun_it():
+    pause = EtaBreak(NOW + timedelta(minutes=2), NOW + timedelta(minutes=4))
+    eta = build_queue_eta(
+        now=NOW, exam_starts_at=NOW, current=current(phase_remaining=300), waiting=[waiting(1, 1)], breaks=[pause]
+    )
+    assert eta.items[0].eta_at == NOW + timedelta(minutes=6)

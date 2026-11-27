@@ -317,7 +317,7 @@ async def test_changing_team_slot_across_break_revises_forecast(seeded):
         await register(s, "manager", slot_id=a["id"])
         team = await register(s, "manager2", slot_id=c["id"])
         before = await read_eta(s)
-        assert [item.eta_seconds for item in before.eta.items] == [0, 1500]
+        assert [item.eta_seconds for item in before.eta.items] == [0, 2400]
         moved = await client.post(
             f"registrations/{team.id}/move",
             json={
@@ -401,7 +401,7 @@ async def test_queue_retry_refreshes_slot_and_break_intervals(seeded, monkeypatc
         pause, defense = snapshot(response.json())
         await register(s, "manager", slot_id=defense["id"])
         initial = await read_eta(s)
-        assert initial.eta.items[0].eta_seconds == 600
+        assert initial.eta.items[0].eta_at == START + timedelta(minutes=25)
 
         async with s["uow"]() as uow:
             reader = queue_service(uow, START)
@@ -430,7 +430,7 @@ async def test_queue_retry_refreshes_slot_and_break_intervals(seeded, monkeypatc
     assert updated.queue_revision == initial.queue_revision + 1
     assert not updated.eta_stale
     assert updated.items[0].planned_start_at == START + timedelta(minutes=50)
-    assert updated.eta.items[0].eta_seconds == 1200
+    assert updated.eta.items[0].eta_at == START + timedelta(minutes=35)
 
 
 async def replacement_fixture(s, organizer):
@@ -538,3 +538,32 @@ async def test_replacement_rolls_back_after_cancellation_if_successor_fails(seed
         ]
         history = (await organizer.get(f"registrations/{original.id}/history")).json()["items"]
         assert [event["action"] for event in history] == ["created"]
+
+
+async def test_exam_start_compacts_only_inside_blocks_without_moving_the_break(seeded):
+    s = seeded
+    async with client_for(s) as organizer:
+        rows = [interval(START + timedelta(minutes=offset)) for offset in (0, 15, 30, 45, 60)] + [
+            interval(START + timedelta(minutes=75), 20, kind="break"),
+            interval(START + timedelta(minutes=95)),
+            interval(START + timedelta(minutes=110)),
+        ]
+        saved = await save_schedule(organizer, [], rows)
+        assert saved.status_code == 200
+        slots = saved.json()
+        await register(s, "manager", slot_id=slots[0]["id"])
+        await register(s, "manager2", slot_id=slots[1]["id"])
+        third = await register(s, "member", slot_id=slots[7]["id"])
+
+        # Starting the exam changes the live projection while retaining the timetable.
+        response = await organizer.post("start")
+        assert response.status_code == 200
+        queue = await read_eta(s, START)
+        assert [item.eta_at for item in queue.eta.items] == [
+            START,
+            START + timedelta(minutes=15),
+            START + timedelta(minutes=95),
+        ]
+        previous_slot = next(row for row in queue.items if row.registration_id == third.id)
+        assert previous_slot.planned_start_at == START + timedelta(minutes=110)
+        assert snapshot((await organizer.get("slots")).json()["items"]) == snapshot(slots)

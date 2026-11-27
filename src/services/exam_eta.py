@@ -136,9 +136,8 @@ def build_queue_eta(
             scheduled_after_break = team.planned_start_at is not None and team.planned_start_at >= pause.ends_at
             if not scheduled_after_break and cursor + duration <= pause.starts_at:
                 break
-            # The live queue can compress empty slots. Add the break's duration
-            # without treating other gaps in the timetable as waiting time.
-            cursor += pause.ends_at - pause.starts_at
+            # Compact defenses against the fixed end of the break.
+            cursor = max(cursor, pause.ends_at)
             upcoming_breaks.popleft()
         eta_at = cursor
         items.append(
